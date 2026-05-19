@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Extended information about the user",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "company": { "type": "string" },
+        "organization": { "type": "string" },
+        "role": { "type": "string", "enum": ["enduser", "integrator", "other"] },
+        "email": { "type": "string" }
+      },
+      "required": ["name", "company", "role"]
+    },
+    "ProjectPart": {
+      "title": "Project Part",
+      "description": "Information about a specific part in the project",
+      "type": "object",
+      "properties": {
+        "responses": { "type": "object" },
+        "images": { "type": "array" }
+      }
+    },
+    "Project": {
+      "title": "Bin-Picking Project",
+      "description": "Captured evaluator data for a Scape bin-picking project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "submitted", "cancelled", "approved", "rejected"] },
+        "isLocked": { "type": "boolean" },
+        "isFullySpecified": { "type": "boolean" },
+        "generalResponses": { "type": "object" },
+        "parts": { "type": "array", "items": { "$ref": "ProjectPart" } },
+        "report": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "status"]
+    },
+    "ChangeLog": {
+      "title": "Change Log",
+      "description": "Trail of changes for a project",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "action": { "type": "string" },
+        "userId": { "type": "string" },
+        "changes": { "type": "object" }
+      }
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "UserProfile",
+      "description": "User profile data"
+    },
+    "projects": {
+      "schema": "Project",
+      "description": "Storage for all bin-picking project assessments"
+    },
+    "projects/{projectId}/changelog": {
+      "schema": "ChangeLog",
+      "description": "History of changes for a specific project"
+    },
+    "admins": {
+      "schema": { "type": "object", "properties": { "email": { "type": "string" } } },
+      "description": "UIDs of administrative users (Scape Solutions)"
+    }
+  }
+}

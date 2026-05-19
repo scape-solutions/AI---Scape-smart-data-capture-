@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    
+    function isScape() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && (
+          request.auth.token.email.lower().endsWith('@scapesolutions.eu') ||
+          request.auth.token.email.lower().endsWith('@scapesolutions.com')
+        )) ||
+        request.auth.uid == "PvdZWFVtE6YKsa16loWrUNwjuif1"
+      );
+    }
+
+    match /users/{userId} {
+      allow get, update, delete: if isOwner(userId) || isScape();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow list: if isScape();
+    }
+
+    match /projects/{projectId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isScape() || (
+        resource != null && 
+        resource.data.userId == request.auth.uid && 
+        resource.data.get('isLocked', false) == false
+      );
+      allow delete: if isScape() || (resource != null && resource.data.userId == request.auth.uid);
+
+      match /changelog/{logId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+      }
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    match /{document=**} {
+      allow read, write: if isScape();
+    }
+  }
+}

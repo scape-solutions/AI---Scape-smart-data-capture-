@@ -1,0 +1,9 @@
+{
+  "name": "Scape Bin-Picking Evaluator",
+  "description": "AI-guided industrial assessment tool for robotic bin-picking feasibility, helping integrators capture technical requirements accurately.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
