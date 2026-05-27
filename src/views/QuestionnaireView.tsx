@@ -213,7 +213,9 @@ export function QuestionnaireView({
       
       // Strict size check: max 200 KB
       if (file.size > 200 * 1024) {
-        alert(`CAD file size is ${(file.size / 1024).toFixed(1)} KB, which exceeds the strict 200 KB limit. To prevent database errors, please simplify your CAD model or export it as a low-poly binary STL file.`);
+        alert(`CAD file size is ${(file.size / 1024).toFixed(1)} KB, which exceeds the strict 200 KB database limit. 
+
+To prevent errors, please simplify your CAD model, export it as a low-poly binary STL, or take screenshots of the CAD model from multiple angles and upload them in the next tab ("Visual Evidence") instead!`);
         return;
       }
 
@@ -770,18 +772,23 @@ export function QuestionnaireView({
                               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">CAD File Upload</p>
                               
                               {!currentProject.parts[activePartIndex].cadFile ? (
-                                <label className={`w-full h-32 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center bg-white hover:bg-slate-50 transition-all ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                                  <UploadCloud className="w-8 h-8 text-slate-400 animate-pulse" />
-                                  <span className="text-xs font-bold text-slate-500 mt-2">Select CAD file (Max 200 KB)</span>
-                                  <span className="text-[10px] text-slate-400 mt-1 font-semibold">Supports STL, STEP, STP, IGES, IGS</span>
-                                  <input 
-                                    type="file" 
-                                    accept=".stl,.step,.stp,.igs,.iges,.dwg,.dxf" 
-                                    disabled={isReadOnly}
-                                    className="hidden" 
-                                    onChange={handleUploadCadFile} 
-                                  />
-                                </label>
+                                <div className="space-y-3 w-full">
+                                  <label className={`w-full h-32 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center bg-white hover:bg-slate-50 transition-all ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                                    <UploadCloud className="w-8 h-8 text-slate-400 animate-pulse" />
+                                    <span className="text-xs font-bold text-slate-500 mt-2">Select CAD file (Max 200 KB)</span>
+                                    <span className="text-[10px] text-slate-400 mt-1 font-semibold">Supports STL, STEP, STP, IGES, IGS</span>
+                                    <input 
+                                      type="file" 
+                                      accept=".stl,.step,.stp,.igs,.iges,.dwg,.dxf" 
+                                      disabled={isReadOnly}
+                                      className="hidden" 
+                                      onChange={handleUploadCadFile} 
+                                    />
+                                  </label>
+                                  <div className="p-3.5 bg-amber-50 border border-amber-100 rounded-xl text-[11px] text-amber-800 leading-relaxed font-semibold">
+                                    💡 <strong>Is your CAD file too large?</strong> If your file exceeds 200 KB, please take screenshots of the CAD model from different angles and upload them under the next tab (<strong>"Visual Evidence"</strong>) instead!
+                                  </div>
+                                </div>
                               ) : (
                                 <div className="bg-white p-4 border border-slate-100 rounded-xl flex items-center justify-between shadow-xs">
                                   <div className="flex items-center gap-3">
