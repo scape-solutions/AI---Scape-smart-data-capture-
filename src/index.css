@@ -1,9 +1,22 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  
+  /* Brand Color Palette: Scape Solutions Crimson Red & Dark Charcoal */
+  --color-blue-50: #fff5f5;
+  --color-blue-100: #ffe3e3;
+  --color-blue-200: #ffc9c9;
+  --color-blue-300: #ffa3a3;
+  --color-blue-400: #ff6b6b;
+  --color-blue-500: #fa5252;
+  --color-blue-600: #bf1e2e; /* Den præcise crimson-røde farve fra Scape logoet! */
+  --color-blue-700: #a61a28;
+  --color-blue-800: #8c1622;
+  --color-blue-900: #73121c;
+  --color-blue-950: #4a0b12;
 }
 
 @layer base {

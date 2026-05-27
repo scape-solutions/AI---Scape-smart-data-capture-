@@ -1,3 +1,19 @@
+/**
+ * questionnaire.ts
+ * 
+ * Denne fil definerer det overordnede spørgeskemaskema (schema) for hele applikationen.
+ * Spørgeskemaet er opdelt i to hovedområder:
+ * 
+ * 1. GENERAL_STEPS ("Project & Cell Info"):
+ *    - Indsamler generelle stamdata om selve projektet, kassetype (bin), kassestørrelse og foretrukne robotter.
+ *    - Data gemmes direkte under `currentProject.generalResponses` med de tilsvarende id'er.
+ * 
+ * 2. PART_STEPS (Emne-detaljer):
+ *    - Indsamler detaljeret information for hvert enkelt emne (part), f.eks. emnenavn, vægt, dimensioner og billeder.
+ *    - Data gemmes under hvert enkelt emne-objekt i `currentProject.parts[index].responses` med de tilsvarende id'er.
+ *    - Billeder gemmes under `currentProject.parts[index].images`.
+ */
+
 import { 
   Settings2, 
   Box, 
@@ -6,34 +22,39 @@ import {
   Camera
 } from 'lucide-react';
 
+// Understøttede spørgsmålstyper i UI-generatoren
 export type QuestionType = 'text' | 'number' | 'select' | 'boolean' | 'textarea' | 'media';
 
+// Interface for et enkelt spørgsmål i skemaet
 export interface Question {
-  id: string;
-  label: string;
-  type: QuestionType;
-  placeholder?: string;
-  options?: { value: string; label: string; description?: string }[];
-  description?: string;
-  important?: boolean;
+  id: string;          // Unikt ID (f.eks. '1.01' eller '2.01') der svarer til databasenøglen
+  label: string;       // Overskrift eller label vist til brugeren
+  type: QuestionType;  // Input-type (f.eks. select, text, boolean)
+  placeholder?: string;// Valgfri hjælpetekst i feltet
+  options?: { value: string; label: string; description?: string }[]; // Valgmuligheder hvis type === 'select'
+  description?: string;// Uddybende hjælpetekst under feltet
+  important?: boolean; // Angiver om feltet er påkrævet/skal fremhæves
+  condition?: (responses: Record<string, any>) => boolean; // Valgfri betingelse for visning af spørgsmålet
 }
 
+// Interface for et trin (step / fane) i spørgeskemaet
 export interface Step {
   id: string;
-  title: string;
-  icon: any;
-  scope: 'general' | 'part';
-  questions: Question[];
+  title: string;       // Navn på fanen (f.eks. 'Project & Cell Info' eller 'Part Dimensions')
+  icon: any;           // Lucide-react ikon tilknyttet fanen i sidebaren
+  scope: 'general' | 'part'; // Omfang (stamdata eller delvist emne-data)
+  questions: Question[]; // Liste af spørgsmål under dette trin
 }
 
 export const GENERAL_STEPS: Step[] = [
   {
     id: 'general',
-    title: 'General Information',
+    title: 'Project & Cell Info',
     icon: Settings2,
     scope: 'general',
     questions: [
       { id: '1.01', label: 'Project Name', type: 'text', placeholder: 'e.g. Billund Automation 2024', important: true },
+      { id: '1.02', label: 'Total of different parts in project', type: 'number', placeholder: 'e.g. 1', important: true },
       { id: '1.03', label: 'Bin type', type: 'select', options: [
         { value: 'eu-pallet', label: 'EU-Pallet', description: 'Standard Euro pallet' },
         { value: 'metal-solid', label: 'Metal Solid', description: 'Solid metal container' },
@@ -51,7 +72,8 @@ export const GENERAL_STEPS: Step[] = [
         { value: 'abb', label: 'ABB' },
         { value: 'kuka', label: 'KUKA' },
         { value: 'other', label: 'Other' }
-      ] }
+      ] },
+      { id: '1.05_other', label: 'Specify Robot Brand and Model', type: 'text', placeholder: 'e.g. Kawasaki RS007L', important: true, condition: (res) => res['1.05'] === 'other' }
     ]
   }
 ];
@@ -66,8 +88,10 @@ export const PART_STEPS: Step[] = [
       { id: '2.01', label: 'Part Name / Number', type: 'text', important: true },
       { id: '2.02', label: 'Part Dimensions (mm)', type: 'text', placeholder: 'e.g. 100x150x50', important: true },
       { id: '2.03', label: 'Part Weight (kg)', type: 'number', placeholder: 'e.g. 1.5', important: true },
-      { id: '2.14', label: 'Part Material', type: 'text', placeholder: 'e.g. Cast Iron, Plastic', important: true },
-      { id: '2.04', label: 'Desired Average Cycle Time (sec)', type: 'number', placeholder: 'e.g. 15', important: true }
+      { id: '2.03_material', label: 'Part Material', type: 'text', placeholder: 'e.g. Cast Iron, Plastic', important: true },
+      { id: '2.04', label: 'Desired Average Cycle Time (sec)', type: 'number', placeholder: 'e.g. 15', important: true },
+      { id: '2.05', label: 'Average Cycle Time Based On', type: 'text', placeholder: 'e.g. 1 bin, 1 shift, or 50 cycles' },
+      { id: '2.06', label: 'CAD file available for the part?', type: 'boolean', description: 'Preferred format is STL (~0.01 mm accuracy). Other formats (STP/STEP, IGS/IGES, DWG/DXF) can be converted.' }
     ]
   },
   {
@@ -78,8 +102,13 @@ export const PART_STEPS: Step[] = [
     questions: [
       { id: '2.11', label: 'Is the part very shiny?', type: 'boolean', description: 'Reflectivity affects vision selection.' },
       { id: '2.07', label: 'Any oil/soap/lubrication?', type: 'boolean' },
+      { id: '2.08', label: 'Are the parts separated by a slip sheet?', type: 'boolean', description: 'Check YES if layers of parts are separated by sheets.' },
       { id: '2.09', label: 'Risk of entanglement?', type: 'boolean', description: 'Can parts hook into each other?' },
-      { id: '2.13', label: 'Determine which side is up?', type: 'boolean' }
+      { id: '2.10', label: 'Any temperature issues?', type: 'boolean', description: 'High temperatures (>50°C) can influence the choice of gripper.' },
+      { id: '2.10_temp', label: 'Expected Temperature (°C)', type: 'number', placeholder: 'e.g. 80', condition: (res) => res['2.10'] === true },
+      { id: '2.13', label: 'Determine which side is up?', type: 'boolean' },
+      { id: '2.14', label: 'Any special gripper requirements?', type: 'boolean', description: 'Check YES if a specific gripper is required to hold or place the part.' },
+      { id: '2.12', label: 'Short description of place requirements', type: 'textarea', placeholder: 'e.g. Must be placed in a welding fixture with 0.5mm tolerance.' }
     ]
   },
   {
