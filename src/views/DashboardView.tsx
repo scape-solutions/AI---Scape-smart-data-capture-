@@ -73,9 +73,13 @@ export function DashboardView({
       if (filterStatus !== 'inactive' && p.status !== filterStatus) return false;
     }
     
-    // Fritekst-søgning: .includes() tjekker om den indtastede tekst findes i firmanavnet.
-    // Vi konverterer begge til små bogstaver (.toLowerCase()) for at gøre søgningen case-insensitive.
-    if (filterOrg && !p.ownerCompany?.toLowerCase().includes(filterOrg.toLowerCase())) return false;
+    // Fritekst-søgning: tjekker om den indtastede tekst findes i firmanavnet, projektnavnet eller ID.
+    if (filterOrg && 
+        !p.ownerCompany?.toLowerCase().includes(filterOrg.toLowerCase()) && 
+        !p.projectName?.toLowerCase().includes(filterOrg.toLowerCase()) &&
+        !(p.id && p.id.toLowerCase().includes(filterOrg.toLowerCase()))
+    ) return false;
+    
     if (filterUser && !p.ownerName?.toLowerCase().includes(filterUser.toLowerCase()) && !p.userId.toLowerCase().includes(filterUser.toLowerCase())) return false;
     
     return true; // Bestod alle checks, så behold projektet!
@@ -97,10 +101,9 @@ export function DashboardView({
           </button>
         </div>
 
-        {profile?.isAdmin && (
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-wrap gap-4 items-center">
-            <div className="flex-1 min-w-[200px]">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">Search Organization</p>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-wrap gap-4 items-center">
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">Search Project / Org / ID</p>
               {/* Her ser du "To-vejs databinding" i React:
                   - 'value' læser data fra state
                   - 'onChange' skriver ny data til state (hver gang man trykker på en tast) */}
@@ -158,8 +161,7 @@ export function DashboardView({
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* .map() bruges i React til at generere HTML ud fra et Array. 

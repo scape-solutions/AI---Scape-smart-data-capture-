@@ -362,8 +362,13 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           <div className="mb-6 p-4 bg-white border border-slate-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
               <span className="uppercase tracking-wider text-[10px] text-slate-400">Project:</span>
-              <span className="text-slate-900 font-black text-xs md:text-sm bg-slate-100 px-3 py-1 rounded-lg">
-                {currentProject.projectName || 'Unnamed Project'}
+              <span className="text-slate-900 font-black text-xs md:text-sm bg-slate-100 px-3 py-1 rounded-lg flex items-center gap-1.5">
+                <span>{currentProject.projectName || 'Unnamed Project'}</span>
+                {currentProject.id && (
+                  <span className="text-[9px] font-mono font-bold text-slate-400 bg-white border border-slate-200/80 px-1 py-0.5 rounded select-all" title={`Case ID: ${currentProject.id}`}>
+                    #{currentProject.id.substring(0, 6).toUpperCase()}
+                  </span>
+                )}
               </span>
             </div>
             <div className="flex items-center gap-2 text-xs font-bold text-slate-500">

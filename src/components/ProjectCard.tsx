@@ -149,15 +149,26 @@ export function ProjectCard({
             <Clock className="w-4 h-4 text-slate-300 shrink-0 mt-1" />
           </div>
           
-          <h3 className="font-bold text-lg mb-1">{p.projectName}</h3>
-          <div className="mb-4">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h3 className="font-bold text-lg text-slate-900 leading-tight">{p.projectName}</h3>
+            {p.id && (
+              <span 
+                className="text-[9px] font-mono font-black text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded select-all shadow-3xs" 
+                title={`Full Case ID: ${p.id}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                #{p.id.substring(0, 6).toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div className="mb-4 space-y-0.5">
             {/* || betyder "OR". Hvis p.ownerName er tom (falsy), vises i stedet 'Unknown Owner' */}
-            <p className="text-[11px] text-slate-600 font-bold">{p.ownerName || 'Unknown Owner'}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">{p.ownerCompany || 'No Company'}</p>
+            <p className="text-[13px] text-slate-700 font-extrabold">{p.ownerName || 'Unknown Owner'}</p>
+            <p className="text-xs text-slate-500 font-bold">{p.ownerCompany || 'No Company'}</p>
             {p.ownerEmail && p.ownerEmail !== 'Unknown' ? (
-              <p className="text-[9px] text-slate-400 mt-1 italic font-medium">{p.ownerEmail}</p>
+              <p className="text-[11px] text-slate-400 italic font-semibold">{p.ownerEmail}</p>
             ) : (
-              <p className="text-[9px] text-amber-500 mt-1 italic font-bold">Email unknown</p>
+              <p className="text-[11px] text-amber-500 italic font-bold">Email unknown</p>
             )}
           </div>
 
