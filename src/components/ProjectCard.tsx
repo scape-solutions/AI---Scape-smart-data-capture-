@@ -112,7 +112,7 @@ export function ProjectCard({
    */
   return (
     <div 
-      className={`group relative bg-white p-6 rounded-3xl border shadow-md hover:shadow-xl hover:-translate-y-1.5 hover:border-blue-200/50 transition-all duration-300 ease-out cursor-pointer overflow-hidden flex flex-col h-full ${p.isInactive ? 'opacity-60 border-slate-200 shadow-xs' : 'border-slate-100'}`} 
+      className={`group relative bg-white p-6 rounded-3xl border border-slate-200 shadow-md shadow-slate-100 hover:shadow-xl hover:shadow-blue-600/8 hover:-translate-y-1.5 hover:border-blue-600/30 transition-all duration-300 ease-out cursor-pointer overflow-hidden flex flex-col h-full ${p.isInactive ? 'opacity-60 border-slate-300 shadow-xs' : ''}`} 
       onClick={() => openProject(p)}
       style={{
         isolation: 'isolate',

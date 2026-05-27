@@ -89,7 +89,8 @@ export function DashboardView({
   });
 
   return (
-    <div className="flex-1 p-4 md:p-10 overflow-y-auto max-w-6xl mx-auto w-full">
+    <div className="flex-1 p-4 md:p-10 overflow-y-auto w-full bg-slate-50/50">
+      <div className="max-w-6xl mx-auto">
       <div className="flex flex-col gap-4 mb-8">
         <div className="flex justify-between items-center gap-3 w-full">
           <div className="flex flex-col">
@@ -209,6 +210,7 @@ export function DashboardView({
             toggleInactive={toggleInactive}
           />
         ))}
+      </div>
       </div>
     </div>
   );
