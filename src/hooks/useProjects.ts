@@ -17,7 +17,39 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { ProjectState, OperationType } from '../types';
+import { ProjectState, OperationType, PartData } from '../types';
+
+export function normalizeProject(p: any): ProjectState {
+  const generalResponses = p?.generalResponses || {};
+  
+  let parts = Array.isArray(p?.parts) ? p.parts : [];
+  if (parts.length === 0) {
+    parts = [{ responses: {}, images: [] }];
+  }
+  
+  const normalizedParts = parts.map((part: any) => ({
+    responses: part?.responses || {},
+    images: Array.isArray(part?.images) ? part.images : [],
+    cadFile: part?.cadFile || null
+  }));
+
+  return {
+    ...p,
+    projectName: p?.projectName || generalResponses['1.01'] || p?.generalResponses?.['1.01'] || "Untitled Project",
+    generalResponses,
+    parts: normalizedParts,
+    report: p?.report || null,
+    status: p?.status || 'draft',
+    userId: p?.userId || '',
+    isLocked: !!p?.isLocked,
+    isFullySpecified: !!p?.isFullySpecified,
+    isVerdictVisible: !!p?.isVerdictVisible,
+    ownerName: p?.ownerName || 'Unknown',
+    ownerCompany: p?.ownerCompany || 'Unknown',
+    ownerEmail: p?.ownerEmail || 'Unknown',
+    ownerPhone: p?.ownerPhone || 'Unknown'
+  };
+}
 
 export function useProjects(
   user: any, 
@@ -56,8 +88,8 @@ export function useProjects(
       const snap = await getDocs(q);
       
       // 'snap.docs' indeholder de rå data fra Firebase. Vi mapper (konverterer) 
-      // dem til vores eget ProjectState format.
-      let data = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as ProjectState));
+      // dem til vores eget ProjectState format med robust skema-normalisering.
+      let data = snap.docs.map(d => normalizeProject({ id: d.id, ...(d.data() as any) }));
       
       // Sortering af data. Først efter dato (nyeste først).
       data.sort((a: any, b: any) => {
@@ -126,12 +158,13 @@ export function useProjects(
 
   // Henter billeder fra sub-kollektionen for et givent projekt
   const fetchProjectImages = async (p: ProjectState): Promise<ProjectState> => {
-    if (!p.id) return p;
+    const normalized = normalizeProject(p);
+    if (!normalized.id) return normalized;
     try {
-      const snap = await getDocs(collection(db, 'projects', p.id, 'images'));
+      const snap = await getDocs(collection(db, 'projects', normalized.id, 'images'));
       const imagesData = snap.docs.map(d => d.data());
       
-      const parts = p.parts.map((part, index) => {
+      const parts = normalized.parts.map((part, index) => {
         const partImages = imagesData
           .filter((img: any) => img.partIndex === index)
           .sort((a: any, b: any) => {
@@ -148,12 +181,12 @@ export function useProjects(
       });
       
       return {
-        ...p,
+        ...normalized,
         parts
       };
     } catch (e) {
       console.error("Failed to fetch images from sub-collection:", e);
-      return p;
+      return normalized;
     }
   };
 
