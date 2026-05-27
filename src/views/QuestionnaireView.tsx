@@ -13,7 +13,9 @@ import {
   RotateCcw, 
   CheckCircle2, 
   X, 
-  UploadCloud 
+  UploadCloud,
+  Menu,
+  ChevronDown
 } from 'lucide-react';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 import { ProjectState, UserProfile } from '../types';
@@ -69,6 +71,7 @@ export function QuestionnaireView({
   generateReport,
 }: QuestionnaireViewProps) {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Read-only state (locked or submitted, unless the user is an admin)
@@ -179,8 +182,8 @@ export function QuestionnaireView({
 
   return (
     <>
-      {/* Sidebar on the Left */}
-      <aside className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-slate-200 p-4 md:p-6 flex flex-col gap-4 overflow-y-auto max-h-[30vh] md:max-h-none shrink-0">
+      {/* Sidebar on the Left (Desktop-only) */}
+      <aside className="hidden md:flex md:w-64 bg-white md:border-r border-slate-200 p-6 flex-col gap-4 overflow-y-auto shrink-0">
         <button 
           onClick={() => setView('dashboard')}
           className="flex items-center gap-2 text-sm text-slate-500 mb-6 hover:text-slate-900 transition-colors"
@@ -248,6 +251,39 @@ export function QuestionnaireView({
       {/* Main Content Area */}
       <div className="flex-1 p-4 md:p-12 overflow-y-auto bg-slate-50">
         <div className="max-w-2xl mx-auto w-full">
+          
+          {/* Sticky Mobile Header Bar (Only visible on screens < md) */}
+          <div className="md:hidden sticky top-0 z-30 -mx-4 -mt-4 mb-6 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-xs select-none">
+            <button 
+              onClick={() => setView('dashboard')}
+              className="p-1.5 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl text-slate-500 transition-all active:scale-95"
+              title="Dashboard"
+            >
+              <LayoutDashboard className="w-5 h-5" />
+            </button>
+
+            <div 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 border border-slate-100 rounded-xl px-3 py-1.5 transition-all active:scale-[0.98] shadow-xs"
+            >
+              <span className="text-xs font-black text-slate-700">
+                {isReviewing 
+                  ? 'Final Review' 
+                  : currentStep === 0 
+                    ? 'Project & Cell Info' 
+                    : `Part #0${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            </div>
+
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-1.5 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl text-slate-500 transition-all active:scale-95"
+              title="Sektioner"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
           
           {/* Header Bar */}
           <div className="mb-6 p-4 bg-white border border-slate-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
@@ -798,6 +834,133 @@ export function QuestionnaireView({
           )}
         </div>
       </div>
+
+      {/* Mobile Navigation Drawer / Bottom Sheet */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/60 backdrop-blur-xs transition-all duration-300 animate-fadeIn"
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          {/* Bottom Sheet Box */}
+          <div 
+            className="w-full bg-white rounded-t-[2.5rem] shadow-2xl p-6 pb-10 z-[110] animate-slideUp max-h-[85vh] flex flex-col overflow-hidden border-t border-slate-100"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Grab/Drag Handle */}
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 shrink-0" />
+
+            {/* Header */}
+            <div className="flex justify-between items-center mb-6 shrink-0">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Project Sections</h3>
+                <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">JUMP TO A SECTION</p>
+              </div>
+              <button 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-full border border-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Navigation Cards Grid */}
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {/* Project & Cell Info Card */}
+              <button 
+                onClick={() => { setIsReviewing(false); setCurrentStep(0); setIsMobileMenuOpen(false); }}
+                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${currentStep === 0 && !isReviewing ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${currentStep === 0 && !isReviewing ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    <Settings2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold">Project & Cell Info</h4>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">Bin size, preferred robot...</p>
+                  </div>
+                </div>
+                {Object.keys(currentProject.generalResponses).length >= 2 && (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                )}
+              </button>
+
+              {/* Part Section Cards */}
+              {currentProject.parts.map((part, partIdx) => (
+                <div key={partIdx} className="p-4 bg-slate-50/30 border border-slate-100 rounded-2xl space-y-3">
+                  <div className="flex justify-between items-center px-1">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">PART #0{partIdx + 1}</span>
+                    {currentProject.parts.length > 1 && !isReadOnly && (
+                      <button 
+                        onClick={() => { handleRemovePart(partIdx); setIsMobileMenuOpen(false); }}
+                        className="text-red-400 hover:text-red-600 font-bold text-[9px] uppercase tracking-wider transition-colors"
+                      >
+                        Delete Part
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    {PART_STEPS.map((step, stepIdx) => {
+                      const isActive = currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing;
+                      return (
+                        <button 
+                          key={step.id}
+                          onClick={() => { setIsReviewing(false); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); setIsMobileMenuOpen(false); }}
+                          className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all ${isActive ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'}`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            {React.createElement(step.icon, { className: `w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}` })}
+                            <span className="text-xs font-bold">{step.title}</span>
+                          </div>
+                          {step.id === 'part-basics' && part.responses['2.01'] && (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          )}
+                          {step.id === 'surface' && part.responses['2.11'] !== undefined && (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          )}
+                          {step.id === 'media' && part.images.length > 0 && (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {/* Final Verdict Card */}
+              <button 
+                onClick={() => { setIsReviewing(true); setIsMobileMenuOpen(false); if (!currentProject.report && !isGeneratingReport) generateReport(); }}
+                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${isReviewing ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${isReviewing ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold">Final Verdict</h4>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">Submit & view AI Advisor feasibility</p>
+                  </div>
+                </div>
+                {currentProject.status === 'submitted' && (
+                  <ShieldCheck className="w-4 h-4 text-blue-500 shrink-0" />
+                )}
+              </button>
+            </div>
+
+            {/* Quick Actions at Bottom of Sheet */}
+            {!isReadOnly && (
+              <button 
+                onClick={() => { handleAddPart(); setIsMobileMenuOpen(false); }}
+                className="mt-6 w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors shrink-0 shadow-lg shadow-slate-900/10 active:scale-[0.99]"
+              >
+                <PlusCircle className="w-5 h-5" />
+                <span>Add Another Part</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Fullscreen Image Magnifier modal */}
       {fullscreenImage && (
