@@ -101,7 +101,7 @@ export function DashboardView({
           </button>
         </div>
 
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-wrap gap-4 items-center">
+        <div className="bg-blue-50/40 p-6 rounded-[2rem] border border-blue-100/60 shadow-xs flex flex-wrap gap-4 items-center animate-fadeIn">
           <div className="flex-1 min-w-[200px]">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">Search Project / Org / ID</p>
               {/* Her ser du "To-vejs databinding" i React:
@@ -110,17 +110,17 @@ export function DashboardView({
               <input 
                 type="text" 
                 placeholder="e.g. Billund Automation" 
-                className="w-full bg-slate-50 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600"
+                className="w-full bg-white border border-slate-200/80 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none transition-all font-semibold text-slate-800"
                 value={filterOrg}
                 onChange={e => setFilterOrg(e.target.value)}
               />
             </div>
             <div className="flex-1 min-w-[200px]">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">Search User</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">Search Contact</p>
               <input 
                 type="text" 
-                placeholder="Name or UID" 
-                className="w-full bg-slate-50 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600"
+                placeholder="e.g. Rune Larsen" 
+                className="w-full bg-white border border-slate-200/80 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none transition-all font-semibold text-slate-800"
                 value={filterUser}
                 onChange={e => setFilterUser(e.target.value)}
               />
@@ -128,7 +128,7 @@ export function DashboardView({
             <div className="w-48">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">Status</p>
               <select 
-                className="w-full bg-slate-50 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600"
+                className="w-full bg-white border border-slate-200/80 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none transition-all font-bold text-slate-700"
                 value={filterStatus}
                 onChange={e => setFilterStatus(e.target.value)}
               >
@@ -145,7 +145,7 @@ export function DashboardView({
               <select 
                 value={sortBy} 
                 onChange={e => setSortBy(e.target.value)}
-                className="w-full bg-slate-50 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600"
+                className="w-full bg-white border border-slate-200/80 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none transition-all font-bold text-slate-700"
               >
                 <option value="date">Date</option>
                 <option value="org">Organization</option>
@@ -155,7 +155,7 @@ export function DashboardView({
             <div className="flex items-center gap-2 pt-6">
               <button 
                 onClick={() => setShowInactive(!showInactive)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${showInactive ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}
+                className={`px-5 py-3 rounded-xl text-xs font-bold transition-all border ${showInactive ? 'bg-blue-600 text-white border-blue-600 shadow-sm hover:bg-blue-700' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
               >
                 {showInactive ? "Hide Inactive" : "Show Inactive"}
               </button>

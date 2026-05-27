@@ -112,16 +112,16 @@ export function ProjectCard({
    */
   return (
     <div 
-      className={`group relative bg-white p-6 rounded-3xl border shadow-sm hover:shadow-md hover:border-slate-200 transition-all cursor-pointer overflow-hidden flex flex-col h-full ${p.isInactive ? 'opacity-60 border-slate-200' : 'border-slate-100'}`} 
+      className={`group relative bg-white p-6 rounded-3xl border shadow-md hover:shadow-xl hover:-translate-y-1.5 hover:border-blue-200/50 transition-all duration-300 ease-out cursor-pointer overflow-hidden flex flex-col h-full ${p.isInactive ? 'opacity-60 border-slate-200 shadow-xs' : 'border-slate-100'}`} 
       onClick={() => openProject(p)}
     >
-      {/* Udvasket baggrundsbillede hvis der er uploadet et billede til projektet */}
+      {/* Udvasket baggrundsbillede hvis der er uploadet et billede til projektet (rounded-3xl fixes corner bleed) */}
       {firstImage && (
-        <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden">
+        <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden rounded-3xl">
           <img 
             src={firstImage} 
             alt="" 
-            className="w-full h-full object-cover opacity-30 saturate-[0.8] blur-[1px] group-hover:scale-[1.03] transition-all duration-500 ease-out" 
+            className="w-full h-full object-cover opacity-30 saturate-[0.8] blur-[1px] group-hover:scale-[1.05] transition-all duration-500 ease-out" 
           />
           {/* Udvasknings-gradient der sikrer ekstrem høj læsbarhed af teksten */}
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-white/40 to-white/70" />
