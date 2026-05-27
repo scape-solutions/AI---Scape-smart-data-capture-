@@ -77,6 +77,64 @@ export function QuestionnaireView({
   // Read-only state (locked or submitted, unless the user is an admin)
   const isReadOnly = (currentProject.isLocked || currentProject.status === 'submitted') && !profile?.isAdmin;
 
+  // Helper to calculate question fill progress for a step
+  const getStepProgress = (step: any, responses: Record<string, any>, part?: any) => {
+    let filled = 0;
+    let total = 0;
+
+    step.questions.forEach((q: any) => {
+      if (q.condition && !q.condition(responses)) {
+        return;
+      }
+
+      total++;
+      const val = responses[q.id];
+      let isFilled = false;
+
+      if (q.type === 'media') {
+        isFilled = !!(part && part.images && part.images.length > 0);
+      } else if (q.type === 'boolean') {
+        isFilled = typeof val === 'boolean';
+      } else if (q.type === 'number') {
+        isFilled = val !== undefined && val !== null && val !== '';
+      } else {
+        isFilled = typeof val === 'string' && val.trim() !== '';
+      }
+
+      if (q.id === '2.06' && val === true) {
+        total++;
+        if (part && part.cadFile) {
+          filled++;
+        }
+      }
+
+      if (isFilled) {
+        filled++;
+      }
+    });
+
+    return { filled, total };
+  };
+
+  const renderProgressBadge = (filled: number, total: number) => {
+    const isComplete = filled === total && total > 0;
+    
+    if (isComplete) {
+      return (
+        <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100/50 px-2.5 py-0.5 rounded-full select-none shrink-0 shadow-3xs animate-fadeIn">
+          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+          Done
+        </span>
+      );
+    }
+    
+    return (
+      <span className="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-200/30 px-2 py-0.5 rounded-full select-none shrink-0 transition-all duration-300">
+        {filled}/{total}
+      </span>
+    );
+  };
+
   // Handle ESC key to close fullscreen image viewer
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -196,9 +254,16 @@ export function QuestionnaireView({
         {/* Project & Cell Info */}
         <button 
           onClick={() => { setIsReviewing(false); setCurrentStep(0); }}
-          className={`flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${currentStep === 0 && !isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+          className={`w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-all ${currentStep === 0 && !isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
         >
-          <Settings2 className="w-4 h-4" /> Project & Cell Info
+          <div className="flex items-center gap-3">
+            <Settings2 className="w-4 h-4" />
+            <span>Project & Cell Info</span>
+          </div>
+          {(() => {
+            const { filled, total } = getStepProgress(GENERAL_STEPS[0], currentProject.generalResponses);
+            return renderProgressBadge(filled, total);
+          })()}
         </button>
 
         {/* Dynamic Part Tabs */}
@@ -215,16 +280,22 @@ export function QuestionnaireView({
                 </button>
               )}
             </div>
-            {PART_STEPS.map((step, stepIdx) => (
-              <button 
-                key={step.id}
-                onClick={() => { setIsReviewing(false); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); }}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
-              >
-                {React.createElement(step.icon, { className: "w-4 h-4" })}
-                <span>{step.title}</span>
-              </button>
-            ))}
+            {PART_STEPS.map((step, stepIdx) => {
+              const { filled, total } = getStepProgress(step, part.responses, part);
+              return (
+                <button 
+                  key={step.id}
+                  onClick={() => { setIsReviewing(false); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); }}
+                  className={`w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-all ${currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    {React.createElement(step.icon, { className: "w-4 h-4" })}
+                    <span>{step.title}</span>
+                  </div>
+                  {renderProgressBadge(filled, total)}
+                </button>
+              );
+            })}
           </div>
         ))}
 
@@ -549,9 +620,52 @@ export function QuestionnaireView({
                   // Condition check
                   if (q.condition && !q.condition(responses)) return null;
 
+                  const isFieldFilled = (question: any, res: Record<string, any>, partItem?: any) => {
+                    const val = res[question.id];
+                    if (question.type === 'media') {
+                      return !!(partItem && partItem.images && partItem.images.length > 0);
+                    } else if (question.type === 'boolean') {
+                      return typeof val === 'boolean';
+                    } else if (question.type === 'number') {
+                      return val !== undefined && val !== null && val !== '';
+                    } else {
+                      return typeof val === 'string' && val.trim() !== '';
+                    }
+                  };
+
+                  let filled = isFieldFilled(q, responses, currentStep === 0 ? undefined : currentProject.parts[activePartIndex]);
+                  if (q.id === '2.06' && responses['2.06'] === true) {
+                    const part = currentProject.parts[activePartIndex];
+                    if (!part.cadFile) {
+                      filled = false;
+                    }
+                  }
+
                   return (
-                    <div key={q.id} className="space-y-2 animate-fadeIn">
-                      <label className="block text-sm font-bold text-slate-700">{q.label}</label>
+                    <div 
+                      key={q.id} 
+                      className={`space-y-2.5 animate-fadeIn border-l-3 pl-4 py-2.5 rounded-r-2xl transition-all duration-300 ${
+                        isReadOnly 
+                          ? 'border-transparent pl-0' 
+                          : filled 
+                            ? 'border-slate-200/50 bg-transparent' 
+                            : q.important 
+                              ? 'border-amber-500 bg-amber-500/5 shadow-3xs animate-fadeIn' 
+                              : 'border-slate-300 bg-slate-500/2'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <label className="block text-sm font-bold text-slate-700">{q.label}</label>
+                        {!isReadOnly && !filled && (
+                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md select-none shrink-0 ${
+                            q.important 
+                              ? 'bg-amber-100 text-amber-800 animate-pulse' 
+                              : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {q.important ? 'Important' : 'Optional'}
+                          </span>
+                        )}
+                      </div>
                       {q.description && (
                         <p className="text-xs text-slate-400 mb-1">{q.description}</p>
                       )}
@@ -879,9 +993,10 @@ export function QuestionnaireView({
                     <p className="text-[10px] text-slate-400 font-medium mt-0.5">Bin size, preferred robot...</p>
                   </div>
                 </div>
-                {Object.keys(currentProject.generalResponses).length >= 2 && (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                )}
+                {(() => {
+                  const { filled, total } = getStepProgress(GENERAL_STEPS[0], currentProject.generalResponses);
+                  return renderProgressBadge(filled, total);
+                })()}
               </button>
 
               {/* Part Section Cards */}
@@ -902,6 +1017,7 @@ export function QuestionnaireView({
                   <div className="grid grid-cols-1 gap-2">
                     {PART_STEPS.map((step, stepIdx) => {
                       const isActive = currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing;
+                      const { filled, total } = getStepProgress(step, part.responses, part);
                       return (
                         <button 
                           key={step.id}
@@ -912,15 +1028,7 @@ export function QuestionnaireView({
                             {React.createElement(step.icon, { className: `w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}` })}
                             <span className="text-xs font-bold">{step.title}</span>
                           </div>
-                          {step.id === 'part-basics' && part.responses['2.01'] && (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          )}
-                          {step.id === 'surface' && part.responses['2.11'] !== undefined && (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          )}
-                          {step.id === 'media' && part.images.length > 0 && (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          )}
+                          {renderProgressBadge(filled, total)}
                         </button>
                       );
                     })}
