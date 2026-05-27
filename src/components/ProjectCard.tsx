@@ -114,6 +114,10 @@ export function ProjectCard({
     <div 
       className={`group relative bg-white p-6 rounded-3xl border shadow-md hover:shadow-xl hover:-translate-y-1.5 hover:border-blue-200/50 transition-all duration-300 ease-out cursor-pointer overflow-hidden flex flex-col h-full ${p.isInactive ? 'opacity-60 border-slate-200 shadow-xs' : 'border-slate-100'}`} 
       onClick={() => openProject(p)}
+      style={{
+        isolation: 'isolate',
+        WebkitMaskImage: '-webkit-radial-gradient(white, black)'
+      }}
     >
       {/* Udvasket baggrundsbillede hvis der er uploadet et billede til projektet (rounded-3xl fixes corner bleed) */}
       {firstImage && (
