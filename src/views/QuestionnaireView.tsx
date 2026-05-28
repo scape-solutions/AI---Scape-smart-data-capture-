@@ -20,6 +20,8 @@ import {
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 import { ProjectState, UserProfile } from '../types';
 import imageCompression from 'browser-image-compression';
+import { Header } from '../components/Header';
+import ReactMarkdown from 'react-markdown';
 
 interface QuestionnaireViewProps {
   currentProject: ProjectState;
@@ -43,7 +45,14 @@ interface QuestionnaireViewProps {
   db: any;
   logChange: any;
   fetchProjects: any;
-  generateReport: any;
+  generateExternalAdvice: any;
+  generateEvaluatorDraft: any;
+  user: any;
+  logout: () => void;
+  switchMode: (role: 'evaluator' | 'external', onStatusChanged: (isAdmin: boolean) => void) => void;
+  isAllowedEvaluator: (email: string | null | undefined) => boolean;
+  isScapeEmployee: (email: string | null | undefined, uid?: string | null) => boolean;
+  saveProfile: (data: any) => Promise<void>;
 }
 
 export function QuestionnaireView({
@@ -68,7 +77,14 @@ export function QuestionnaireView({
   db,
   logChange,
   fetchProjects,
-  generateReport,
+  generateExternalAdvice,
+  generateEvaluatorDraft,
+  user,
+  logout,
+  switchMode,
+  isAllowedEvaluator,
+  isScapeEmployee,
+  saveProfile,
 }: QuestionnaireViewProps) {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -145,6 +161,20 @@ export function QuestionnaireView({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  const handleBackToDashboard = async () => {
+    if (!isReadOnly) {
+      setIsSaving(true);
+      try {
+        await saveProject('draft');
+      } catch (err) {
+        console.error("Auto-save failed on view change:", err);
+      } finally {
+        setIsSaving(false);
+      }
+    }
+    setView('dashboard');
+  };
 
   const handleAddPart = async () => {
     if (isReadOnly) return;
@@ -245,10 +275,16 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
       {/* Sidebar on the Left (Desktop-only) */}
       <aside className="hidden md:flex md:w-64 bg-white md:border-r border-slate-200 p-6 flex-col gap-4 overflow-y-auto shrink-0">
         <button 
-          onClick={() => setView('dashboard')}
-          className="flex items-center gap-2 text-sm text-slate-500 mb-6 hover:text-slate-900 transition-colors"
+          onClick={handleBackToDashboard}
+          disabled={isSaving}
+          className="flex items-center gap-2 text-sm text-slate-500 mb-6 hover:text-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <LayoutDashboard className="w-4 h-4" /> Dashboard
+          {isSaving ? (
+            <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+          ) : (
+            <LayoutDashboard className="w-4 h-4" />
+          )}
+          <span>Dashboard</span>
         </button>
 
         <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Structure</h2>
@@ -304,7 +340,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
         {/* Final Verdict */}
         <div className="mt-4 pt-4 border-t border-slate-100">
           <button 
-            onClick={() => { setIsReviewing(true); if (!currentProject.report && !isGeneratingReport) generateReport(); }}
+            onClick={() => { setIsReviewing(true); if (!currentProject.report && !isGeneratingReport && !profile?.isAdmin) generateExternalAdvice(); }}
             className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
           >
             <Sparkles className="w-4 h-4" /> Final Verdict
@@ -322,17 +358,40 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 p-4 md:p-12 overflow-y-auto bg-slate-50">
+      <div className="flex-1 px-4 pb-4 pt-0 md:p-12 overflow-y-auto bg-slate-50">
         <div className="max-w-2xl mx-auto w-full">
           
+          {/* Mobile-Only Header inside the scrollable container */}
+          <div className="md:hidden -mx-4 mt-0 mb-4 select-none">
+            <Header 
+              user={user}
+              profile={profile}
+              globalError={null}
+              globalSuccess={null}
+              setGlobalError={() => {}}
+              setGlobalSuccess={() => {}}
+              setView={setView}
+              logout={logout}
+              switchMode={switchMode}
+              isAllowedEvaluator={isAllowedEvaluator}
+              isScapeEmployee={isScapeEmployee}
+              saveProfile={saveProfile}
+            />
+          </div>
+
           {/* Sticky Mobile Header Bar (Only visible on screens < md) */}
-          <div className="md:hidden sticky top-0 z-30 -mx-4 -mt-4 mb-6 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-xs select-none">
+          <div className="md:hidden sticky top-0 z-30 -mx-4 mb-6 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-xs select-none">
             <button 
-              onClick={() => setView('dashboard')}
-              className="p-1.5 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl text-slate-500 transition-all active:scale-95"
+              onClick={handleBackToDashboard}
+              disabled={isSaving}
+              className="p-1.5 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl text-slate-500 transition-all active:scale-95 disabled:opacity-50"
               title="Dashboard"
             >
-              <LayoutDashboard className="w-5 h-5" />
+              {isSaving ? (
+                <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+              ) : (
+                <LayoutDashboard className="w-5 h-5" />
+              )}
             </button>
 
             <div 
@@ -402,42 +461,144 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             <div className="space-y-10 animate-fadeIn">
               <h1 className="text-5xl font-black tracking-tighter">Final Review</h1>
               
-              {/* Feasibility Verdict Box */}
-              <div className="bg-slate-900 text-white p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
-                <Sparkles className="absolute top-0 right-0 w-40 h-40 opacity-10" />
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <Zap className="text-blue-400" /> Advisor Verdict
-                </h3>
+              {/* AI Advice Box (External) */}
+              {!profile?.isAdmin && (
+                <div className="bg-slate-900 text-white p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
+                  <Sparkles className="absolute top-0 right-0 w-40 h-40 opacity-10" />
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <Zap className="text-blue-400" /> Data Capture Advice
+                  </h3>
+                  
+                  {isGeneratingReport ? (
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Analyzing Data...</span>
+                    </div>
+                  ) : (
+                    <div className="text-slate-300 leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-white">
+                      <ReactMarkdown>
+                        {currentProject.report || 'No advice generated yet.'}
+                      </ReactMarkdown>
+                    </div>
+                  )}
 
-                {profile?.isAdmin || currentProject.isVerdictVisible ? (
-                  <>
-                    {isGeneratingReport ? (
-                      <div className="flex items-center gap-3">
-                        <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
-                        <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Calculating Feasibility...</span>
-                      </div>
-                    ) : (
-                      <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">
-                        {currentProject.report || 'Awaiting submission data...'}
-                      </p>
-                    )}
-                    {profile?.isAdmin && (
+                  {!isReadOnly && (
+                    <button 
+                      onClick={generateExternalAdvice}
+                      disabled={isGeneratingReport}
+                      className="mt-8 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border border-slate-700 text-slate-300 hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <RotateCcw className="w-4 h-4" /> Get Advice on Data
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Evaluator AI Draft Box (Admin Only) */}
+              {profile?.isAdmin && (
+                <div className="bg-blue-50/50 border border-blue-100 p-10 rounded-[3rem] shadow-sm relative">
+                  <h3 className="text-xl font-bold text-blue-900 mb-6 flex items-center gap-2">
+                    <Zap className="text-blue-600" /> Evaluator AI Draft
+                  </h3>
+                  
+                  {isGeneratingReport ? (
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Drafting Conclusion...</span>
+                    </div>
+                  ) : (
+                    <div className="bg-white p-6 rounded-2xl border border-blue-100 text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-mono">
+                      {currentProject.evaluatorDraft || 'No draft generated yet.'}
+                    </div>
+                  )}
+
+                  <div className="flex gap-4 mt-6">
+                    <button 
+                      onClick={generateEvaluatorDraft}
+                      disabled={isGeneratingReport}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-blue-700 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4" /> Generate Evaluator Draft
+                    </button>
+                    {currentProject.evaluatorDraft && (
                       <button 
-                        onClick={() => toggleVerdictVisibility(currentProject)}
-                        className={`mt-10 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all ${currentProject.isVerdictVisible ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-700 text-slate-400 hover:text-white hover:border-white'}`}
+                        onClick={() => {
+                          navigator.clipboard.writeText(currentProject.evaluatorDraft || '');
+                          setGlobalSuccess("Draft copied to clipboard!");
+                          setTimeout(() => setGlobalSuccess(null), 3000);
+                        }}
+                        className="px-6 py-3 bg-white text-blue-600 border border-blue-200 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-blue-50 transition-all"
                       >
-                        {currentProject.isVerdictVisible ? 'Verdict Published' : 'Publish Verdict to User'}
+                        Copy Draft
                       </button>
                     )}
-                  </>
-                ) : (
-                  <div className="py-10 text-center">
-                    <Info className="w-12 h-12 text-slate-700 mx-auto mb-4" />
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Verdict Pending</p>
-                    <p className="text-slate-400 text-sm mt-2">A Scape Applications Engineer is reviewing your specification.</p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* Final Verdict Box (Visible to Admin, OR to User if Published) */}
+              {(profile?.isAdmin || currentProject.isVerdictVisible) && (
+                <div className="bg-white border-2 border-slate-900 p-10 rounded-[3rem] shadow-xl relative">
+                  <h3 className="text-2xl font-black text-slate-900 mb-2">Final Verdict</h3>
+                  {!profile?.isAdmin && (
+                    <p className="text-sm text-slate-500 font-medium mb-8">Official conclusion from Scape Solutions.</p>
+                  )}
+                  
+                  {profile?.isAdmin ? (
+                    <div className="space-y-4">
+                      <p className="text-sm text-slate-500 font-medium mb-4">Edit and paste your final verdict below. Once published, the external user can view it.</p>
+                      <textarea
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all font-mono min-h-[300px]"
+                        placeholder="Paste AI draft here and edit, or write from scratch..."
+                        value={currentProject.finalVerdict || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCurrentProject({ ...currentProject, finalVerdict: val });
+                          // Auto-save logic on blur or manual save could be used, for now we save on publish
+                        }}
+                      />
+                      <div className="flex items-center justify-end gap-4 mt-6">
+                        <button 
+                          onClick={async () => {
+                            try {
+                              await updateProjectField(currentProject, 'finalVerdict', currentProject.finalVerdict, "Evaluator updated final verdict");
+                              setGlobalSuccess("Verdict text saved.");
+                              setTimeout(() => setGlobalSuccess(null), 3000);
+                            } catch (e) {
+                              handleAppError(e);
+                            }
+                          }}
+                          className="px-6 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-200 transition-all"
+                        >
+                          Save Draft
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            try {
+                              await updateProjectField(currentProject, 'isVerdictVisible', !currentProject.isVerdictVisible, `Verdict visibility changed to ${!currentProject.isVerdictVisible}`);
+                              if (!currentProject.isVerdictVisible) {
+                                // If turning on, make sure we save the text too
+                                await updateProjectField(currentProject, 'finalVerdict', currentProject.finalVerdict, "Verdict published");
+                              }
+                            } catch (e) {
+                              handleAppError(e);
+                            }
+                          }}
+                          className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md ${currentProject.isVerdictVisible ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                        >
+                          {currentProject.isVerdictVisible ? 'Unpublish Verdict' : 'Publish Verdict to User'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-slate-700 leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-slate-900">
+                      <ReactMarkdown>
+                        {currentProject.finalVerdict || '*The evaluator did not provide text for the verdict.*'}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Parts Summary list */}
               <div className="space-y-4">
@@ -933,7 +1094,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           } else {
                             // Go to final review page
                             setIsReviewing(true);
-                            generateReport();
+                            if (!currentProject.report && !isGeneratingReport && !profile?.isAdmin) generateExternalAdvice();
                           }
                         } else {
                           // Move to next step
@@ -1012,6 +1173,10 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               </button>
 
               {/* Part Section Cards */}
+              <div className="mt-8 mb-4">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2 px-3">Parts Data</h3>
+              </div>
+
               {currentProject.parts.map((part, partIdx) => (
                 <div key={partIdx} className="p-4 bg-slate-50/30 border border-slate-100 rounded-2xl space-y-3">
                   <div className="flex justify-between items-center px-1">
@@ -1050,7 +1215,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
               {/* Final Verdict Card */}
               <button 
-                onClick={() => { setIsReviewing(true); setIsMobileMenuOpen(false); if (!currentProject.report && !isGeneratingReport) generateReport(); }}
+                onClick={() => { setIsReviewing(true); setIsMobileMenuOpen(false); if (!currentProject.report && !isGeneratingReport && !profile?.isAdmin) generateExternalAdvice(); }}
                 className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${isReviewing ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
               >
                 <div className="flex items-center gap-3">

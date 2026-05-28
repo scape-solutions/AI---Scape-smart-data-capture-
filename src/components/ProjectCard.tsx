@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { ShieldCheck, CheckCircle2, Clock, History, Trash2, ChevronRight, User as UserIcon } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, Clock, History, Trash2, ChevronRight, User as UserIcon, RotateCcw } from 'lucide-react';
 import { ProjectState, UserProfile } from '../types';
 
 interface ProjectCardProps {
@@ -16,6 +16,7 @@ interface ProjectCardProps {
   openProject: (p: ProjectState) => void;
   fetchLog: (id: string) => void;
   deleteProject: (p: ProjectState) => void;
+  restoreProject: (p: ProjectState) => void;
   toggleLock: (p: ProjectState) => void;
   takeProject: (p: ProjectState) => void;
   updateStatus: (p: ProjectState, status: ProjectState['status']) => void;
@@ -30,6 +31,7 @@ export function ProjectCard({
   openProject,
   fetchLog,
   deleteProject,
+  restoreProject,
   toggleLock,
   takeProject,
   updateStatus,
@@ -112,16 +114,18 @@ export function ProjectCard({
    */
   return (
     <div 
-      className={`group relative bg-white p-6 rounded-3xl border border-slate-200 shadow-md shadow-slate-100 hover:shadow-xl hover:shadow-blue-600/8 hover:-translate-y-1.5 hover:border-blue-600/30 transition-all duration-300 ease-out cursor-pointer overflow-hidden flex flex-col h-full ${p.isInactive ? 'opacity-60 border-slate-300 shadow-xs' : ''}`} 
+      className={`group relative bg-white p-6 rounded-3xl border border-slate-200/90 shadow-[3px_10px_24px_-2px_rgba(15,23,42,0.09),_1px_3px_8px_-1px_rgba(15,23,42,0.04)] hover:shadow-xl hover:shadow-blue-600/8 hover:-translate-y-1.5 hover:border-blue-600/30 transition-all duration-300 ease-out cursor-pointer flex flex-col h-full ${p.isInactive || p.isDeleted ? 'opacity-60 border-slate-300 shadow-xs' : ''}`} 
       onClick={() => openProject(p)}
-      style={{
-        isolation: 'isolate',
-        WebkitMaskImage: '-webkit-radial-gradient(white, black)'
-      }}
     >
       {/* Udvasket baggrundsbillede hvis der er uploadet et billede til projektet (rounded-3xl fixes corner bleed) */}
       {firstImage && (
-        <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden rounded-3xl">
+        <div 
+          className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden rounded-3xl"
+          style={{
+            isolation: 'isolate',
+            WebkitMaskImage: '-webkit-radial-gradient(white, black)'
+          }}
+        >
           <img 
             src={firstImage} 
             alt="" 
@@ -148,7 +152,8 @@ export function ProjectCard({
               {/* Hvis projektet er låst (isLocked er true), så vis dette badge */}
               {p.isLocked && <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shrink-0"><ShieldCheck className="w-3 h-3" /> Locked</span>}
               {p.isFullySpecified && <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shrink-0"><CheckCircle2 className="w-3 h-3" /> Specified</span>}
-              {p.isInactive && <span className="bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shrink-0">Inactive</span>}
+              {p.isInactive && !p.isDeleted && <span className="bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shrink-0">Inactive</span>}
+              {p.isDeleted && <span className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shrink-0 flex items-center gap-1"><Trash2 className="w-3 h-3" /> Deleted</span>}
             </div>
             <Clock className="w-4 h-4 text-slate-300 shrink-0 mt-1" />
           </div>
@@ -250,12 +255,22 @@ export function ProjectCard({
                 <History className="w-3 h-3" /> History
               </button>
               {(p.userId === user?.uid || profile?.isAdmin) && (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); deleteProject(p); }} 
-                  className="hover:text-red-500 flex items-center gap-1 transition-colors"
-                >
-                  <Trash2 className="w-3 h-3" /> Delete
-                </button>
+                <>
+                  {p.isDeleted && profile?.isAdmin && (
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); restoreProject(p); }} 
+                      className="hover:text-emerald-500 text-emerald-600 font-bold flex items-center gap-1 transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Restore
+                    </button>
+                  )}
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); deleteProject(p); }} 
+                    className="hover:text-red-500 flex items-center gap-1 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" /> {p.isDeleted ? 'Final Delete' : 'Delete'}
+                  </button>
+                </>
               )}
             </div>
             <button 

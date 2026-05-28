@@ -40,6 +40,9 @@ export interface ProjectState {
   generalResponses: Record<string, any>;
   parts: PartData[];
   report: string | null;
+  evaluatorDraft?: string | null;
+  finalVerdict?: string | null;
+  chatHistory?: { role: 'user' | 'model'; text: string }[];
   // 'status' kan KUN være en af disse præcise strenge. Det kaldes en "Union Type".
   status: 'draft' | 'submitted' | 'cancelled' | 'approved' | 'rejected';
   userId: string;
@@ -49,6 +52,7 @@ export interface ProjectState {
   isLocked?: boolean;
   isFullySpecified?: boolean;
   isInactive?: boolean;
+  isDeleted?: boolean;
   takenBy?: string;
   takenByName?: string;
   isVerdictVisible?: boolean;

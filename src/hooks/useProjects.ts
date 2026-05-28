@@ -89,7 +89,14 @@ export function useProjects(
       
       // 'snap.docs' indeholder de rå data fra Firebase. Vi mapper (konverterer) 
       // dem til vores eget ProjectState format med robust skema-normalisering.
-      let data = snap.docs.map(d => normalizeProject({ id: d.id, ...(d.data() as any) }));
+      // Sørg for at 'id: d.id' kommer EFTER d.data(), så eventuelle forældede 'id: null' i dokumentfelterne ikke overskriver det ægte ID!
+      let data = snap.docs.map(d => {
+        const rawData = d.data() as any;
+        if (rawData && 'id' in rawData) {
+          console.warn(`[Firestore ID Audit] Document "${d.id}" ("${rawData.projectName || 'Untitled'}") contains a polluted internal 'id' field!`);
+        }
+        return normalizeProject({ ...rawData, id: d.id });
+      });
       
       // Sortering af data. Først efter dato (nyeste først).
       data.sort((a: any, b: any) => {
@@ -208,9 +215,11 @@ export function useProjects(
       images: [] // Hoveddokumentet skal ikke have base64 data
     }));
 
-    // Vi bygger det data-objekt, vi vil sende til databasen
+    // Vi bygger det data-objekt, vi vil sende til databasen.
+    // Vi trækker 'id' ud så vi ALDRIG gemmer et forældet 'id: null' eller database-ID som et felt i Firestore dokumentet!
+    const { id, ...projectDataWithoutId } = currentProject;
     const data = {
-      ...currentProject,
+      ...projectDataWithoutId,
       parts: partsWithoutImages,
       status,
       isLocked: !!currentProject.isLocked,
@@ -248,15 +257,34 @@ export function useProjects(
     }
   };
 
-  // Sletter et projekt fuldstændigt
-  const deleteProject = async (p: ProjectState) => {
+  // Sletter et projekt (soft delete eller hard delete afhængig af parameter)
+  const deleteProject = async (p: ProjectState, finalDelete: boolean = false) => {
     try {
-      await deleteDoc(doc(db, 'projects', p.id!));
-      setGlobalSuccess(`Project "${p.projectName}" deleted successfully.`);
+      if (finalDelete) {
+        await deleteDoc(doc(db, 'projects', p.id!));
+        setGlobalSuccess(`Project "${p.projectName}" permanently deleted.`);
+      } else {
+        await updateDoc(doc(db, 'projects', p.id!), { isDeleted: true });
+        await logChange(p.id!, "Project moved to trash");
+        setGlobalSuccess(`Project "${p.projectName}" moved to trash.`);
+      }
       setTimeout(() => setGlobalSuccess(null), 5000);
       await fetchProjects(profile?.isAdmin);
     } catch (e: any) {
       handleAppError(e, OperationType.DELETE, `projects/${p.id}`);
+      throw e;
+    }
+  };
+
+  const restoreProject = async (p: ProjectState) => {
+    try {
+      await updateDoc(doc(db, 'projects', p.id!), { isDeleted: false });
+      await logChange(p.id!, "Project restored from trash");
+      setGlobalSuccess(`Project "${p.projectName}" restored.`);
+      setTimeout(() => setGlobalSuccess(null), 5000);
+      await fetchProjects(profile?.isAdmin);
+    } catch (e: any) {
+      handleAppError(e, OperationType.WRITE, `projects/${p.id}`);
       throw e;
     }
   };
@@ -300,7 +328,9 @@ export function useProjects(
     setCurrentProject,
     fetchProjects,
     saveProject,
+    saveProjectImages,
     deleteProject,
+    restoreProject,
     fetchLog,
     changelog,
     showLog,

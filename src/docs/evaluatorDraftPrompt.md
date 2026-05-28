@@ -1,0 +1,1 @@
+Analyze this bin-picking project specification and make the best possible conclusions on the overall project and on sub-parts. Write the output in markdown format. Act as an expert Scape Applications Engineer.

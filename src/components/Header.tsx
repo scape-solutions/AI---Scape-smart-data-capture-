@@ -73,7 +73,7 @@ export function Header({
   };
 
   return (
-    <header className="h-16 flex items-center justify-between px-4 md:px-8 bg-white border-b border-slate-200 sticky top-0 z-[50]">
+    <header className="h-16 flex items-center justify-between px-4 md:px-8 bg-white border-b border-slate-200 relative md:sticky top-0 z-[50]">
       {/* Hvis globalError er sat til noget (ikke null), viser vi denne røde boks. */}
       {globalError && (
         <div className="absolute top-16 left-0 right-0 bg-red-600 text-white text-[10px] py-1 px-4 md:px-8 font-bold flex justify-between items-center z-[60]">
