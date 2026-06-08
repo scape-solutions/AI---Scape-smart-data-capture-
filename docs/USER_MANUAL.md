@@ -95,10 +95,10 @@ Each project card displays its status badge on the dashboard. Use this table to 
 
 | State Badge | Editable By | Visible To | Description |
 | :--- | :--- | :--- | :--- |
-| **Draft** | Owner | Owner & Admins | The project is in preparation. The owner can add, modify, or delete parts, upload CAD, and delete files. |
-| **Submitted** | Evaluator / Super User | Owner & Admins | Submitted to SCAPE for feasibility checks. The data is locked for the customer to prevent modifications during review. |
-| **Approved** | Evaluator / Super User | Owner & Admins | SCAPE has evaluated the project and approved it as technically feasible. |
-| **Rejected** | Evaluator / Super User | Owner & Admins | The project has been marked as not feasible or cancelled. |
+| **Draft** | Owner | Owner & Admins | The project is in preparation. Only the owner can edit it. Admins/Evaluators can view drafts but cannot edit answers, perform AI reviews, or write verdicts. |
+| **Submitted** | Evaluator / Super User | Owner & Admins | Submitted to SCAPE for feasibility checks. The data is locked for the customer, and the case becomes open for evaluator action. |
+| **Approved** | Evaluator / Super User | Owner & Admins | SCAPE has evaluated the project and approved it as technically feasible. The final verdict text is automatically visible to the user. |
+| **Rejected** | Evaluator / Super User | Owner & Admins | The project has been marked as not feasible or cancelled. The final verdict text is automatically visible to the user. |
 | **Specified** | Evaluator / Super User | Owner & Admins | An administrative sub-state indicating that the physical specifications have been verified and locked. |
 | **Inactive** | Evaluator / Super User | Owner & Admins | Archived projects. Hidden from the dashboard unless the "Show Inactive" filter is toggled. |
 | **Trash (Deleted)** | Evaluator / Super User | Owner & Admins | Staged in the trash bin. Can be restored by an admin or permanently deleted. |
@@ -154,3 +154,8 @@ When importing projects from external systems in JSON format:
 1. They enter the database in a staged state (**Import Pending**) and are only visible in Super User mode.
 2. The Super User can click **Accept** on the project card (or **Accept All Staged** in the toolbar) to move them into active status (making them visible to the assigned owners).
 3. If the data is corrupted or unwanted, clicking **Discard** permanently clears the imported draft.
+
+### Final Verdict Visibility for Users
+* **Draft & Submitted State**: The Final Verdict report details and decisions are hidden from the external customer (unless manually published by an evaluator using "Publish Verdict to User").
+* **Approved & Rejected State**: Once an evaluator approves or rejects a submission, the **Final Verdict** technical conclusions and recommendation texts are automatically and immediately visible to the customer under their **Final Review** tab.
+

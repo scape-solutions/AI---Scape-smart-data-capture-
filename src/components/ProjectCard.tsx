@@ -262,7 +262,7 @@ export function ProjectCard({
         </div>
 
         <div>
-          {profile?.isAdmin && !p.isImportPending && (
+          {profile?.isAdmin && !p.isImportPending && p.status !== 'draft' && (
             <div className="flex flex-wrap gap-2 mb-4 border-t border-slate-100 pt-4">
               <button 
                 // e.stopPropagation() sørger for, at "klikket" ikke bobler op 

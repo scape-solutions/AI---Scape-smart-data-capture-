@@ -465,11 +465,18 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               <ShieldCheck className="w-5 h-5 text-amber-600 animate-pulse" />
               <div>
                 <p className="text-sm font-bold text-amber-950">
-                  {currentProject.status === 'submitted' ? 'Project Submitted (Read-Only)' : 'Project Locked (Read-Only)'}
+                  {currentProject.status === 'submitted' ? 'Project Submitted (Read-Only)' :
+                   currentProject.status === 'approved' ? 'Project Approved (Read-Only)' :
+                   currentProject.status === 'rejected' ? 'Project Rejected (Read-Only)' :
+                   'Project Locked (Read-Only)'}
                 </p>
                 <p className="text-xs text-amber-700 mt-0.5">
                   {currentProject.status === 'submitted' 
                     ? 'This project has been submitted to Scape. You can cancel submission at the bottom of the Final Review tab if you need to make changes.' 
+                    : currentProject.status === 'approved'
+                    ? 'This project has been evaluated and approved by Scape Solutions.'
+                    : currentProject.status === 'rejected'
+                    ? 'This project has been evaluated and marked as rejected / not feasible by Scape Solutions.'
                     : 'This project has been locked by Scape. You cannot edit it in this state.'}
                 </p>
               </div>
@@ -480,6 +487,15 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           {isReviewing ? (
             /* Final Verdict Review Page */
             <div className="space-y-10 animate-fadeIn">
+              {profile?.isAdmin && currentProject.status === 'draft' && (
+                <div className="p-6 bg-rose-50 border border-rose-200 rounded-[2rem] text-rose-800 text-sm font-medium flex items-start gap-3 shadow-xs">
+                  <ShieldCheck className="w-5 h-5 text-rose-600 animate-pulse mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-bold">Project is in Draft State</p>
+                    <p className="text-xs text-rose-700 mt-1">This project has not been submitted by the external user. Evaluators cannot perform evaluations, write verdicts, or approve/reject/specify projects until the case is officially submitted.</p>
+                  </div>
+                </div>
+              )}
               <div className="flex justify-between items-center flex-wrap gap-4 border-b border-slate-200 pb-4">
                 <h1 className="text-5xl font-black tracking-tighter">Final Review</h1>
                 {((currentProject.generalImages && currentProject.generalImages.length > 0) || currentProject.parts.some(p => p.cadFile || (p.images && p.images.length > 0))) && (
@@ -592,7 +608,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   <div className="flex gap-4 mt-6">
                     <button 
                       onClick={generateEvaluatorDraft}
-                      disabled={isGeneratingReport}
+                      disabled={isGeneratingReport || currentProject.status === 'draft'}
                       className="px-6 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-blue-700 transition-all flex items-center gap-2 disabled:opacity-50"
                     >
                       <Sparkles className="w-4 h-4" /> Generate Evaluator Draft
@@ -613,8 +629,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 </div>
               )}
 
-              {/* Final Verdict Box (Visible to Admin, OR to User if Published) */}
-              {(profile?.isAdmin || currentProject.isVerdictVisible) && (
+              {/* Final Verdict Box (Visible to Admin, OR to User if Published or if the project is Approved/Rejected) */}
+              {(profile?.isAdmin || currentProject.isVerdictVisible || currentProject.status === 'approved' || currentProject.status === 'rejected') && (
                 <div className="bg-white border-2 border-slate-900 p-10 rounded-[3rem] shadow-xl relative">
                   <h3 className="text-2xl font-black text-slate-900 mb-2">Final Verdict</h3>
                   {!profile?.isAdmin && (
@@ -625,7 +641,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     <div className="space-y-4">
                       <p className="text-sm text-slate-500 font-medium mb-4">Edit and paste your final verdict below. Once published, the external user can view it.</p>
                       <textarea
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all font-mono min-h-[300px]"
+                        disabled={currentProject.status === 'draft'}
+                        className={`w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all font-mono min-h-[300px] ${currentProject.status === 'draft' ? 'opacity-50 cursor-not-allowed' : ''}`}
                         placeholder="Paste AI draft here and edit, or write from scratch..."
                         value={currentProject.finalVerdict || ''}
                         onChange={(e) => {
@@ -645,7 +662,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                               handleAppError(e);
                             }
                           }}
-                          className="px-6 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-200 transition-all"
+                          disabled={currentProject.status === 'draft'}
+                          className={`px-6 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-200 transition-all ${currentProject.status === 'draft' ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           Save Draft
                         </button>
@@ -661,7 +679,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                               handleAppError(e);
                             }
                           }}
-                          className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md ${currentProject.isVerdictVisible ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                          disabled={currentProject.status === 'draft'}
+                          className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md ${currentProject.isVerdictVisible ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'} ${currentProject.status === 'draft' ? 'opacity-50 cursor-not-allowed shadow-none' : ''}`}
                         >
                           {currentProject.isVerdictVisible ? 'Unpublish Verdict' : 'Publish Verdict to User'}
                         </button>
