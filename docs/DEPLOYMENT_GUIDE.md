@@ -31,7 +31,7 @@ Du bør se følgende i din terminal:
 > `Scape Bin-Picking Evaluator Server running on port 8080`
 
 ### Trin 4: Test i browseren
-Åbn [http://localhost:8080](http://localhost:8080) i din browser. Appen kører nu på Express-serveren, og alle AI-forespørgsler bliver automatisk sendt gennem din lokale proxy.
+Åbn [://localhost:8080http](http://localhost:8080) i din browser. Appen kører nu på Express-serveren, og alle AI-forespørgsler bliver automatisk sendt gennem din lokale proxy.
 
 ---
 
@@ -46,7 +46,14 @@ docker build -t scape-evaluator .
 ```
 
 ### Trin 2: Kør Docker-containeren
-Start containeren og send din API-nøgle ind som en miljøvariabel (`-e`):
+Start containeren lokalt. Du kan enten sende din API-nøgle direkte ind med `-e`, eller indlæse den direkte fra din `.env.local` fil:
+
+**Metode A: Indlæs automatisk fra din `.env.local` fil (anbefalet):**
+```bash
+docker run -p 8080:8080 --env-file .env.local scape-evaluator
+```
+
+**Metode B: Angiv API-nøglen direkte i kommandoen:**
 ```bash
 docker run -p 8080:8080 -e GEMINI_API_KEY="DIN_API_NØGLE_HER" scape-evaluator
 ```
