@@ -82,7 +82,7 @@ export function ProjectCard({
     };
 
     fetchFirstImage();
-  }, [p.id, p.parts]);
+  }, [p.id]);
   
   // En lille hjælpefunktion internt i komponenten
   const isActuallyEmail = (email: string | null | undefined) => {
