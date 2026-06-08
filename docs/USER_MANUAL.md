@@ -97,8 +97,8 @@ Each project card displays its status badge on the dashboard. Use this table to 
 | :--- | :--- | :--- | :--- |
 | **Draft** | Owner | Owner & Admins | The project is in preparation. Only the owner can edit it. Admins/Evaluators can view drafts but cannot edit answers, perform AI reviews, or write verdicts. |
 | **Submitted** | Evaluator / Super User | Owner & Admins | Submitted to SCAPE for feasibility checks. The data is locked for the customer, and the case becomes open for evaluator action. |
-| **Approved** | Evaluator / Super User | Owner & Admins | SCAPE has evaluated the project and approved it as technically feasible. The final verdict text is automatically visible to the user. |
-| **Rejected** | Evaluator / Super User | Owner & Admins | The project has been marked as not feasible or cancelled. The final verdict text is automatically visible to the user. |
+| **Approved** | Evaluator / Super User | Owner & Admins | SCAPE has evaluated the project and approved it as technically feasible. The "Project Review from Scape Solutions" is automatically visible to the user. |
+| **Rejected** | Evaluator / Super User | Owner & Admins | The project has been marked as not feasible or cancelled. The "Project Review from Scape Solutions" is automatically visible to the user. |
 | **Specified** | Evaluator / Super User | Owner & Admins | An administrative sub-state indicating that the physical specifications have been verified and locked. |
 | **Inactive** | Evaluator / Super User | Owner & Admins | Archived projects. Hidden from the dashboard unless the "Show Inactive" filter is toggled. |
 | **Trash (Deleted)** | Evaluator / Super User | Owner & Admins | Staged in the trash bin. Can be restored by an admin or permanently deleted. |
@@ -128,17 +128,17 @@ Each project card displays its status badge on the dashboard. Use this table to 
 * **Activate / Deactivate** (Admin only): Toggles active vs inactive status.
 * **Export Dropdown**:
   * **Export as JSON**: Exports full project data (including image base64s) as a JSON file.
-  * **Export as PDF**: Generates and downloads a branded PDF feasibility report (using jsPDF) including metadata, parts list table, final verdict, and photos appendix.
+  * **Export as PDF**: Generates and downloads a branded PDF feasibility report (using jsPDF) including metadata, parts list table, project review text, and photos appendix.
 * **Accept / Discard** (Staged cards only): Accepts a pending imported project to activate it, or discards it.
 
-### C. Questionnaire & Final Review Buttons
+### C. Questionnaire & Review Buttons
 * **Save Draft**: Saves the current questionnaire progress.
 * **Submit Case**: Transmits the questionnaire details to SCAPE and locks editing.
 * **Download All Media Files**: Sequential bulk download of all project CAD and image files.
 * **Get Advice on Data** (External user review tab): Triggers Gemini AI to analyze the draft and provide constructive advice on missing fields or media uploads.
 * **Generate Evaluator Draft** (Admin review tab): Prompts Gemini AI to draft a detailed technical feasibility review and recommends vision systems.
 * **Submit Technical Verdict** (Admin review tab): Publishes the written technical report and feasibility decision to the database.
-* **Toggle Verdict Visibility** (Admin review tab): Controls whether the customer can view the finalized verdict and recommendations on their review page.
+* **Toggle Verdict Visibility** (Admin review tab): Controls whether the customer can view the project review and recommendations on their review page.
 
 ---
 
@@ -155,7 +155,8 @@ When importing projects from external systems in JSON format:
 2. The Super User can click **Accept** on the project card (or **Accept All Staged** in the toolbar) to move them into active status (making them visible to the assigned owners).
 3. If the data is corrupted or unwanted, clicking **Discard** permanently clears the imported draft.
 
-### Final Verdict Visibility for Users
-* **Draft & Submitted State**: The Final Verdict report details and decisions are hidden from the external customer (unless manually published by an evaluator using "Publish Verdict to User").
-* **Approved & Rejected State**: Once an evaluator approves or rejects a submission, the **Final Verdict** technical conclusions and recommendation texts are automatically and immediately visible to the customer under their **Final Review** tab.
+### Project Review Visibility for Users
+* **Draft & Submitted State**: The "Project Review from Scape Solutions" report details and decisions are hidden from the external customer (unless manually published by an evaluator using "Publish Verdict to User").
+* **Approved & Rejected State**: Once an evaluator approves or rejects a submission, the **Project Review from Scape Solutions** technical conclusions and recommendation texts are automatically and immediately visible to the customer under their **Review** tab.
+
 

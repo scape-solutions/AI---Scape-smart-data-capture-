@@ -101,6 +101,8 @@ export function QuestionnaireView({
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAdviceExpanded, setIsAdviceExpanded] = useState(true);
+
 
   // Read-only state (locked or submitted/approved/rejected, unless the user is an admin)
   const isReadOnly = (currentProject.isLocked || currentProject.status === 'submitted' || currentProject.status === 'approved' || currentProject.status === 'rejected') && !profile?.isAdmin;
@@ -364,7 +366,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             onClick={() => { setIsReviewing(true); if (!currentProject.report && !isGeneratingReport && !profile?.isAdmin) generateExternalAdvice(); }}
             className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
           >
-            <Sparkles className="w-4 h-4" /> Final Verdict
+            <Sparkles className="w-4 h-4" /> Review
           </button>
         </div>
 
@@ -497,7 +499,9 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 </div>
               )}
               <div className="flex justify-between items-center flex-wrap gap-4 border-b border-slate-200 pb-4">
-                <h1 className="text-5xl font-black tracking-tighter">Final Review</h1>
+                <h1 className="text-5xl font-black tracking-tighter">
+                  {profile?.isAdmin ? 'Final Review' : 'Data Capture Advice'}
+                </h1>
                 {((currentProject.generalImages && currentProject.generalImages.length > 0) || currentProject.parts.some(p => p.cadFile || (p.images && p.images.length > 0))) && (
                   <button
                     onClick={(e) => {
@@ -558,31 +562,44 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               {!profile?.isAdmin && (
                 <div className="bg-slate-900 text-white p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
                   <Sparkles className="absolute top-0 right-0 w-40 h-40 opacity-10" />
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                    <Zap className="text-blue-400" /> Data Capture Advice
-                  </h3>
                   
-                  {isGeneratingReport ? (
-                    <div className="flex items-center gap-3">
-                      <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
-                      <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Analyzing Data...</span>
-                    </div>
-                  ) : (
-                    <div className="text-slate-300 leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-white">
-                      <ReactMarkdown>
-                        {currentProject.report || 'No advice generated yet.'}
-                      </ReactMarkdown>
-                    </div>
-                  )}
-
-                  {!isReadOnly && (
+                  <div className="flex justify-between items-center mb-6 relative z-10">
+                    <h3 className="text-xl font-bold flex items-center gap-2">
+                      <Zap className="text-blue-400" /> Data Capture Advice
+                    </h3>
                     <button 
-                      onClick={generateExternalAdvice}
-                      disabled={isGeneratingReport}
-                      className="mt-8 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border border-slate-700 text-slate-300 hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50"
+                      onClick={() => setIsAdviceExpanded(!isAdviceExpanded)}
+                      className="px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-white/10 hover:bg-white/20 transition-all select-none border border-white/10"
                     >
-                      <RotateCcw className="w-4 h-4" /> Get Advice on Data
+                      {isAdviceExpanded ? 'Hide Advice' : 'Show Advice'}
                     </button>
+                  </div>
+                  
+                  {isAdviceExpanded && (
+                    <div className="relative z-10 space-y-6 animate-fadeIn">
+                      {isGeneratingReport ? (
+                        <div className="flex items-center gap-3 py-6">
+                          <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Analyzing Data...</span>
+                        </div>
+                      ) : (
+                        <div className="max-h-[55vh] overflow-y-auto pr-4 text-slate-300 leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-white custom-scrollbar">
+                          <ReactMarkdown>
+                            {currentProject.report || 'No advice generated yet.'}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+
+                      {!isReadOnly && (
+                        <button 
+                          onClick={generateExternalAdvice}
+                          disabled={isGeneratingReport}
+                          className="px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border border-slate-700 text-slate-300 hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50"
+                        >
+                          <RotateCcw className="w-4 h-4" /> Get Advice on Data
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -632,14 +649,14 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               {/* Final Verdict Box (Visible to Admin, OR to User if NOT draft AND (Published or Approved/Rejected)) */}
               {(profile?.isAdmin || (currentProject.status !== 'draft' && (currentProject.isVerdictVisible || currentProject.status === 'approved' || currentProject.status === 'rejected'))) && (
                 <div className="bg-white border-2 border-slate-900 p-10 rounded-[3rem] shadow-xl relative">
-                  <h3 className="text-2xl font-black text-slate-900 mb-2">Final Verdict</h3>
+                  <h3 className="text-2xl font-black text-slate-900 mb-2">Project Review from Scape Solutions</h3>
                   {!profile?.isAdmin && (
                     <p className="text-sm text-slate-500 font-medium mb-8">Official conclusion from Scape Solutions.</p>
                   )}
                   
                   {profile?.isAdmin ? (
                     <div className="space-y-4">
-                      <p className="text-sm text-slate-500 font-medium mb-4">Edit and paste your final verdict below. Once published, the external user can view it.</p>
+                      <p className="text-sm text-slate-500 font-medium mb-4">Edit and paste your project review below. Once published, the external user can view it.</p>
                       <textarea
                         disabled={currentProject.status === 'draft'}
                         className={`w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all font-mono min-h-[300px] ${currentProject.status === 'draft' ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -1429,7 +1446,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold">Final Verdict</h4>
+                    <h4 className="text-sm font-bold">Review</h4>
                     <p className="text-[10px] text-slate-400 font-medium mt-0.5">Submit & view AI Advisor feasibility</p>
                   </div>
                 </div>
