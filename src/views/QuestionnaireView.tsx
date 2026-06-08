@@ -15,7 +15,9 @@ import {
   X, 
   UploadCloud,
   Menu,
-  ChevronDown
+  ChevronDown,
+  Download,
+  Trash2
 } from 'lucide-react';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 import { ProjectState, UserProfile } from '../types';
@@ -237,12 +239,20 @@ export function QuestionnaireView({
         }
       }
 
-      const updatedParts = [...currentProject.parts];
-      updatedParts[activePartIndex].images = [
-        ...updatedParts[activePartIndex].images,
-        ...compressedImages
-      ];
-      setCurrentProject({ ...currentProject, parts: updatedParts });
+      if (currentStep === 0) {
+        const updatedGeneralImages = [
+          ...(currentProject.generalImages || []),
+          ...compressedImages
+        ];
+        setCurrentProject({ ...currentProject, generalImages: updatedGeneralImages });
+      } else {
+        const updatedParts = [...currentProject.parts];
+        updatedParts[activePartIndex].images = [
+          ...updatedParts[activePartIndex].images,
+          ...compressedImages
+        ];
+        setCurrentProject({ ...currentProject, parts: updatedParts });
+      }
       setTimeout(() => setGlobalSuccess(null), 1500);
     }
   };
@@ -469,7 +479,63 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           {isReviewing ? (
             /* Final Verdict Review Page */
             <div className="space-y-10 animate-fadeIn">
-              <h1 className="text-5xl font-black tracking-tighter">Final Review</h1>
+              <div className="flex justify-between items-center flex-wrap gap-4 border-b border-slate-200 pb-4">
+                <h1 className="text-5xl font-black tracking-tighter">Final Review</h1>
+                {((currentProject.generalImages && currentProject.generalImages.length > 0) || currentProject.parts.some(p => p.cadFile || (p.images && p.images.length > 0))) && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      let downloadIndex = 0;
+                      
+                      // 1. General/Environmental images
+                      if (currentProject.generalImages) {
+                        currentProject.generalImages.forEach((img: string, imgIdx: number) => {
+                          setTimeout(() => {
+                            const link = document.createElement('a');
+                            link.href = img;
+                            link.download = `general-image-${imgIdx + 1}.png`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }, downloadIndex * 250);
+                          downloadIndex++;
+                        });
+                      }
+                      
+                      // 2. Parts files (CAD + Images)
+                      currentProject.parts.forEach((part: any, pIdx: number) => {
+                        if (part.cadFile) {
+                          setTimeout(() => {
+                            const link = document.createElement('a');
+                            link.href = part.cadFile.dataUrl;
+                            link.download = part.cadFile.name;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }, downloadIndex * 250);
+                          downloadIndex++;
+                        }
+                        if (part.images) {
+                          part.images.forEach((img: string, imgIdx: number) => {
+                            setTimeout(() => {
+                              const link = document.createElement('a');
+                              link.href = img;
+                              link.download = `part-${pIdx + 1}-image-${imgIdx + 1}.png`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }, downloadIndex * 250);
+                            downloadIndex++;
+                          });
+                        }
+                      });
+                    }}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all active:scale-95 shadow-sm shadow-blue-100 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" /> Download All Media Files
+                  </button>
+                )}
+              </div>
               
               {/* AI Advice Box (External) */}
               {!profile?.isAdmin && (
@@ -617,19 +683,55 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 </h3>
                 <div className="space-y-2">
                   {currentProject.parts.map((part, index) => (
-                    <div key={index} className="bg-white p-4 rounded-xl flex justify-between items-center shadow-sm border border-slate-100 hover:border-slate-200 transition-all">
-                      <span className="font-bold text-slate-800">
+                    <div key={index} className="bg-white p-4 rounded-xl flex flex-wrap justify-between items-center gap-3 shadow-sm border border-slate-100 hover:border-slate-200 transition-all">
+                      <span className="font-bold text-slate-800 text-sm md:text-base">
                         Part #0{index + 1}: {part.responses['2.01'] || 'Unnamed Part'}
                       </span>
-                      <div className="flex items-center gap-2">
-                        {part.cadFile && (
-                          <span className="text-xs text-blue-600 font-bold bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg flex items-center gap-1">
-                            <UploadCloud className="w-3 h-3" /> CAD Model
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          {part.cadFile && (
+                            <span className="text-[10px] text-blue-600 font-bold bg-blue-50 border border-blue-100/50 px-2.5 py-1.5 rounded-lg flex items-center gap-1 select-none">
+                              <UploadCloud className="w-3.5 h-3.5 animate-pulse" /> CAD
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-400 font-bold bg-slate-50 border px-2.5 py-1.5 rounded-lg select-none">
+                            {part.images ? part.images.length : 0} Images
                           </span>
+                        </div>
+                        {((part.images && part.images.length > 0) || part.cadFile) && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              let dlIndex = 0;
+                              if (part.cadFile) {
+                                const link = document.createElement('a');
+                                link.href = part.cadFile.dataUrl;
+                                link.download = part.cadFile.name;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                dlIndex++;
+                              }
+                              if (part.images) {
+                                part.images.forEach((img: string, imgIdx: number) => {
+                                  setTimeout(() => {
+                                    const link = document.createElement('a');
+                                    link.href = img;
+                                    link.download = `part-${index + 1}-image-${imgIdx + 1}.png`;
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  }, dlIndex * 250);
+                                  dlIndex++;
+                                });
+                              }
+                            }}
+                            className="px-3 py-1.5 hover:bg-slate-50 border border-slate-200 hover:border-slate-400 rounded-lg text-slate-700 hover:text-slate-900 transition-all active:scale-95 flex items-center gap-1 text-[10px] font-bold shadow-3xs cursor-pointer select-none"
+                            title="Download all files for this part"
+                          >
+                            <Download className="w-3.5 h-3.5" /> Download Files
+                          </button>
                         )}
-                        <span className="text-xs text-slate-400 font-bold bg-slate-50 border px-2.5 py-1 rounded-lg">
-                          {part.images ? part.images.length : 0} Images
-                        </span>
                       </div>
                     </div>
                   ))}
@@ -980,19 +1082,38 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                       </p>
                                     </div>
                                   </div>
-                                  {!isReadOnly && (
+                                  <div className="flex gap-4">
                                     <button 
                                       onClick={(e) => {
                                         e.preventDefault();
-                                        const parts = [...currentProject.parts];
-                                        parts[activePartIndex].cadFile = null;
-                                        setCurrentProject({ ...currentProject, parts });
+                                        const cadFile = currentProject.parts[activePartIndex].cadFile;
+                                        if (cadFile) {
+                                          const link = document.createElement('a');
+                                          link.href = cadFile.dataUrl;
+                                          link.download = cadFile.name;
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                        }
                                       }}
-                                      className="text-red-500 hover:text-red-700 text-xs font-bold hover:underline"
+                                      className="text-blue-600 hover:text-blue-800 text-xs font-bold hover:underline cursor-pointer select-none"
                                     >
-                                      Remove File
+                                      Download File
                                     </button>
-                                  )}
+                                    {!isReadOnly && (
+                                      <button 
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          const parts = [...currentProject.parts];
+                                          parts[activePartIndex].cadFile = null;
+                                          setCurrentProject({ ...currentProject, parts });
+                                        }}
+                                        className="text-red-500 hover:text-red-700 text-xs font-bold hover:underline cursor-pointer select-none"
+                                      >
+                                        Remove File
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -1027,54 +1148,109 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       )}
 
                       {/* Media Image Photo Uploader */}
-                      {q.type === 'media' && (
-                        <div className="space-y-4">
-                          <label className={`w-full h-32 border-2 border-dashed border-slate-300 rounded-3xl flex flex-col items-center justify-center bg-white hover:bg-slate-50 transition-all ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                            <Camera className="w-8 h-8 text-slate-300" />
-                            <span className="text-xs font-bold text-slate-400 mt-2">Upload Part Photos</span>
-                            <input 
-                              type="file" 
-                              multiple 
-                              accept="image/*" 
-                              disabled={isReadOnly} 
-                              className="hidden" 
-                              onChange={handleUploadImages} 
-                            />
-                          </label>
+                      {q.type === 'media' && (() => {
+                        const isGeneralImages = q.id === 'generalImages';
+                        const imageList = isGeneralImages 
+                          ? (currentProject.generalImages || []) 
+                          : (currentProject.parts[activePartIndex]?.images || []);
 
-                          <div className="flex justify-between items-center mt-2">
-                            <span className="text-xs font-bold text-slate-400">
-                              Uploaded Photos ({currentProject.parts[activePartIndex].images.length})
-                            </span>
-                            {currentProject.parts[activePartIndex].images.length > 0 && !isReadOnly && (
-                              <button 
-                                onClick={e => {
-                                  e.preventDefault();
-                                  const parts = [...currentProject.parts];
-                                  parts[activePartIndex].images = [];
-                                  setCurrentProject({ ...currentProject, parts });
-                                }}
-                                className="text-[10px] uppercase font-black tracking-widest text-red-500 hover:underline"
-                              >
-                                Clear All Images
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-4 gap-2">
-                            {currentProject.parts[activePartIndex].images.map((img, imgIdx) => (
-                              <img 
-                                key={imgIdx}
-                                src={img} 
-                                onClick={() => setFullscreenImage(img)}
-                                className="w-full h-16 object-cover rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all hover:scale-[1.04] hover:shadow-md"
-                                title="Klik for at se i fuld skærm"
-                                alt={`Part upload ${imgIdx + 1}`}
+                        return (
+                          <div className="space-y-4">
+                            <label className={`w-full h-32 border-2 border-dashed border-slate-300 rounded-3xl flex flex-col items-center justify-center bg-white hover:bg-slate-50 transition-all ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                              <Camera className="w-8 h-8 text-slate-300" />
+                              <span className="text-xs font-bold text-slate-400 mt-2">
+                                {isGeneralImages ? "Upload Environmental Photos" : "Upload Part Photos"}
+                              </span>
+                              <input 
+                                type="file" 
+                                multiple 
+                                accept="image/*" 
+                                disabled={isReadOnly} 
+                                className="hidden" 
+                                onChange={handleUploadImages} 
                               />
-                            ))}
+                            </label>
+
+                            <div className="flex justify-between items-center mt-2">
+                              <span className="text-xs font-bold text-slate-400">
+                                Uploaded Photos ({imageList.length})
+                              </span>
+                              {imageList.length > 0 && !isReadOnly && (
+                                <button 
+                                  onClick={e => {
+                                    e.preventDefault();
+                                    if (isGeneralImages) {
+                                      setCurrentProject({ ...currentProject, generalImages: [] });
+                                    } else {
+                                      const parts = [...currentProject.parts];
+                                      parts[activePartIndex].images = [];
+                                      setCurrentProject({ ...currentProject, parts });
+                                    }
+                                  }}
+                                  className="text-[10px] uppercase font-black tracking-widest text-red-500 hover:underline cursor-pointer"
+                                >
+                                  Clear All Images
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-4 gap-2">
+                              {imageList.map((img, imgIdx) => (
+                                <div key={imgIdx} className="group relative h-16 w-full rounded-lg overflow-hidden border border-slate-200 shadow-xs">
+                                  <img 
+                                    src={img} 
+                                    onClick={() => setFullscreenImage(img)}
+                                    className="w-full h-full object-cover cursor-pointer transition-transform duration-200 group-hover:scale-105"
+                                    alt={isGeneralImages ? `Environmental photo ${imgIdx + 1}` : `Part upload ${imgIdx + 1}`}
+                                  />
+                                  {/* Overlay Controls */}
+                                  <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const link = document.createElement('a');
+                                        link.href = img;
+                                        link.download = isGeneralImages 
+                                          ? `general-image-${imgIdx + 1}.png`
+                                          : `part-${activePartIndex + 1}-image-${imgIdx + 1}.png`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                      }}
+                                      className="p-1 bg-white/90 hover:bg-white text-slate-800 rounded-md transition-all active:scale-95 shadow-xs cursor-pointer"
+                                      title="Download image"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </button>
+                                    {!isReadOnly && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          if (isGeneralImages) {
+                                            const generalImages = [...(currentProject.generalImages || [])];
+                                            generalImages.splice(imgIdx, 1);
+                                            setCurrentProject({ ...currentProject, generalImages });
+                                          } else {
+                                            const parts = [...currentProject.parts];
+                                            parts[activePartIndex].images.splice(imgIdx, 1);
+                                            setCurrentProject({ ...currentProject, parts });
+                                          }
+                                        }}
+                                        className="p-1 bg-red-600/90 hover:bg-red-600 text-white rounded-md transition-all active:scale-95 shadow-xs cursor-pointer"
+                                        title="Delete image"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   );
                 })}
@@ -1279,6 +1455,66 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               alt="Fuld størrelse visning" 
               className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-slate-800/50 select-none"
             />
+            <div className="mt-4 flex gap-4 select-none">
+              <button 
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = fullscreenImage;
+                  
+                  let filename = "downloaded_image.png";
+                  const isGeneral = currentProject.generalImages?.includes(fullscreenImage);
+                  if (isGeneral) {
+                    const idx = currentProject.generalImages.indexOf(fullscreenImage);
+                    filename = `general-image-${idx + 1}.png`;
+                  } else {
+                    const partIdx = currentProject.parts.findIndex(p => p.images?.includes(fullscreenImage));
+                    if (partIdx > -1) {
+                      const imgIdx = currentProject.parts[partIdx].images.indexOf(fullscreenImage);
+                      filename = `part-${partIdx + 1}-image-${imgIdx + 1}.png`;
+                    }
+                  }
+                  
+                  link.download = filename;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="px-4 py-2 bg-slate-900 text-white border border-slate-800 hover:bg-slate-800 transition-all font-bold text-xs rounded-xl flex items-center gap-1.5 active:scale-95 shadow-xs cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> Download
+              </button>
+              
+              {!isReadOnly && (
+                <button 
+                  onClick={() => {
+                    const isGeneral = currentProject.generalImages?.includes(fullscreenImage);
+                    if (isGeneral) {
+                      const generalImages = [...(currentProject.generalImages || [])];
+                      const idx = generalImages.indexOf(fullscreenImage);
+                      if (idx > -1) {
+                        generalImages.splice(idx, 1);
+                        setCurrentProject({ ...currentProject, generalImages });
+                      }
+                    } else {
+                      const parts = [...currentProject.parts];
+                      const partIdx = parts.findIndex(p => p.images?.includes(fullscreenImage));
+                      if (partIdx > -1) {
+                        const imgIdx = parts[partIdx].images.indexOf(fullscreenImage);
+                        if (imgIdx > -1) {
+                          parts[partIdx].images.splice(imgIdx, 1);
+                          setCurrentProject({ ...currentProject, parts });
+                        }
+                      }
+                    }
+                    setFullscreenImage(null);
+                  }}
+                  className="px-4 py-2 bg-red-950/80 text-red-400 border border-red-900/50 hover:bg-red-900/60 hover:text-red-200 transition-all font-bold text-xs rounded-xl flex items-center gap-1.5 active:scale-95 shadow-xs cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </button>
+              )}
+            </div>
+
             <div className="mt-4 text-xs font-medium text-slate-400 select-none bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-800">
               Click anywhere outside or press ESC to close
             </div>
