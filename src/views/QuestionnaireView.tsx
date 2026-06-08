@@ -53,6 +53,11 @@ interface QuestionnaireViewProps {
   isAllowedEvaluator: (email: string | null | undefined) => boolean;
   isScapeEmployee: (email: string | null | undefined, uid?: string | null) => boolean;
   saveProfile: (data: any) => Promise<void>;
+  sendMessageToAssistant: (msg: string) => Promise<void>;
+  reviewTab: 'advice' | 'evaluation';
+  setReviewTab: (tab: 'advice' | 'evaluation') => void;
+  updateProjectField: (p: ProjectState, field: string, value: any, logMessage: string) => Promise<void>;
+  handleAppError: (e: any, op?: any, path?: string) => void;
 }
 
 export function QuestionnaireView({
@@ -85,6 +90,11 @@ export function QuestionnaireView({
   isAllowedEvaluator,
   isScapeEmployee,
   saveProfile,
+  sendMessageToAssistant,
+  reviewTab,
+  setReviewTab,
+  updateProjectField,
+  handleAppError
 }: QuestionnaireViewProps) {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

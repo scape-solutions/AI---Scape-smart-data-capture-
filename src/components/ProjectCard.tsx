@@ -7,6 +7,7 @@ import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { ShieldCheck, CheckCircle2, Clock, History, Trash2, ChevronRight, User as UserIcon, RotateCcw } from 'lucide-react';
 import { ProjectState, UserProfile } from '../types';
+import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 
 interface ProjectCardProps {
   key?: string | number | null;
@@ -82,6 +83,48 @@ export function ProjectCard({
     return email.includes('@') && email.includes('.');
   };
 
+  const getStepProgress = (step: any, responses: Record<string, any>, part?: any) => {
+    let filled = 0;
+    let total = 0;
+
+    step.questions.forEach((q: any) => {
+      if (q.dependsOn) {
+        const val = responses[q.dependsOn];
+        if (q.dependsOnValue && val !== q.dependsOnValue) return;
+        if (!q.dependsOnValue && !val) return;
+      }
+      total++;
+      if (responses[q.id] !== undefined && responses[q.id] !== '') {
+        filled++;
+      } else if (q.type === 'file' && part && part.cadFile && q.id === '3.01') {
+        filled++;
+      }
+    });
+
+    return { filled, total };
+  };
+
+  const calculateTotalProgress = () => {
+    let totalFilled = 0;
+    let totalQuestions = 0;
+
+    const generalProgress = getStepProgress(GENERAL_STEPS[0], p.generalResponses || {});
+    totalFilled += generalProgress.filled;
+    totalQuestions += generalProgress.total;
+
+    p.parts?.forEach(part => {
+      PART_STEPS.forEach(step => {
+        const partProgress = getStepProgress(step, part.responses || {}, part);
+        totalFilled += partProgress.filled;
+        totalQuestions += partProgress.total;
+      });
+    });
+
+    return { totalFilled, totalQuestions, percentage: totalQuestions > 0 ? Math.round((totalFilled / totalQuestions) * 100) : 0 };
+  };
+
+  const progress = calculateTotalProgress();
+
   const formatCreatedAt = (timestamp: any) => {
     if (!timestamp) return 'N/A';
     try {
@@ -114,13 +157,13 @@ export function ProjectCard({
    */
   return (
     <div 
-      className={`group relative bg-white p-6 rounded-3xl border border-slate-200/90 shadow-[3px_10px_24px_-2px_rgba(15,23,42,0.09),_1px_3px_8px_-1px_rgba(15,23,42,0.04)] hover:shadow-xl hover:shadow-blue-600/8 hover:-translate-y-1.5 hover:border-blue-600/30 transition-all duration-300 ease-out cursor-pointer flex flex-col h-full ${p.isInactive || p.isDeleted ? 'opacity-60 border-slate-300 shadow-xs' : ''}`} 
+      className={`group relative bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-300/85 shadow-[4px_10px_24px_-2px_rgba(15,23,42,0.18),_2px_4px_8px_-1px_rgba(15,23,42,0.12)] hover:shadow-[10px_22px_40px_-5px_rgba(15,23,42,0.28),_3px_6px_14px_-2px_rgba(15,23,42,0.18)] hover:border-blue-600/50 hover:-translate-y-1.5 transition-all duration-300 ease-out cursor-pointer flex flex-col h-full ${p.isInactive || p.isDeleted ? 'opacity-60 border-slate-300 shadow-xs' : ''}`} 
       onClick={() => openProject(p)}
     >
       {/* Udvasket baggrundsbillede hvis der er uploadet et billede til projektet (rounded-3xl fixes corner bleed) */}
       {firstImage && (
         <div 
-          className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden rounded-3xl"
+          className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden rounded-2xl md:rounded-3xl"
           style={{
             isolation: 'isolate',
             WebkitMaskImage: '-webkit-radial-gradient(white, black)'
@@ -155,7 +198,10 @@ export function ProjectCard({
               {p.isInactive && !p.isDeleted && <span className="bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shrink-0">Inactive</span>}
               {p.isDeleted && <span className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shrink-0 flex items-center gap-1"><Trash2 className="w-3 h-3" /> Deleted</span>}
             </div>
-            <Clock className="w-4 h-4 text-slate-300 shrink-0 mt-1" />
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-xl shrink-0 select-none shadow-3xs" title={`Last updated: ${formatCreatedAt(p.updatedAt || p.createdAt)}`}>
+              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>{formatCreatedAt(p.updatedAt || p.createdAt)}</span>
+            </div>
           </div>
           
           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -250,7 +296,13 @@ export function ProjectCard({
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center text-xs text-slate-400 border-t border-slate-100 pt-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <span>{p.parts.length} Parts</span>
+              <span className="font-bold text-slate-500">{p.parts.length} Part{p.parts.length !== 1 ? 's' : ''}</span>
+              <div className="flex items-center gap-1.5" title={`${progress.totalFilled}/${progress.totalQuestions} questions answered`}>
+                <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${progress.percentage === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${progress.percentage}%` }} />
+                </div>
+                <span className="text-[10px] font-bold">{progress.percentage}%</span>
+              </div>
               <button onClick={(e) => { e.stopPropagation(); fetchLog(p.id!); }} className="hover:text-blue-600 flex items-center gap-1 transition-colors">
                 <History className="w-3 h-3" /> History
               </button>

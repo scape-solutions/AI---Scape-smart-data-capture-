@@ -13,10 +13,12 @@ import { db } from './lib/firebase';
 import { useAuth, isScapeEmployee, getEffectiveAdminStatus } from './hooks/useAuth';
 import { isAllowedEvaluator } from './config/evaluators';
 import { useProjects } from './hooks/useProjects';
+import { GENERAL_STEPS, PART_STEPS } from './questionnaire';
 
 import { Header } from './components/Header';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ChangelogModal } from './components/ChangelogModal';
+import { SplashScreen } from './components/SplashScreen';
 
 import { AuthView } from './views/AuthView';
 import { ProfileSetupView } from './views/ProfileSetupView';
@@ -101,7 +103,11 @@ export default function App() {
     setShowLog,
     updateProjectField,
     logChange,
-    fetchProjectImages
+    fetchProjectImages,
+    isGeneratingDemo,
+    isCleaningDemo,
+    generateDemoProjects,
+    cleanDemoProjects
   } = useProjects(user, profile, sortBy, handleAppError, setGlobalSuccess, getEffectiveEmail);
 
   // State-variabler specifikt til Login/Sign-up processen
@@ -124,8 +130,41 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState(0);
   const [activePartIndex, setActivePartIndex] = useState(0);
   const [isReviewing, setIsReviewing] = useState(false);
+  const [reviewTab, setReviewTab] = useState<'advice' | 'evaluation'>('advice');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Splash screen state og inaktivitets-timer (5 minutter)
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    let inactivityTimeout: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimeout);
+      inactivityTimeout = setTimeout(() => {
+        setShowSplash(true);
+      }, 5 * 60 * 1000); // 5 minutter
+    };
+
+    if (!showSplash) {
+      resetTimer();
+
+      const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+      const handleActivity = () => resetTimer();
+
+      events.forEach(event => {
+        window.addEventListener(event, handleActivity, { passive: true });
+      });
+
+      return () => {
+        clearTimeout(inactivityTimeout);
+        events.forEach(event => {
+          window.removeEventListener(event, handleActivity);
+        });
+      };
+    }
+  }, [showSplash]);
 
   // Opretter et helt nyt "tomt" projekt i hukommelsen. 
   // Bemærk: Det gemmes ikke i databasen endnu.
@@ -146,6 +185,7 @@ export default function App() {
     setView('questionnaire');
     setCurrentStep(0);
     setIsReviewing(false);
+    setReviewTab('advice');
     setActivePartIndex(0);
   };
 
@@ -153,6 +193,7 @@ export default function App() {
     setCurrentProject(p);
     setView('questionnaire');
     setIsReviewing(true); // Åbner altid projektet på "Final Verdict" siden
+    setReviewTab(p.status === 'submitted' ? 'evaluation' : 'advice');
     
     // Hent billederne asynkront i baggrunden for super-hurtig UI-respons
     const fullProject = await fetchProjectImages(p);
@@ -379,12 +420,32 @@ export default function App() {
         if (part.cadFile) part.cadFile.dataUrl = "[CAD removed]";
       });
 
+      // Construct a lightweight schema representation so the LLM knows all field IDs, types, and labels
+      const questionnaireSchema = {
+        generalFields: GENERAL_STEPS[0].questions.map(q => ({
+          id: q.id,
+          label: q.label,
+          type: q.type,
+          description: q.description,
+          important: q.important,
+          options: q.options?.map(o => o.value)
+        })),
+        partFields: PART_STEPS.flatMap(step => step.questions.map(q => ({
+          id: q.id,
+          label: q.label,
+          type: q.type,
+          description: q.description,
+          important: q.important,
+          options: q.options?.map(o => o.value)
+        })))
+      };
+
       // Construct history for Gemini
       const contents = newHistory.map((msg, i) => {
         let text = msg.text;
-        // Inject the latest system prompt and project state into the final user message
+        // Inject the latest system prompt, schema, and project state into the final user message
         if (i === newHistory.length - 1 && msg.role === 'user') {
-           text = `${autoFillPromptRaw.trim()}\n\nCURRENT PROJECT STATE:\n${JSON.stringify(cleanProject, null, 2)}\n\nUSER MESSAGE:\n${text}`;
+           text = `${autoFillPromptRaw.trim()}\n\nQUESTIONNAIRE SCHEMA:\n${JSON.stringify(questionnaireSchema, null, 2)}\n\nCURRENT PROJECT STATE:\n${JSON.stringify(cleanProject, null, 2)}\n\nACTIVE PART INDEX (0-based): ${activePartIndex}\n\nUSER MESSAGE:\n${text}`;
         }
         return { role: msg.role, parts: [{ text }] };
       });
@@ -419,6 +480,11 @@ export default function App() {
    * Herunder returnerer komponenten sit HTML/JSX.
    * I JSX bruger vi tuborgklammer {} til at skrive almindelig JavaScript indeni HTML'en.
    */
+
+  // Hvis splash skærmen skal vises, returnerer vi den med det samme
+  if (showSplash) {
+    return <SplashScreen onClose={() => setShowSplash(false)} />;
+  }
 
   // Hvis der ikke er en bruger ('user' er null), vis Login-skærmen
   if (!user) {
@@ -461,6 +527,19 @@ export default function App() {
           setView={setView} logout={logout} switchMode={switchMode}
           isAllowedEvaluator={isAllowedEvaluator} isScapeEmployee={isScapeEmployee}
           saveProfile={saveProfile}
+          projectName={view === 'questionnaire' && currentProject ? currentProject.projectName : undefined}
+          projectId={view === 'questionnaire' && currentProject ? currentProject.id : undefined}
+          ownerName={view === 'questionnaire' && currentProject ? currentProject.ownerName : undefined}
+          ownerCompany={view === 'questionnaire' && currentProject ? currentProject.ownerCompany : undefined}
+          ownerEmail={view === 'questionnaire' && currentProject ? currentProject.ownerEmail : undefined}
+          ownerPhone={view === 'questionnaire' && currentProject ? currentProject.ownerPhone : undefined}
+          locationLabel={view === 'questionnaire' && currentProject ? (
+            isReviewing 
+              ? (reviewTab === 'advice' ? 'Data Capture Advice' : 'Technical Evaluation') 
+              : currentStep === 0 
+                ? 'Project & Cell Info' 
+                : `Part #0${activePartIndex + 1}: ${currentProject.parts[activePartIndex]?.responses?.['2.01'] || 'Unnamed Part'}`
+          ) : undefined}
         />
       </div>
 
@@ -484,16 +563,21 @@ export default function App() {
             updateStatus={(p, status) => updateProjectField(p, 'status', status, `Project status changed to ${status}`)}
             toggleSpecified={(p) => updateProjectField(p, 'isFullySpecified', !p.isFullySpecified, `Project fully specified status changed to ${!p.isFullySpecified}`)}
             toggleInactive={(p) => updateProjectField(p, 'isInactive', !p.isInactive, `Project marked as ${!p.isInactive ? 'inactive' : 'active'}`)}
+            isGeneratingDemo={isGeneratingDemo}
+            isCleaningDemo={isCleaningDemo}
+            generateDemoProjects={generateDemoProjects}
+            cleanDemoProjects={cleanDemoProjects}
           />
         )}
 
         {view === 'questionnaire' && currentProject && (
           <QuestionnaireView 
             currentProject={currentProject} setCurrentProject={setCurrentProject}
-            profile={profile} setView={setView}
+            profile={profile} setView={(v) => setView(v as any)}
             currentStep={currentStep} setCurrentStep={setCurrentStep}
             activePartIndex={activePartIndex} setActivePartIndex={setActivePartIndex}
             isReviewing={isReviewing} setIsReviewing={setIsReviewing}
+            reviewTab={reviewTab} setReviewTab={setReviewTab}
             isGeneratingReport={isGeneratingReport} isSubmitting={isSubmitting}
             saveProject={saveProject}
             toggleLock={(p) => updateProjectField(p, 'isLocked', !p.isLocked, `Project lock state changed to ${!p.isLocked}`)}
@@ -509,6 +593,8 @@ export default function App() {
             isAllowedEvaluator={isAllowedEvaluator}
             isScapeEmployee={isScapeEmployee}
             saveProfile={saveProfile}
+            updateProjectField={(p, field, value, comment) => updateProjectField(p, field, value, comment)}
+            handleAppError={handleAppError}
           />
         )}
       </main>

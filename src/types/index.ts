@@ -24,12 +24,9 @@ export enum OperationType {
  * hvilke felter objektet skal have, og hvilke datatyper de er.
  */
 export interface PartData {
-  // Record<string, any> betyder en "Dictionary" eller "Map",
-  // hvor nøglen (key) er en string, og værdien (value) kan være hvad som helst (any).
   responses: Record<string, any>;
-  // Et array af strings (f.eks. base64-kodede billeder eller URL'er)
   images: string[];
-  // Valgfri 3D CAD-fil gemt som Base64 i Firestore
+  imageCount?: number; // Cached image count stored in main doc (images are stored separately)
   cadFile?: { name: string; size: number; type: string; dataUrl: string } | null;
 }
 
@@ -39,6 +36,7 @@ export interface ProjectState {
   projectName: string;
   generalResponses: Record<string, any>;
   parts: PartData[];
+  generalImages?: string[];
   report: string | null;
   evaluatorDraft?: string | null;
   finalVerdict?: string | null;
@@ -53,6 +51,7 @@ export interface ProjectState {
   isFullySpecified?: boolean;
   isInactive?: boolean;
   isDeleted?: boolean;
+  isDemo?: boolean;
   takenBy?: string;
   takenByName?: string;
   isVerdictVisible?: boolean;

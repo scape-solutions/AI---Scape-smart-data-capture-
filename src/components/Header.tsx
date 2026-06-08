@@ -15,6 +15,13 @@ interface HeaderProps {
   isAllowedEvaluator: (email: string | null | undefined) => boolean;
   isScapeEmployee: (email: string | null | undefined, uid?: string | null) => boolean;
   saveProfile: (data: any) => Promise<void>;
+  projectName?: string;
+  projectId?: string;
+  locationLabel?: string;
+  ownerName?: string;
+  ownerCompany?: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
 }
 
 export function Header({
@@ -29,7 +36,14 @@ export function Header({
   switchMode,
   isAllowedEvaluator,
   isScapeEmployee,
-  saveProfile
+  saveProfile,
+  projectName,
+  projectId,
+  locationLabel,
+  ownerName,
+  ownerCompany,
+  ownerEmail,
+  ownerPhone
 }: HeaderProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [name, setName] = useState('');
@@ -37,6 +51,11 @@ export function Header({
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<'enduser' | 'integrator' | 'other'>('enduser');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [showContactPopover, setShowContactPopover] = useState(false);
+
+  useEffect(() => {
+    setShowContactPopover(false);
+  }, [projectId]);
 
   // Sync profile details when loaded or modal is opened
   useEffect(() => {
@@ -106,6 +125,83 @@ export function Header({
           PE
         </span>
       </div>
+      
+      {projectName && (
+        <div className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-500 max-w-md lg:max-w-xl mx-4 select-none overflow-hidden animate-fadeIn">
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/60 px-3 py-1.5 rounded-xl shrink-0">
+            <span className="uppercase tracking-wider text-[9px] text-slate-400 font-bold">Project:</span>
+            <span className="text-slate-800 font-black truncate max-w-[120px] lg:max-w-[200px]" title={projectName}>
+              {projectName}
+            </span>
+            {projectId && (
+              <div className="relative inline-flex items-center">
+                <span className="text-[9px] font-mono font-bold text-slate-400 bg-white border border-slate-200 px-1 py-0.5 rounded select-all" title={`Case ID: ${projectId}`}>
+                  #{projectId.substring(0, 6).toUpperCase()}
+                </span>
+                {profile?.isAdmin && (ownerName || ownerCompany || ownerEmail) && (
+                  <div className="relative ml-1 shrink-0">
+                    <button
+                      onClick={() => setShowContactPopover(!showContactPopover)}
+                      className={`p-1 rounded-md transition-all select-none cursor-pointer hover:bg-slate-100 ${showContactPopover ? 'text-blue-600 bg-blue-50' : 'text-slate-400'}`}
+                      title="View external user contact info"
+                    >
+                      <UserIcon className="w-3 h-3" />
+                    </button>
+
+                    {showContactPopover && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40 cursor-default" 
+                          onClick={() => setShowContactPopover(false)} 
+                        />
+                        <div className="absolute left-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 z-50 animate-fadeIn text-left cursor-default select-text">
+                          <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2 border-b border-slate-100 pb-1.5 flex items-center justify-between">
+                            <span>Project Owner Contact</span>
+                            <button 
+                              onClick={() => setShowContactPopover(false)}
+                              className="text-slate-400 hover:text-slate-600 rounded p-0.5 cursor-pointer"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </h4>
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Name</p>
+                              <p className="text-xs font-bold text-slate-800">{ownerName || 'Unknown Owner'}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Company / Org</p>
+                              <p className="text-xs font-bold text-slate-800">{ownerCompany || 'No Company'}</p>
+                            </div>
+                            {ownerEmail && (
+                              <div>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Email</p>
+                                <a href={`mailto:${ownerEmail}`} className="text-xs font-bold text-blue-600 hover:underline">{ownerEmail}</a>
+                              </div>
+                            )}
+                            {ownerPhone && ownerPhone !== 'Unknown' && (
+                              <div>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Phone</p>
+                                <a href={`tel:${ownerPhone}`} className="text-xs font-bold text-slate-800 hover:underline">{ownerPhone}</a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <svg className="w-3.5 h-3.5 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+          <div className="bg-blue-50 border border-blue-100/50 px-3 py-1.5 rounded-xl text-blue-700 font-black text-[11px] truncate shrink-0 max-w-[220px]">
+            {locationLabel}
+          </div>
+        </div>
+      )}
       
       <div className="flex items-center gap-2 md:gap-6">
         {/* Vises kun for Scape ansatte. */}

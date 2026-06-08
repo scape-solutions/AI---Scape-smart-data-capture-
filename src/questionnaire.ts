@@ -73,7 +73,9 @@ export const GENERAL_STEPS: Step[] = [
         { value: 'kuka', label: 'KUKA' },
         { value: 'other', label: 'Other' }
       ] },
-      { id: '1.05_other', label: 'Specify Robot Brand and Model', type: 'text', placeholder: 'e.g. Kawasaki RS007L', important: true, condition: (res) => res['1.05'] === 'other' }
+      { id: '1.05_other', label: 'Specify Robot Brand and Model', type: 'text', placeholder: 'e.g. Kawasaki RS007L', important: true, condition: (res) => res['1.05'] === 'other' },
+      { id: '1.06', label: 'Additional Project Notes / Info', type: 'textarea', placeholder: 'e.g. Summarized extra info, ambient light conditions, or cell space limits...' },
+      { id: 'generalImages', label: 'Upload Cell & Environmental Photos', type: 'media', description: 'Please upload photos of the robot installation area, ceiling (to check for sunlight interference), overall surroundings, or any other relevant environmental conditions.' }
     ]
   }
 ];
@@ -108,7 +110,8 @@ export const PART_STEPS: Step[] = [
       { id: '2.10_temp', label: 'Expected Temperature (°C)', type: 'number', placeholder: 'e.g. 80', condition: (res) => res['2.10'] === true },
       { id: '2.13', label: 'Determine which side is up?', type: 'boolean' },
       { id: '2.14', label: 'Any special gripper requirements?', type: 'boolean', description: 'Check YES if a specific gripper is required to hold or place the part.' },
-      { id: '2.12', label: 'Short description of place requirements', type: 'textarea', placeholder: 'e.g. Must be placed in a welding fixture with 0.5mm tolerance.' }
+      { id: '2.12', label: 'Short description of place requirements', type: 'textarea', placeholder: 'e.g. Must be placed in a welding fixture with 0.5mm tolerance.' },
+      { id: '2.15', label: 'Additional Part Notes / Info', type: 'textarea', placeholder: 'e.g. Summarized extra info about part variants, surface conditions, or special handling...' }
     ]
   },
   {

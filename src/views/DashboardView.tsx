@@ -4,7 +4,7 @@
  * Den modtager en masse data ("projects") og funktioner fra App.tsx som props.
  */
 import { useState } from 'react';
-import { PlusCircle, LayoutDashboard, SlidersHorizontal } from 'lucide-react';
+import { PlusCircle, LayoutDashboard, SlidersHorizontal, Sparkles, Trash2, Loader2 } from 'lucide-react';
 import { ProjectCard } from '../components/ProjectCard';
 import { ProjectState, UserProfile } from '../types';
 
@@ -32,6 +32,10 @@ interface DashboardViewProps {
   updateStatus: (p: ProjectState, status: ProjectState['status']) => void;
   toggleSpecified: (p: ProjectState) => void;
   toggleInactive: (p: ProjectState) => void;
+  isGeneratingDemo: boolean;
+  isCleaningDemo: boolean;
+  generateDemoProjects: () => Promise<void>;
+  cleanDemoProjects: () => Promise<void>;
 }
 
 export function DashboardView({
@@ -57,7 +61,11 @@ export function DashboardView({
   takeProject,
   updateStatus,
   toggleSpecified,
-  toggleInactive
+  toggleInactive,
+  isGeneratingDemo,
+  isCleaningDemo,
+  generateDemoProjects,
+  cleanDemoProjects
 }: DashboardViewProps) {
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
@@ -150,6 +158,38 @@ export function DashboardView({
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse shrink-0" />
                   )}
                 </button>
+
+                {profile?.isAdmin && (
+                  <>
+                    <button 
+                      onClick={generateDemoProjects}
+                      disabled={isGeneratingDemo || isCleaningDemo}
+                      className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Generate 20 demo projects"
+                    >
+                      {isGeneratingDemo ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                      <span>{isGeneratingDemo ? 'Generating...' : 'Generate Demo'}</span>
+                    </button>
+
+                    <button 
+                      onClick={cleanDemoProjects}
+                      disabled={isGeneratingDemo || isCleaningDemo}
+                      className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-600/50 text-white px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-rose-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Delete all demo projects"
+                    >
+                      {isCleaningDemo ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                      <span>{isCleaningDemo ? 'Cleaning...' : 'Clean Demo'}</span>
+                    </button>
+                  </>
+                )}
 
                 <button 
                   onClick={createNewProject} 
@@ -254,7 +294,7 @@ export function DashboardView({
       </div>
 
       {/* Scrollable Project Cards Grid Container */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-10 pt-6 md:pt-6 w-full z-10">
+      <div className="flex-1 overflow-y-auto p-6 md:p-10 pt-6 md:pt-6 w-full z-10">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* .map() bruges i React til at generere HTML ud fra et Array. */}
