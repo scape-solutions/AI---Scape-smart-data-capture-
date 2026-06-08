@@ -19,7 +19,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile, OperationType } from '../types';
-import { isAllowedEvaluator } from '../config/evaluators';
+import { isAllowedEvaluator, isSuperuser } from '../config/evaluators';
 
 // Tjekker om en email/bruger er en intern Scape-medarbejder
 export const isScapeEmployee = (email: string | null | undefined, uid?: string | null) => {
@@ -145,8 +145,8 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     if (!user || !profile) return;
     const email = getEffectiveEmail();
     
-    // Safety check for superuser: only rune.k.larsen@scapesolutions.eu can switch to superuser
-    if (newRole === 'superuser' && email?.toLowerCase() !== 'rune.k.larsen@scapesolutions.eu') {
+    // Safety check for superuser
+    if (newRole === 'superuser' && !isSuperuser(email)) {
       console.warn("Unauthorized attempt to switch to superuser role");
       return;
     }

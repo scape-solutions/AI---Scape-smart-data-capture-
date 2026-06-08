@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LogOut, User as UserIcon, X, Settings } from 'lucide-react';
+import { isSuperuser } from '../config/evaluators';
 import { UserProfile } from '../types';
 
 interface HeaderProps {
@@ -207,7 +208,7 @@ export function Header({
         {/* Vises kun for Scape ansatte. */}
         {(isScapeEmployee(user?.email, user?.uid) || isAllowedEvaluator(user?.email)) && (
           <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
-            {user?.email?.toLowerCase() === 'rune.k.larsen@scapesolutions.eu' && (
+            {isSuperuser(user?.email) && (
               <button 
                 onClick={() => switchMode('superuser', () => {})}
                 className={`text-[9px] font-black uppercase px-2 md:px-3 py-1.5 rounded-lg transition-all ${profile?.requestedRole === 'superuser' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
