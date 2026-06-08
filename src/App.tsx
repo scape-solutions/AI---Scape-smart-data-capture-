@@ -39,6 +39,44 @@ if (GEMINI_API_KEY) {
   ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 }
 
+/**
+ * Hjælpefunktion til at generere indhold fra Gemini.
+ * Hvis VITE_GEMINI_API_KEY er tilgængelig lokalt, kaldes SDK'et direkte fra klienten.
+ * Ellers routes anmodningen gennem vores sikre backend proxy endpoint (/api/gemini).
+ */
+async function generateAIContent(model: string, contents: any[]): Promise<string> {
+  if (GEMINI_API_KEY) {
+    if (!ai) {
+      ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    }
+    const response = await ai.models.generateContent({ model, contents });
+    return response.text || "";
+  } else {
+    const response = await fetch('/api/gemini', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ model, contents }),
+    });
+
+    if (!response.ok) {
+      let errorMsg = 'Failed to generate AI content via server proxy';
+      try {
+        const errJson = await response.json();
+        errorMsg = errJson.details || errJson.error || errorMsg;
+      } catch (e) {
+        const text = await response.text();
+        if (text) errorMsg = text;
+      }
+      throw new Error(errorMsg);
+    }
+
+    const data = await response.json();
+    return data.text || "";
+  }
+}
+
 // export default betyder, at når andre filer importerer denne fil, 
 // er 'App' den primære ting, de får.
 export default function App() {
@@ -307,10 +345,9 @@ export default function App() {
    */
   const generateExternalAdvice = async () => {
     // 1. Sikkerheds-tjek:
-    // - Har vi adgang til Firebase Genkit AI SDK? (!ai)
     // - Er der et aktivt projekt? (!currentProject)
     // - Er brugeren en Evaluator/Admin? (profile?.isAdmin) -> Hvis ja, stop! De bruger den anden funktion.
-    if (!ai || !currentProject || profile?.isAdmin) return;
+    if (!currentProject || profile?.isAdmin) return;
     
     // Viser "Analyzing Data..." spinner i UI'et
     setIsGeneratingReport(true);
@@ -322,12 +359,8 @@ export default function App() {
       // Brug vores nye hjælpefunktion til at pakke dataen korrekt (JSON + rigtige billedfiler)
       const contents = prepareAIRequest(currentProject, basePrompt);
       
-      // 3. Kald Gemini API'et
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: contents,
-      });
-      const text = response.text; // Det rene markdown svar fra AI'en
+      // 3. Kald Gemini API'et (via proxy eller lokalt SDK)
+      const text = await generateAIContent('gemini-2.5-flash', contents);
       
       // 4. Opdater det lokale state på frontend'en med det samme:
       // Vi gemmer rådgivningen i feltet 'report'. (Tidligere brugt til verdicts).
@@ -359,7 +392,7 @@ export default function App() {
    */
   const generateEvaluatorDraft = async () => {
     // 1. Sikkerheds-tjek: Forhindrer almindelige brugere i at generere en evaluator konklusion.
-    if (!ai || !currentProject || !profile?.isAdmin) return;
+    if (!currentProject || !profile?.isAdmin) return;
     
     // Viser "Drafting Conclusion..." spinner i UI'et
     setIsGeneratingReport(true);
@@ -371,12 +404,8 @@ export default function App() {
       // Gør data klar (JSON + Billeder)
       const contents = prepareAIRequest(currentProject, basePrompt);
       
-      // 3. Kald Gemini API'et
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: contents,
-      });
-      const text = response.text;
+      // 3. Kald Gemini API'et (via proxy eller lokalt SDK)
+      const text = await generateAIContent('gemini-2.5-flash', contents);
       
       // 4. Opdater det lokale state:
       // Vi gemmer draftet i et NYT felt kaldet 'evaluatorDraft'. 
@@ -404,7 +433,7 @@ export default function App() {
    * ==========================================
    */
   const sendMessageToAssistant = async (userMessage: string) => {
-    if (!ai || !currentProject) return;
+    if (!currentProject) return;
 
     // 1. Add user message to history
     const history = currentProject.chatHistory ? [...currentProject.chatHistory] : [];
@@ -453,12 +482,8 @@ export default function App() {
         return { role: msg.role, parts: [{ text }] };
       });
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: contents,
-      });
-
-      const aiText = response.text || "";
+      // 3. Kald Gemini API'et (via proxy eller lokalt SDK)
+      const aiText = await generateAIContent('gemini-2.5-flash', contents);
 
       // Append AI response
       const finalHistory = [...newHistory, { role: 'model' as const, text: aiText }];
