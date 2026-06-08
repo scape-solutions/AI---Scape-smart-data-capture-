@@ -40,38 +40,144 @@ if (GEMINI_API_KEY) {
 }
 
 /**
- * Hjælpefunktion til at generere indhold fra Gemini.
- * Hvis VITE_GEMINI_API_KEY er tilgængelig lokalt, kaldes SDK'et direkte fra klienten.
- * Ellers routes anmodningen gennem vores sikre backend proxy endpoint (/api/gemini).
+ * Hjælpefunktion: Fjerner de gigantiske Base64-billeder fra JSON-strengen
+ * og pakker dem i stedet som rigtige 'inlineData' filer, så Gemini kan "se" dem.
  */
-async function generateAIContent(model: string, contents: any[]): Promise<string> {
-  if (GEMINI_API_KEY) {
-    if (!ai) {
-      ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+const prepareAIRequest = (project: ProjectState, basePrompt: string) => {
+  // Klon projektet så vi ikke ødelægger det originale state
+  const cleanProject = JSON.parse(JSON.stringify(project));
+  const imageParts: any[] = [];
+
+  cleanProject.parts.forEach((part: any) => {
+    // Ekstraher billeder
+    if (part.images && Array.isArray(part.images)) {
+      part.images.forEach((imgBase64: string) => {
+        if (imgBase64.startsWith('data:')) {
+          const mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
+          const data = imgBase64.substring(imgBase64.indexOf(',') + 1);
+          imageParts.push({ inlineData: { data, mimeType } });
+        }
+      });
+      // Erstat de gigantiske strenge med en simpel tekst placeholder i JSON
+      part.images = [`[${part.images.length} images provided as attachments]`];
     }
-    const response = await ai.models.generateContent({ model, contents });
+    
+    // Fjern evt. CAD base64 data for at spare tokens (Gemini kan alligevel ikke læse rå .step filer endnu)
+    if (part.cadFile && part.cadFile.dataUrl) {
+      part.cadFile.dataUrl = "[CAD data removed to save tokens]";
+    }
+  });
+
+  // Sammensæt den fulde tekst
+  const finalPromptText = `${basePrompt}\n\nData:\n${JSON.stringify(cleanProject, null, 2)}`;
+  
+  // Returnér et array bestående af teksten først, og derefter alle billederne
+  return [finalPromptText, ...imageParts];
+};
+
+/**
+ * Henter Data Capture Advice.
+ * Bruger det lokale SDK hvis en API-nøgle er tilgængelig, ellers kaldes det sikre server-side endpoint.
+ */
+async function generateAdviceAPI(project: ProjectState): Promise<string> {
+  if (GEMINI_API_KEY) {
+    if (!ai) ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const basePrompt = externalAdvicePromptRaw.trim();
+    const contents = prepareAIRequest(project, basePrompt);
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents,
+    });
     return response.text || "";
   } else {
-    const response = await fetch('/api/gemini', {
+    const response = await fetch('/api/ai/advice', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ model, contents }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project }),
     });
 
     if (!response.ok) {
-      let errorMsg = 'Failed to generate AI content via server proxy';
-      try {
-        const errJson = await response.json();
-        errorMsg = errJson.details || errJson.error || errorMsg;
-      } catch (e) {
-        const text = await response.text();
-        if (text) errorMsg = text;
-      }
-      throw new Error(errorMsg);
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.details || err.error || 'Failed to generate advice.');
     }
+    const data = await response.json();
+    return data.text || "";
+  }
+}
 
+/**
+ * Henter Evaluator Draft.
+ * Bruger det lokale SDK hvis en API-nøgle er tilgængelig, ellers kaldes det sikre server-side endpoint.
+ */
+async function generateDraftAPI(project: ProjectState): Promise<string> {
+  if (GEMINI_API_KEY) {
+    if (!ai) ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const basePrompt = evaluatorDraftPromptRaw.trim();
+    const contents = prepareAIRequest(project, basePrompt);
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents,
+    });
+    return response.text || "";
+  } else {
+    const response = await fetch('/api/ai/draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.details || err.error || 'Failed to generate draft.');
+    }
+    const data = await response.json();
+    return data.text || "";
+  }
+}
+
+/**
+ * Sender besked til chat assistenten.
+ * Bruger det lokale SDK hvis en API-nøgle er tilgængelig, ellers kaldes det sikre server-side endpoint.
+ */
+async function sendChatAPI(
+  project: ProjectState,
+  activePartIndex: number,
+  history: any[],
+  schema: any
+): Promise<string> {
+  if (GEMINI_API_KEY) {
+    if (!ai) ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    
+    const cleanProject = JSON.parse(JSON.stringify(project));
+    cleanProject.parts.forEach((part: any) => {
+      if (part.images) part.images = [`[${part.images.length} images]`];
+      if (part.cadFile) part.cadFile.dataUrl = "[CAD removed]";
+    });
+
+    const contents = history.map((msg, i) => {
+      let text = msg.text;
+      if (i === history.length - 1 && msg.role === 'user') {
+         text = `${autoFillPromptRaw.trim()}\n\nQUESTIONNAIRE SCHEMA:\n${JSON.stringify(schema, null, 2)}\n\nCURRENT PROJECT STATE:\n${JSON.stringify(cleanProject, null, 2)}\n\nACTIVE PART INDEX (0-based): ${activePartIndex}\n\nUSER MESSAGE:\n${text}`;
+      }
+      return { role: msg.role, parts: [{ text }] };
+    });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents,
+    });
+    return response.text || "";
+  } else {
+    const response = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project, activePartIndex, history, schema }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.details || err.error || 'Failed to process chat message.');
+    }
     const data = await response.json();
     return data.text || "";
   }
@@ -297,41 +403,7 @@ export default function App() {
     }
   };
 
-  /**
-   * Hjælpefunktion: Fjerner de gigantiske Base64-billeder fra JSON-strengen
-   * og pakker dem i stedet som rigtige 'inlineData' filer, så Gemini kan "se" dem.
-   */
-  const prepareAIRequest = (project: ProjectState, basePrompt: string) => {
-    // Klon projektet så vi ikke ødelægger det originale state
-    const cleanProject = JSON.parse(JSON.stringify(project));
-    const imageParts: any[] = [];
 
-    cleanProject.parts.forEach((part: any) => {
-      // Ekstraher billeder
-      if (part.images && Array.isArray(part.images)) {
-        part.images.forEach((imgBase64: string) => {
-          if (imgBase64.startsWith('data:')) {
-            const mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
-            const data = imgBase64.substring(imgBase64.indexOf(',') + 1);
-            imageParts.push({ inlineData: { data, mimeType } });
-          }
-        });
-        // Erstat de gigantiske strenge med en simpel tekst placeholder i JSON
-        part.images = [`[${part.images.length} images provided as attachments]`];
-      }
-      
-      // Fjern evt. CAD base64 data for at spare tokens (Gemini kan alligevel ikke læse rå .step filer endnu)
-      if (part.cadFile && part.cadFile.dataUrl) {
-        part.cadFile.dataUrl = "[CAD data removed to save tokens]";
-      }
-    });
-
-    // Sammensæt den fulde tekst
-    const finalPromptText = `${basePrompt}\n\nData:\n${JSON.stringify(cleanProject, null, 2)}`;
-    
-    // Returnér et array bestående af teksten først, og derefter alle billederne
-    return [finalPromptText, ...imageParts];
-  };
 
   /**
    * ==========================================
@@ -351,16 +423,10 @@ export default function App() {
     
     // Viser "Analyzing Data..." spinner i UI'et
     setIsGeneratingReport(true);
-    
+
     try {
-      // Opret system prompten til LLM'en baseret på markdown filen i src/docs:
-      const basePrompt = externalAdvicePromptRaw.trim();
-      
-      // Brug vores nye hjælpefunktion til at pakke dataen korrekt (JSON + rigtige billedfiler)
-      const contents = prepareAIRequest(currentProject, basePrompt);
-      
       // 3. Kald Gemini API'et (via proxy eller lokalt SDK)
-      const text = await generateAIContent('gemini-2.5-flash', contents);
+      const text = await generateAdviceAPI(currentProject);
       
       // 4. Opdater det lokale state på frontend'en med det samme:
       // Vi gemmer rådgivningen i feltet 'report'. (Tidligere brugt til verdicts).
@@ -398,14 +464,8 @@ export default function App() {
     setIsGeneratingReport(true);
     
     try {
-      // Opret system prompten til LLM'en baseret på markdown filen i src/docs:
-      const basePrompt = evaluatorDraftPromptRaw.trim();
-      
-      // Gør data klar (JSON + Billeder)
-      const contents = prepareAIRequest(currentProject, basePrompt);
-      
       // 3. Kald Gemini API'et (via proxy eller lokalt SDK)
-      const text = await generateAIContent('gemini-2.5-flash', contents);
+      const text = await generateDraftAPI(currentProject);
       
       // 4. Opdater det lokale state:
       // Vi gemmer draftet i et NYT felt kaldet 'evaluatorDraft'. 
@@ -444,14 +504,6 @@ export default function App() {
     setIsGeneratingReport(true);
 
     try {
-      const cleanProject = JSON.parse(JSON.stringify(currentProject));
-      
-      // Strip images to save tokens, exactly like prepareAIRequest does
-      cleanProject.parts.forEach((part: any) => {
-        if (part.images) part.images = [`[${part.images.length} images]`];
-        if (part.cadFile) part.cadFile.dataUrl = "[CAD removed]";
-      });
-
       // Construct a lightweight schema representation so the LLM knows all field IDs, types, and labels
       const questionnaireSchema = {
         generalFields: GENERAL_STEPS[0].questions.map(q => ({
@@ -472,18 +524,8 @@ export default function App() {
         })))
       };
 
-      // Construct history for Gemini
-      const contents = newHistory.map((msg, i) => {
-        let text = msg.text;
-        // Inject the latest system prompt, schema, and project state into the final user message
-        if (i === newHistory.length - 1 && msg.role === 'user') {
-           text = `${autoFillPromptRaw.trim()}\n\nQUESTIONNAIRE SCHEMA:\n${JSON.stringify(questionnaireSchema, null, 2)}\n\nCURRENT PROJECT STATE:\n${JSON.stringify(cleanProject, null, 2)}\n\nACTIVE PART INDEX (0-based): ${activePartIndex}\n\nUSER MESSAGE:\n${text}`;
-        }
-        return { role: msg.role, parts: [{ text }] };
-      });
-
       // 3. Kald Gemini API'et (via proxy eller lokalt SDK)
-      const aiText = await generateAIContent('gemini-2.5-flash', contents);
+      const aiText = await sendChatAPI(currentProject, activePartIndex, newHistory, questionnaireSchema);
 
       // Append AI response
       const finalHistory = [...newHistory, { role: 'model' as const, text: aiText }];

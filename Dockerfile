@@ -36,6 +36,7 @@ RUN npm ci --only=production
 # Copy production assets and server code from the builder stage
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/src/docs ./docs
 
 # Expose port (Cloud Run overrides this via PORT env variable, defaulting to 8080)
 EXPOSE 8080
