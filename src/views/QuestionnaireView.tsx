@@ -629,8 +629,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 </div>
               )}
 
-              {/* Final Verdict Box (Visible to Admin, OR to User if Published or if the project is Approved/Rejected) */}
-              {(profile?.isAdmin || currentProject.isVerdictVisible || currentProject.status === 'approved' || currentProject.status === 'rejected') && (
+              {/* Final Verdict Box (Visible to Admin, OR to User if NOT draft AND (Published or Approved/Rejected)) */}
+              {(profile?.isAdmin || (currentProject.status !== 'draft' && (currentProject.isVerdictVisible || currentProject.status === 'approved' || currentProject.status === 'rejected'))) && (
                 <div className="bg-white border-2 border-slate-900 p-10 rounded-[3rem] shadow-xl relative">
                   <h3 className="text-2xl font-black text-slate-900 mb-2">Final Verdict</h3>
                   {!profile?.isAdmin && (
