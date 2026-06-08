@@ -4,7 +4,7 @@
  * Den modtager en masse data ("projects") og funktioner fra App.tsx som props.
  */
 import { useState } from 'react';
-import { PlusCircle, LayoutDashboard, SlidersHorizontal, Sparkles, Trash2, Loader2 } from 'lucide-react';
+import { PlusCircle, LayoutDashboard, SlidersHorizontal, Sparkles, Trash2, Loader2, Upload, Download, CheckCircle } from 'lucide-react';
 import { ProjectCard } from '../components/ProjectCard';
 import { ProjectState, UserProfile } from '../types';
 
@@ -36,6 +36,10 @@ interface DashboardViewProps {
   isCleaningDemo: boolean;
   generateDemoProjects: () => Promise<void>;
   cleanDemoProjects: () => Promise<void>;
+  acceptProject: (id: string) => void;
+  acceptAllPendingProjects: () => void;
+  importProjectsFromJson: (arr: any[]) => void;
+  fetchProjectImages: (p: ProjectState) => Promise<ProjectState>;
 }
 
 export function DashboardView({
@@ -65,11 +69,57 @@ export function DashboardView({
   isGeneratingDemo,
   isCleaningDemo,
   generateDemoProjects,
-  cleanDemoProjects
+  cleanDemoProjects,
+  acceptProject,
+  acceptAllPendingProjects,
+  importProjectsFromJson,
+  fetchProjectImages
 }: DashboardViewProps) {
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
-  
+  const [isExportingBulk, setIsExportingBulk] = useState(false);
+
+  const handleExportFiltered = async () => {
+    if (filteredProjects.length === 0) return;
+    setIsExportingBulk(true);
+    try {
+      const fullProjects = await Promise.all(
+        filteredProjects.map(p => fetchProjectImages(p))
+      );
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullProjects, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `scape_projects_export_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      document.body.removeChild(downloadAnchor);
+    } catch (err) {
+      console.error("Failed to export projects:", err);
+    } finally {
+      setIsExportingBulk(false);
+    }
+  };
+
+  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        const projectsArray = Array.isArray(parsed) ? parsed : [parsed];
+        importProjectsFromJson(projectsArray);
+      } catch (err) {
+        console.error("Failed to parse imported JSON file:", err);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const hasActiveFilters = !!(filterOrg || filterUser || filterStatus !== 'all' || sortBy !== 'date' || showInactive);
 
   // Extract unique contacts from the current projects list for suggestions
@@ -159,38 +209,6 @@ export function DashboardView({
                   )}
                 </button>
 
-                {profile?.isAdmin && (
-                  <>
-                    <button 
-                      onClick={generateDemoProjects}
-                      disabled={isGeneratingDemo || isCleaningDemo}
-                      className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Generate 20 demo projects"
-                    >
-                      {isGeneratingDemo ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                      ) : (
-                        <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                      )}
-                      <span>{isGeneratingDemo ? 'Generating...' : 'Generate Demo'}</span>
-                    </button>
-
-                    <button 
-                      onClick={cleanDemoProjects}
-                      disabled={isGeneratingDemo || isCleaningDemo}
-                      className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-600/50 text-white px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-rose-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Delete all demo projects"
-                    >
-                      {isCleaningDemo ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                      ) : (
-                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                      )}
-                      <span>{isCleaningDemo ? 'Cleaning...' : 'Clean Demo'}</span>
-                    </button>
-                  </>
-                )}
-
                 <button 
                   onClick={createNewProject} 
                   className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer"
@@ -203,6 +221,78 @@ export function DashboardView({
             <p className="text-[11px] text-slate-400 font-bold block sm:hidden">
               {profile?.isAdmin ? "Administrative Dashboard" : "Manage your Scape bin-picking evaluations"}
             </p>
+
+            {/* Super User Tools Panel */}
+            {profile?.requestedRole === 'superuser' && (
+              <div className="bg-amber-50/40 p-4 md:p-5 rounded-[2rem] border border-amber-200/60 shadow-xs flex flex-wrap gap-3 items-center animate-fadeIn mt-2 select-none">
+                <div className="flex flex-col text-left mr-auto">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-600">Super User Tools</span>
+                  <span className="text-[11px] text-slate-400 font-semibold mt-0.5">Manage data imports/exports and demo seeds</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button 
+                    onClick={handleExportFiltered}
+                    disabled={filteredProjects.length === 0 || isExportingBulk}
+                    className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-900/50 text-white px-3 md:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed animate-all"
+                    title="Export filtered project list as JSON"
+                  >
+                    {isExportingBulk ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <span>{isExportingBulk ? 'Exporting...' : 'Export Filtered (JSON)'}</span>
+                  </button>
+
+                  <label className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer">
+                    <Upload className="w-3.5 h-3.5 shrink-0" />
+                    <span>Import JSON</span>
+                    <input 
+                      type="file" 
+                      accept=".json" 
+                      onChange={handleImportJson} 
+                      className="hidden" 
+                    />
+                  </label>
+
+                  {projects.some(p => p.isImportPending) && (
+                    <button 
+                      onClick={acceptAllPendingProjects}
+                      className="bg-amber-600 hover:bg-amber-700 text-white px-3 md:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Accept All Staged</span>
+                    </button>
+                  )}
+
+                  <button 
+                    onClick={generateDemoProjects}
+                    disabled={isGeneratingDemo || isCleaningDemo}
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white px-3 md:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isGeneratingDemo ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <span>{isGeneratingDemo ? 'Generating...' : 'Generate Demo'}</span>
+                  </button>
+
+                  <button 
+                    onClick={cleanDemoProjects}
+                    disabled={isGeneratingDemo || isCleaningDemo}
+                    className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-600/50 text-white px-3 md:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-rose-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCleaningDemo ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <span>{isCleaningDemo ? 'Cleaning...' : 'Clean Demo'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {isFilterExpanded && (
               <div className="bg-blue-50/40 p-5 rounded-[2rem] border border-blue-100/60 shadow-xs flex flex-wrap gap-3 items-center animate-fadeIn mt-2">
@@ -313,6 +403,8 @@ export function DashboardView({
                 updateStatus={updateStatus}
                 toggleSpecified={toggleSpecified}
                 toggleInactive={toggleInactive}
+                acceptProject={acceptProject}
+                fetchProjectImages={fetchProjectImages}
               />
             ))}
           </div>

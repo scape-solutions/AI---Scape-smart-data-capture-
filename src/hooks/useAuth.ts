@@ -35,7 +35,7 @@ export const getEffectiveAdminStatus = (p: UserProfile | null, uid?: string | nu
   const email = p.email;
   const isEmployee = isScapeEmployee(email, uid);
   if (!isEmployee) return false;
-  return p.requestedRole === 'evaluator' && isAllowedEvaluator(email);
+  return (p.requestedRole === 'evaluator' || p.requestedRole === 'superuser') && isAllowedEvaluator(email);
 };
 
 export function useAuth(handleAppError: (e: any, op?: OperationType, path?: string) => void) {
@@ -140,11 +140,18 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     }
   };
 
-  // Lader Scape Evaluators skifte mellem "Admin" og "External" visning
-  const switchMode = async (newRole: 'evaluator' | 'external', onStatusChanged: (isAdmin: boolean) => void) => {
+  // Lader Scape Evaluators skifte mellem "Admin", "External" og "Super User" visning
+  const switchMode = async (newRole: 'evaluator' | 'external' | 'superuser', onStatusChanged: (isAdmin: boolean) => void) => {
     if (!user || !profile) return;
     const email = getEffectiveEmail();
-    const isAdmin = newRole === 'evaluator' && (isScapeEmployee(email, user.uid) || isAllowedEvaluator(email));
+    
+    // Safety check for superuser: only rune.k.larsen@scapesolutions.eu can switch to superuser
+    if (newRole === 'superuser' && email?.toLowerCase() !== 'rune.k.larsen@scapesolutions.eu') {
+      console.warn("Unauthorized attempt to switch to superuser role");
+      return;
+    }
+
+    const isAdmin = (newRole === 'evaluator' || newRole === 'superuser') && (isScapeEmployee(email, user.uid) || isAllowedEvaluator(email));
     
     try {
       await updateDoc(doc(db, 'users', user.uid), { requestedRole: newRole, isAdmin });

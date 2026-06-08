@@ -52,6 +52,7 @@ export interface ProjectState {
   isInactive?: boolean;
   isDeleted?: boolean;
   isDemo?: boolean;
+  isImportPending?: boolean;
   takenBy?: string;
   takenByName?: string;
   isVerdictVisible?: boolean;
@@ -74,6 +75,6 @@ export interface UserProfile {
   email: string;
   phone?: string;
   isAdmin?: boolean;
-  requestedRole?: 'evaluator' | 'external';
+  requestedRole?: 'evaluator' | 'external' | 'superuser';
 }
 

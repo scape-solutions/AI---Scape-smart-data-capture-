@@ -23,7 +23,7 @@ service cloud.firestore {
 
     match /projects/{projectId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow create: if isScape() || (isSignedIn() && request.resource.data.userId == request.auth.uid);
       allow update: if isScape() || (
         resource != null && 
         resource.data.userId == request.auth.uid && 

@@ -870,6 +870,11 @@ export function useProjects(
         }
         return normalizeProject({ ...rawData, id: d.id });
       });
+
+      // Filter out pending imports for non-superusers
+      if (profile?.requestedRole !== 'superuser') {
+        data = data.filter(p => !p.isImportPending);
+      }
       
       // Sortering af data. Først efter dato (nyeste først).
       data.sort((a: any, b: any) => {
@@ -893,10 +898,10 @@ export function useProjects(
     }
   };
 
-  // Kør fetchProjects automatisk, hvis admin-status eller sort-valg ændrer sig
+  // Kør fetchProjects automatisk, hvis admin-status, requestedRole eller sort-valg ændrer sig
   useEffect(() => {
     fetchProjects(profile?.isAdmin);
-  }, [profile?.isAdmin, sortBy, user]);
+  }, [profile?.isAdmin, profile?.requestedRole, sortBy, user]);
 
   // Gemmer en handling i projektets historik (f.eks. "Projekt låst" eller "Projekt oprettet")
   const logChange = async (projectId: string, action: string) => {
@@ -1303,6 +1308,109 @@ export function useProjects(
     }
   };
 
+  const acceptProject = async (projectId: string) => {
+    try {
+      await updateDoc(doc(db, 'projects', projectId), { isImportPending: false });
+      await logChange(projectId, "Project Import Accepted");
+      
+      if (currentProject?.id === projectId) {
+        setCurrentProject(prev => prev ? ({ ...prev, isImportPending: false }) : null);
+      }
+      
+      setGlobalSuccess("Project successfully accepted.");
+      setTimeout(() => setGlobalSuccess(null), 5000);
+      await fetchProjects(profile?.isAdmin);
+    } catch (e) {
+      handleAppError(e);
+    }
+  };
+
+  const acceptAllPendingProjects = async () => {
+    const pending = projects.filter(p => p.isImportPending);
+    if (pending.length === 0) return;
+    
+    try {
+      await Promise.all(pending.map(async (p) => {
+        if (!p.id) return;
+        await updateDoc(doc(db, 'projects', p.id), { isImportPending: false });
+        await logChange(p.id, "Project Import Accepted (Bulk)");
+      }));
+      
+      setGlobalSuccess(`Successfully accepted and activated ${pending.length} projects.`);
+      setTimeout(() => setGlobalSuccess(null), 5000);
+      await fetchProjects(profile?.isAdmin);
+    } catch (e) {
+      handleAppError(e);
+    }
+  };
+
+  const importProjectsFromJson = async (projectsArray: any[]) => {
+    if (!Array.isArray(projectsArray)) {
+      handleAppError(new Error("Invalid import format. Expected an array of projects."));
+      return;
+    }
+
+    try {
+      let importedCount = 0;
+      for (const p of projectsArray) {
+        const projectData = {
+          projectName: p.projectName || "Imported Project",
+          generalResponses: p.generalResponses || {},
+          parts: (p.parts || []).map((part: any) => ({
+            responses: part.responses || {},
+            images: [],
+            imageCount: Array.isArray(part.images) ? part.images.length : 0,
+            cadFile: part.cadFile || null
+          })),
+          generalImages: [],
+          report: p.report || null,
+          evaluatorDraft: p.evaluatorDraft || null,
+          finalVerdict: p.finalVerdict || null,
+          status: p.status || 'draft',
+          userId: p.userId || user?.uid,
+          ownerName: p.ownerName || 'Unknown Owner',
+          ownerCompany: p.ownerCompany || 'No Company',
+          ownerEmail: p.ownerEmail || 'Unknown Email',
+          ownerPhone: p.ownerPhone || 'Unknown Phone',
+          isLocked: !!p.isLocked,
+          isFullySpecified: !!p.isFullySpecified,
+          isInactive: !!p.isInactive,
+          isDeleted: !!p.isDeleted,
+          isDemo: !!p.isDemo,
+          isImportPending: true,
+          takenBy: p.takenBy || null,
+          takenByName: p.takenByName || null,
+          isVerdictVisible: !!p.isVerdictVisible
+        };
+
+        const docRef = await addDoc(collection(db, 'projects'), {
+          ...projectData,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+
+        const projectWithImages = {
+          ...projectData,
+          generalImages: p.generalImages || [],
+          parts: (p.parts || []).map((part: any) => ({
+            ...part,
+            images: part.images || []
+          }))
+        } as unknown as ProjectState;
+
+        await saveProjectImages(docRef.id, projectWithImages);
+        await logChange(docRef.id, "Project Imported from JSON");
+        importedCount++;
+      }
+
+      setGlobalSuccess(`Successfully imported ${importedCount} projects. They are pending acceptance.`);
+      setTimeout(() => setGlobalSuccess(null), 5000);
+      await fetchProjects(profile?.isAdmin);
+    } catch (e) {
+      handleAppError(e);
+    }
+  };
+
   return {
     projects,
     isLoadingProjects,
@@ -1323,6 +1431,9 @@ export function useProjects(
     isGeneratingDemo,
     isCleaningDemo,
     generateDemoProjects,
-    cleanDemoProjects
+    cleanDemoProjects,
+    acceptProject,
+    acceptAllPendingProjects,
+    importProjectsFromJson
   };
 }

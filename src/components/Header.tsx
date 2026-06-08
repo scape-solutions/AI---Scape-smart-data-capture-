@@ -11,7 +11,7 @@ interface HeaderProps {
   setGlobalSuccess: (msg: string | null) => void;
   setView: (view: 'dashboard' | 'questionnaire' | 'profile_setup') => void;
   logout: () => void;
-  switchMode: (role: 'evaluator' | 'external', onStatusChanged: (isAdmin: boolean) => void) => void;
+  switchMode: (role: 'evaluator' | 'external' | 'superuser', onStatusChanged: (isAdmin: boolean) => void) => void;
   isAllowedEvaluator: (email: string | null | undefined) => boolean;
   isScapeEmployee: (email: string | null | undefined, uid?: string | null) => boolean;
   saveProfile: (data: any) => Promise<void>;
@@ -207,6 +207,14 @@ export function Header({
         {/* Vises kun for Scape ansatte. */}
         {(isScapeEmployee(user?.email, user?.uid) || isAllowedEvaluator(user?.email)) && (
           <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
+            {user?.email?.toLowerCase() === 'rune.k.larsen@scapesolutions.eu' && (
+              <button 
+                onClick={() => switchMode('superuser', () => {})}
+                className={`text-[9px] font-black uppercase px-2 md:px-3 py-1.5 rounded-lg transition-all ${profile?.requestedRole === 'superuser' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                Super User
+              </button>
+            )}
             <button 
               onClick={() => switchMode('evaluator', () => {})}
               className={`text-[9px] font-black uppercase px-2 md:px-3 py-1.5 rounded-lg transition-all ${profile?.requestedRole === 'evaluator' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
@@ -230,8 +238,11 @@ export function Header({
         >
           <div className="hidden sm:block">
             <div className="flex items-center justify-end gap-2">
-              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border leading-none ${profile?.isAdmin ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                {profile?.isAdmin ? "Scape Eng" : "External"}
+              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border leading-none ${
+                profile?.requestedRole === 'superuser' ? 'bg-amber-600 text-white border-amber-600' :
+                profile?.isAdmin ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-100 text-slate-500 border-slate-200'
+              }`}>
+                {profile?.requestedRole === 'superuser' ? "Super User" : profile?.isAdmin ? "Scape Eng" : "External"}
               </span>
               <span className="text-xs font-bold text-slate-800 group-hover:text-slate-950 transition-colors">{profile?.name}</span>
             </div>

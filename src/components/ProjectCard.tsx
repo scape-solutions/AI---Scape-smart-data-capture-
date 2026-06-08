@@ -5,9 +5,10 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { ShieldCheck, CheckCircle2, Clock, History, Trash2, ChevronRight, User as UserIcon, RotateCcw } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, Clock, History, Trash2, ChevronRight, User as UserIcon, RotateCcw, Download, FileText, Check, XCircle } from 'lucide-react';
 import { ProjectState, UserProfile } from '../types';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
+import { generateProjectPdf } from '../utils/pdfGenerator';
 
 interface ProjectCardProps {
   key?: string | number | null;
@@ -23,6 +24,8 @@ interface ProjectCardProps {
   updateStatus: (p: ProjectState, status: ProjectState['status']) => void;
   toggleSpecified: (p: ProjectState) => void;
   toggleInactive: (p: ProjectState) => void;
+  acceptProject: (id: string) => void;
+  fetchProjectImages: (p: ProjectState) => Promise<ProjectState>;
 }
 
 export function ProjectCard({
@@ -37,9 +40,13 @@ export function ProjectCard({
   takeProject,
   updateStatus,
   toggleSpecified,
-  toggleInactive
+  toggleInactive,
+  acceptProject,
+  fetchProjectImages
 }: ProjectCardProps) {
   const [firstImage, setFirstImage] = useState<string | null>(null);
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     if (!p.id) return;
@@ -157,8 +164,10 @@ export function ProjectCard({
    */
   return (
     <div 
-      className={`group relative bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-300/85 shadow-[4px_10px_24px_-2px_rgba(15,23,42,0.18),_2px_4px_8px_-1px_rgba(15,23,42,0.12)] hover:shadow-[10px_22px_40px_-5px_rgba(15,23,42,0.28),_3px_6px_14px_-2px_rgba(15,23,42,0.18)] hover:border-blue-600/50 hover:-translate-y-1.5 transition-all duration-300 ease-out cursor-pointer flex flex-col h-full ${p.isInactive || p.isDeleted ? 'opacity-60 border-slate-300 shadow-xs' : ''}`} 
-      onClick={() => openProject(p)}
+      className={`group relative bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border shadow-[4px_10px_24px_-2px_rgba(15,23,42,0.18),_2px_4px_8px_-1px_rgba(15,23,42,0.12)] hover:shadow-[10px_22px_40px_-5px_rgba(15,23,42,0.28),_3px_6px_14px_-2px_rgba(15,23,42,0.18)] hover:-translate-y-1.5 transition-all duration-300 ease-out cursor-pointer flex flex-col h-full ${
+        p.isImportPending ? 'border-dashed border-amber-400 bg-amber-50/10 hover:border-amber-500' : 'border-slate-300/85 hover:border-blue-600/50'
+      } ${p.isInactive || p.isDeleted ? 'opacity-60 border-slate-300 shadow-xs' : ''}`} 
+      onClick={() => !p.isImportPending && openProject(p)}
     >
       {/* Udvasket baggrundsbillede hvis der er uploadet et billede til projektet (rounded-3xl fixes corner bleed) */}
       {firstImage && (
@@ -192,6 +201,12 @@ export function ProjectCard({
               }`}>
                 {p.status}
               </span>
+              {/* Hvis projektet er staged for import, vis denne badge */}
+              {p.isImportPending && (
+                <span className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shrink-0 animate-pulse">
+                  <Clock className="w-3 h-3 animate-spin" /> Import Pending
+                </span>
+              )}
               {/* Hvis projektet er låst (isLocked er true), så vis dette badge */}
               {p.isLocked && <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shrink-0"><ShieldCheck className="w-3 h-3" /> Locked</span>}
               {p.isFullySpecified && <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shrink-0"><CheckCircle2 className="w-3 h-3" /> Specified</span>}
@@ -228,7 +243,7 @@ export function ProjectCard({
           </div>
 
           {/* Disse sektioner og knapper vises KUN, hvis brugeren har Admin-rettigheder */}
-          {profile?.isAdmin && (
+          {profile?.isAdmin && !p.isImportPending && (
             <div className="mb-4 py-3 px-3 bg-slate-50/80 rounded-xl space-y-1 backdrop-blur-[2px] border border-slate-100/50">
               <p className="text-[10px] text-slate-500 truncate font-bold uppercase tracking-tight">Org: {p.ownerCompany || 'N/A'}</p>
               {p.ownerEmail && isActuallyEmail(p.ownerEmail) && p.ownerEmail !== 'Unknown' ? (
@@ -245,7 +260,7 @@ export function ProjectCard({
         </div>
 
         <div>
-          {profile?.isAdmin && (
+          {profile?.isAdmin && !p.isImportPending && (
             <div className="flex flex-wrap gap-2 mb-4 border-t border-slate-100 pt-4">
               <button 
                 // e.stopPropagation() sørger for, at "klikket" ikke bobler op 
@@ -295,43 +310,140 @@ export function ProjectCard({
           )}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center text-xs text-slate-400 border-t border-slate-100 pt-4">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <span className="font-bold text-slate-500">{p.parts.length} Part{p.parts.length !== 1 ? 's' : ''}</span>
-              <div className="flex items-center gap-1.5" title={`${progress.totalFilled}/${progress.totalQuestions} questions answered`}>
-                <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${progress.percentage === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${progress.percentage}%` }} />
-                </div>
-                <span className="text-[10px] font-bold">{progress.percentage}%</span>
-              </div>
-              <button onClick={(e) => { e.stopPropagation(); fetchLog(p.id!); }} className="hover:text-blue-600 flex items-center gap-1 transition-colors">
-                <History className="w-3 h-3" /> History
-              </button>
-              {(p.userId === user?.uid || profile?.isAdmin) && (
-                <>
-                  {p.isDeleted && profile?.isAdmin && (
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); restoreProject(p); }} 
-                      className="hover:text-emerald-500 text-emerald-600 font-bold flex items-center gap-1 transition-colors"
-                    >
-                      <RotateCcw className="w-3 h-3" /> Restore
-                    </button>
-                  )}
+            {p.isImportPending ? (
+              <div className="flex gap-2 w-full justify-between items-center select-none" onClick={(e) => e.stopPropagation()}>
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 flex items-center gap-1 font-bold">
+                  Staged Import
+                </span>
+                <div className="flex gap-2">
                   <button 
-                    onClick={(e) => { e.stopPropagation(); deleteProject(p); }} 
-                    className="hover:text-red-500 flex items-center gap-1 transition-colors"
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      if (p.id) acceptProject(p.id); 
+                    }}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wide flex items-center gap-1 shadow-sm transition-all cursor-pointer active:scale-95"
                   >
-                    <Trash2 className="w-3 h-3" /> {p.isDeleted ? 'Final Delete' : 'Delete'}
+                    <Check className="w-3 h-3" /> Accept
                   </button>
-                </>
-              )}
-            </div>
-            <button 
-              onClick={(e) => { e.stopPropagation(); openProject(p); }}
-              className="text-blue-600 font-bold flex items-center gap-1 hover:underline sm:ml-auto transition-all"
-            >
-              {p.isLocked && !profile?.isAdmin ? <ShieldCheck className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-              {p.isLocked && !profile?.isAdmin ? 'View Data' : 'View Details'}
-            </button>
+                  <button 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      deleteProject(p); 
+                    }}
+                    className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-[10px] font-black uppercase tracking-wide flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                  >
+                    <XCircle className="w-3 h-3" /> Discard
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <span className="font-bold text-slate-500">{p.parts.length} Part{p.parts.length !== 1 ? 's' : ''}</span>
+                  <div className="flex items-center gap-1.5" title={`${progress.totalFilled}/${progress.totalQuestions} questions answered`}>
+                    <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${progress.percentage === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${progress.percentage}%` }} />
+                    </div>
+                    <span className="text-[10px] font-bold">{progress.percentage}%</span>
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); fetchLog(p.id!); }} className="hover:text-blue-600 flex items-center gap-1 transition-colors">
+                    <History className="w-3 h-3" /> History
+                  </button>
+
+                  {(profile?.isAdmin || profile?.requestedRole === 'superuser') && (
+                    <div className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
+                      <button 
+                        onClick={(e) => { 
+                          e.preventDefault(); 
+                          e.stopPropagation(); 
+                          setExportDropdownOpen(!exportDropdownOpen); 
+                        }} 
+                        className="hover:text-blue-600 flex items-center gap-1 transition-colors select-none cursor-pointer"
+                      >
+                        <Download className="w-3 h-3" /> Export
+                      </button>
+                      {exportDropdownOpen && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setExportDropdownOpen(false)} />
+                          <div className="absolute left-0 bottom-full mb-2 w-36 rounded-xl bg-white border border-slate-200 shadow-xl z-50 p-1.5 animate-fadeIn">
+                            <button 
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setExportDropdownOpen(false);
+                                setIsExporting(true);
+                                try {
+                                  const full = await fetchProjectImages(p);
+                                  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(full, null, 2));
+                                  const dl = document.createElement('a');
+                                  dl.href = dataStr;
+                                  dl.download = `scape_project_${(p.projectName || 'project').toLowerCase().replace(/[^a-z0-9]+/g, '_')}.json`;
+                                  document.body.appendChild(dl);
+                                  dl.click();
+                                  document.body.removeChild(dl);
+                                } catch (err) {
+                                  console.error(err);
+                                } finally {
+                                  setIsExporting(false);
+                                }
+                              }}
+                              disabled={isExporting}
+                              className="w-full text-left p-2 hover:bg-slate-50 rounded-lg text-[10px] font-black uppercase text-slate-700 hover:text-slate-900 transition-colors flex items-center gap-1.5 select-none cursor-pointer disabled:opacity-50"
+                            >
+                              <Download className="w-3.5 h-3.5" /> JSON Format
+                            </button>
+                            <button 
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setExportDropdownOpen(false);
+                                setIsExporting(true);
+                                try {
+                                  const full = await fetchProjectImages(p);
+                                  generateProjectPdf(full);
+                                } catch (err) {
+                                  console.error(err);
+                                } finally {
+                                  setIsExporting(false);
+                                }
+                              }}
+                              disabled={isExporting}
+                              className="w-full text-left p-2 hover:bg-slate-50 rounded-lg text-[10px] font-black uppercase text-slate-700 hover:text-slate-900 transition-colors flex items-center gap-1.5 select-none cursor-pointer disabled:opacity-50"
+                            >
+                              <FileText className="w-3.5 h-3.5" /> PDF Report
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {(p.userId === user?.uid || profile?.isAdmin) && (
+                    <>
+                      {p.isDeleted && profile?.isAdmin && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); restoreProject(p); }} 
+                          className="hover:text-emerald-500 text-emerald-600 font-bold flex items-center gap-1 transition-colors"
+                        >
+                          <RotateCcw className="w-3 h-3" /> Restore
+                        </button>
+                      )}
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); deleteProject(p); }} 
+                        className="hover:text-red-500 flex items-center gap-1 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" /> {p.isDeleted ? 'Final Delete' : 'Delete'}
+                      </button>
+                    </>
+                  )}
+                </div>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); openProject(p); }}
+                  className="text-blue-600 font-bold flex items-center gap-1 hover:underline sm:ml-auto transition-all"
+                >
+                  {p.isLocked && !profile?.isAdmin ? <ShieldCheck className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  {p.isLocked && !profile?.isAdmin ? 'View Data' : 'View Details'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

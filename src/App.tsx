@@ -107,7 +107,10 @@ export default function App() {
     isGeneratingDemo,
     isCleaningDemo,
     generateDemoProjects,
-    cleanDemoProjects
+    cleanDemoProjects,
+    acceptProject,
+    acceptAllPendingProjects,
+    importProjectsFromJson
   } = useProjects(user, profile, sortBy, handleAppError, setGlobalSuccess, getEffectiveEmail);
 
   // State-variabler specifikt til Login/Sign-up processen
@@ -567,6 +570,10 @@ export default function App() {
             isCleaningDemo={isCleaningDemo}
             generateDemoProjects={generateDemoProjects}
             cleanDemoProjects={cleanDemoProjects}
+            acceptProject={acceptProject}
+            acceptAllPendingProjects={acceptAllPendingProjects}
+            importProjectsFromJson={importProjectsFromJson}
+            fetchProjectImages={fetchProjectImages}
           />
         )}
 
