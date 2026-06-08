@@ -193,12 +193,14 @@ export function ProjectCard({
         <div>
           <div className="flex justify-between items-start mb-4">
             <div className="flex flex-wrap gap-1.5 max-w-[85%]">
-              {/* Dynamiske (betingede) klasser: Hvis status er 'submitted', gøres baggrunden blå, ellers grøn eller grå */}
+              {/* Dynamiske (betingede) klasser: Hvis status er 'submitted', gøres baggrunden rød/blå, ellers grøn, rose eller grå */}
               <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${
                 p.status === 'submitted' ? 'bg-red-50 text-red-600 border-red-100' : 
                 p.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                p.status === 'rejected' ? 'bg-rose-50 text-rose-700 border-rose-100' : 
                 'bg-slate-100 text-slate-500 border-slate-200'
               }`}>
+
                 {p.status}
               </span>
               {/* Hvis projektet er staged for import, vis denne badge */}
@@ -288,12 +290,22 @@ export function ProjectCard({
                 <span className="text-[8px] font-bold text-slate-400 px-2 py-1 flex items-center gap-1"><UserIcon className="w-2 h-2" /> {p.takenByName || 'Taken'}</span>
               )}
 
-              <button 
-                onClick={(e) => { e.stopPropagation(); updateStatus(p, 'approved'); }}
-                className="text-[9px] font-black uppercase px-2 py-1 rounded border border-slate-200 text-slate-400 hover:bg-green-50 hover:text-green-600 hover:border-green-600 transition-colors"
-              >
-                Approve
-              </button>
+              {p.status !== 'approved' && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); updateStatus(p, 'approved'); }}
+                  className="text-[9px] font-black uppercase px-2 py-1 rounded border border-slate-200 text-slate-400 hover:bg-green-50 hover:text-green-600 hover:border-green-600 transition-colors"
+                >
+                  Approve
+                </button>
+              )}
+              {p.status !== 'rejected' && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); updateStatus(p, 'rejected'); }}
+                  className="text-[9px] font-black uppercase px-2 py-1 rounded border border-slate-200 text-slate-400 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-600 transition-colors"
+                >
+                  Reject
+                </button>
+              )}
               <button 
                 onClick={(e) => { e.stopPropagation(); toggleSpecified(p); }}
                 className={`text-[9px] font-black uppercase px-2 py-1 rounded border transition-colors ${p.isFullySpecified ? 'bg-emerald-600 text-white border-emerald-600' : 'text-slate-400 border-slate-200 hover:border-emerald-600'}`}

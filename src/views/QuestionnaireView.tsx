@@ -102,8 +102,9 @@ export function QuestionnaireView({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Read-only state (locked or submitted, unless the user is an admin)
-  const isReadOnly = (currentProject.isLocked || currentProject.status === 'submitted') && !profile?.isAdmin;
+  // Read-only state (locked or submitted/approved/rejected, unless the user is an admin)
+  const isReadOnly = (currentProject.isLocked || currentProject.status === 'submitted' || currentProject.status === 'approved' || currentProject.status === 'rejected') && !profile?.isAdmin;
+
 
   // Helper to calculate question fill progress for a step
   const getStepProgress = (step: any, responses: Record<string, any>, part?: any) => {
