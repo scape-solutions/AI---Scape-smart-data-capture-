@@ -15,7 +15,9 @@ initializeApp({
   projectId: process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'scape-data-capture'
 });
 
-const db = getFirestore();
+// Use the custom named Firestore database (not the default one)
+const FIRESTORE_DATABASE_ID = process.env.FIRESTORE_DATABASE_ID || 'ai-studio-scapebinpickinge-034f7a46-4395-4b38-89aa-1055263d83ac';
+const db = getFirestore(FIRESTORE_DATABASE_ID);
 
 // In-memory cache for dynamic allowed access config, with hardcoded fallbacks
 let allowedConfig = {
