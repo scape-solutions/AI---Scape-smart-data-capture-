@@ -18,7 +18,9 @@ import {
   ChevronDown,
   Download,
   Trash2,
-  Bot
+  Bot,
+  Briefcase,
+  Factory
 } from 'lucide-react';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 import { ProjectState, UserProfile } from '../types';
@@ -126,6 +128,7 @@ export function QuestionnaireView({
 }: QuestionnaireViewProps) {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeCustomSection, setActiveCustomSection] = useState<'business-case' | 'additional-opportunities' | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [isAdviceExpanded, setIsAdviceExpanded] = useState(true);
@@ -422,8 +425,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
         
         {/* Project & Cell Info */}
         <button 
-          onClick={() => { setIsReviewing(false); setCurrentStep(0); }}
-          className={`w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-all ${currentStep === 0 && !isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+          onClick={() => { setIsReviewing(false); setActiveCustomSection(null); setCurrentStep(0); }}
+          className={`w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-all ${currentStep === 0 && !isReviewing && !activeCustomSection ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
         >
           <div className="flex items-center gap-3">
             <Settings2 className="w-4 h-4" />
@@ -503,8 +506,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     return (
                       <button 
                         key={step.id}
-                        onClick={() => { setIsReviewing(false); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); }}
-                        className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                        onClick={() => { setIsReviewing(false); setActiveCustomSection(null); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); }}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing && !activeCustomSection ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
                       >
                         <div className="flex items-center gap-2">
                           {React.createElement(step.icon, { className: "w-3.5 h-3.5 shrink-0" })}
@@ -535,11 +538,30 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           <PlusCircle className="w-4 h-4" /> Add Part
         </button>
 
+        {/* Extended Analysis / Custom Sections */}
+        <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Extended Analysis</h2>
+        
+        <button 
+          onClick={() => { setIsReviewing(false); setActiveCustomSection('business-case'); }}
+          className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${activeCustomSection === 'business-case' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+        >
+          <Briefcase className="w-4 h-4" />
+          <span>Business Case</span>
+        </button>
+
+        <button 
+          onClick={() => { setIsReviewing(false); setActiveCustomSection('additional-opportunities'); }}
+          className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${activeCustomSection === 'additional-opportunities' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+        >
+          <Factory className="w-4 h-4" />
+          <span>Additional Opportunities</span>
+        </button>
+
         {/* Final Verdict */}
         <div className="mt-4 pt-4 border-t border-slate-100">
           <button 
-            onClick={() => { setIsReviewing(true); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
-            className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+            onClick={() => { setIsReviewing(true); setActiveCustomSection(null); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${isReviewing && !activeCustomSection ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
           >
             <Sparkles className="w-4 h-4" /> Review / Submit
           </button>
@@ -590,9 +612,13 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               <span className="text-xs font-black text-slate-700">
                 {isReviewing 
                   ? 'Review / Submit' 
-                  : currentStep === 0 
-                    ? 'Project & Cell Info' 
-                    : `Part #${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
+                  : activeCustomSection === 'business-case'
+                    ? 'Business Case'
+                    : activeCustomSection === 'additional-opportunities'
+                      ? 'Additional Opportunities'
+                      : currentStep === 0 
+                        ? 'Project & Cell Info' 
+                        : `Part #${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </div>
@@ -1134,6 +1160,256 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 )}
               </div>
             </div>
+          ) : activeCustomSection === 'business-case' ? (
+            /* Business Case Placeholder View */
+            <div className="space-y-6 animate-fadeIn">
+              <div>
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Business Case</h1>
+                <p className="text-sm text-slate-500">
+                  Estimate the financial feasibility and return on investment (ROI) for this bin-picking installation.
+                </p>
+              </div>
+
+              {/* Info Card / Explanation */}
+              <div className="p-5 bg-blue-50/50 border border-blue-100 rounded-2xl text-blue-900 text-sm space-y-2">
+                <p className="font-bold flex items-center gap-2">
+                  <Info className="w-4 h-4 text-blue-500" />
+                  About the Business Case Tool
+                </p>
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  This section serves as a placeholder for a future interactive ROI calculator. In final production, we will help you make a precise calculation using both already entered project values (such as robot brand, cycles, and parts complexity) and additional operational questions. The goal is to help estimate project cost, payback period, and overall rate of return ("forrentning") based on simulated Scape installation prices.
+                </p>
+              </div>
+
+              {/* Interactive Mock Inputs */}
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-2xs space-y-6">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">ROI Estimation Parameters (Simulation)</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Operator Hourly Cost */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-600 block">Operator Hourly Labor Cost (EUR)</label>
+                    <input 
+                      type="number"
+                      disabled={isReadOnly}
+                      value={currentProject.generalResponses['businessCaseSavedLabor'] ?? 50}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        const updated = { ...currentProject.generalResponses, businessCaseSavedLabor: val };
+                        setCurrentProject({ ...currentProject, generalResponses: updated });
+                      }}
+                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      placeholder="e.g. 50"
+                    />
+                  </div>
+
+                  {/* Number of Shifts */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-600 block">Operating Shifts per Day</label>
+                    <select
+                      disabled={isReadOnly}
+                      value={currentProject.generalResponses['businessCaseShifts'] ?? 2}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 1;
+                        const updated = { ...currentProject.generalResponses, businessCaseShifts: val };
+                        setCurrentProject({ ...currentProject, generalResponses: updated });
+                      }}
+                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm bg-white"
+                    >
+                      <option value={1}>1 Shift</option>
+                      <option value={2}>2 Shifts</option>
+                      <option value={3}>3 Shifts</option>
+                    </select>
+                  </div>
+
+                  {/* Workdays per year */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-600 block">Expected Work Days per Year</label>
+                    <input 
+                      type="number"
+                      disabled={isReadOnly}
+                      value={currentProject.generalResponses['businessCaseWorkDays'] ?? 220}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        const updated = { ...currentProject.generalResponses, businessCaseWorkDays: val };
+                        setCurrentProject({ ...currentProject, generalResponses: updated });
+                      }}
+                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      placeholder="e.g. 220"
+                    />
+                  </div>
+
+                  {/* Installation Cost base */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-600 block">Est. Scape Installation Price Base (EUR)</label>
+                    <input 
+                      type="number"
+                      disabled={isReadOnly}
+                      value={currentProject.generalResponses['businessCaseInstallCost'] ?? 120000}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        const updated = { ...currentProject.generalResponses, businessCaseInstallCost: val };
+                        setCurrentProject({ ...currentProject, generalResponses: updated });
+                      }}
+                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      placeholder="e.g. 120000"
+                    />
+                  </div>
+                </div>
+
+                {/* Calculation Output Card */}
+                {(() => {
+                  const labor = currentProject.generalResponses['businessCaseSavedLabor'] ?? 50;
+                  const sh = currentProject.generalResponses['businessCaseShifts'] ?? 2;
+                  const days = currentProject.generalResponses['businessCaseWorkDays'] ?? 220;
+                  const cost = currentProject.generalResponses['businessCaseInstallCost'] ?? 120000;
+
+                  const annualHours = sh * 8 * days;
+                  const annualSavings = annualHours * labor;
+                  const paybackMonths = annualSavings > 0 ? (cost / annualSavings) * 12 : 0;
+
+                  return (
+                    <div className="p-6 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col md:flex-row justify-between gap-6 mt-6 items-center">
+                      <div className="space-y-1 text-center md:text-left">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Annual Labor Savings (Est.)</span>
+                        <span className="text-xl font-black text-slate-800">
+                          {annualSavings.toLocaleString('en-US', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                      <div className="w-px h-10 bg-slate-200 hidden md:block" />
+                      <div className="space-y-1 text-center">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Est. Payback Period</span>
+                        <span className="text-xl font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg">
+                          {paybackMonths > 0 ? `${paybackMonths.toFixed(1)} Months` : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Bottom Custom Navigation buttons */}
+              <div className="flex justify-between pt-10 pb-16 md:pb-6 border-t mt-8">
+                <button 
+                  onClick={() => {
+                    setActiveCustomSection(null);
+                    setIsReviewing(false);
+                    setActivePartIndex(currentProject.parts.length - 1);
+                    setCurrentStep(PART_STEPS.length);
+                  }}
+                  className="text-slate-400 font-bold uppercase tracking-widest text-xs hover:text-slate-600 transition-colors"
+                >
+                  Back
+                </button>
+                <button 
+                  disabled={isSaving}
+                  onClick={async () => {
+                    if (isReadOnly) {
+                      setActiveCustomSection('additional-opportunities');
+                      return;
+                    }
+                    setIsSaving(true);
+                    try {
+                      await saveProject(currentProject.status || 'draft', currentProject);
+                      setActiveCustomSection('additional-opportunities');
+                    } finally {
+                      setIsSaving(false);
+                    }
+                  }}
+                  className="bg-slate-900 disabled:bg-slate-500 text-white px-10 py-5 rounded-2xl font-bold hover:bg-slate-800 transition-colors shadow-lg flex items-center gap-2 select-none"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Next</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : activeCustomSection === 'additional-opportunities' ? (
+            /* Additional Opportunities Placeholder View */
+            <div className="space-y-6 animate-fadeIn">
+              <div>
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Additional Opportunities</h1>
+                <p className="text-sm text-slate-500">
+                  Outline other manual tasks in the production line that could potentially be automated.
+                </p>
+              </div>
+
+              {/* Info Card / Explanation */}
+              <div className="p-5 bg-blue-50/50 border border-blue-100 rounded-2xl text-blue-900 text-sm space-y-2">
+                <p className="font-bold flex items-center gap-2">
+                  <Info className="w-4 h-4 text-blue-500" />
+                  Additional Production Automation
+                </p>
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  If you have other manual processes in your facility (such as CNC machine tending, part sorting, packaging, or quality control inspection) that you are looking to automate, you can note them down here. A Scape Solution Specialist or local system integrator will review your notes and set up a call to evaluate these opportunities using dedicated, product-specific evaluation templates.
+                </p>
+              </div>
+
+              {/* Input Textarea */}
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-3xs space-y-4">
+                <label className="text-xs font-bold text-slate-600 block">Describe other potential automation processes</label>
+                <textarea
+                  disabled={isReadOnly}
+                  value={currentProject.generalResponses['additionalOpportunitiesText'] ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const updated = { ...currentProject.generalResponses, additionalOpportunitiesText: val };
+                    setCurrentProject({ ...currentProject, generalResponses: updated });
+                  }}
+                  rows={6}
+                  className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm leading-relaxed"
+                  placeholder="e.g. We also have manual CNC machine feeding for our cast iron parts after bin picking. Additionally, visual inspection of parts is done manually at the end of the belt conveyor..."
+                />
+              </div>
+
+              {/* Bottom Custom Navigation buttons */}
+              <div className="flex justify-between pt-10 pb-16 md:pb-6 border-t mt-8">
+                <button 
+                  onClick={() => {
+                    setActiveCustomSection('business-case');
+                  }}
+                  className="text-slate-400 font-bold uppercase tracking-widest text-xs hover:text-slate-600 transition-colors"
+                >
+                  Back
+                </button>
+                <button 
+                  disabled={isSaving}
+                  onClick={async () => {
+                    if (isReadOnly) {
+                      setIsReviewing(true);
+                      setActiveCustomSection(null);
+                      return;
+                    }
+                    setIsSaving(true);
+                    try {
+                      await saveProject(currentProject.status || 'draft', currentProject);
+                      setIsReviewing(true);
+                      setActiveCustomSection(null);
+                      if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) {
+                        generateExternalAdvice();
+                      }
+                    } finally {
+                      setIsSaving(false);
+                    }
+                  }}
+                  className="bg-slate-900 disabled:bg-slate-500 text-white px-10 py-5 rounded-2xl font-bold hover:bg-slate-800 transition-colors shadow-lg flex items-center gap-2 select-none"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Next</span>
+                  )}
+                </button>
+              </div>
+            </div>
           ) : (
             /* Questionnaire Step Form Editing */
             <div className="space-y-6 animate-fadeIn">
@@ -1553,7 +1829,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           setActivePartIndex(activePartIndex + 1);
                           setCurrentStep(1);
                         } else {
-                          setIsReviewing(true);
+                          setActiveCustomSection('business-case');
                         }
                       } else {
                         setCurrentStep(currentStep + 1);
@@ -1572,9 +1848,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                             setActivePartIndex(activePartIndex + 1);
                             setCurrentStep(1);
                           } else {
-                            // Go to final review page
-                            setIsReviewing(true);
-                            if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice();
+                            // Go to Business Case section
+                            setActiveCustomSection('business-case');
                           }
                         } else {
                           // Move to next step
@@ -1634,11 +1909,11 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             <div className="flex-1 overflow-y-auto space-y-4 pr-1">
               {/* Project & Cell Info Card */}
               <button 
-                onClick={() => { setIsReviewing(false); setCurrentStep(0); setIsMobileMenuOpen(false); }}
-                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${currentStep === 0 && !isReviewing ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
+                onClick={() => { setIsReviewing(false); setActiveCustomSection(null); setCurrentStep(0); setIsMobileMenuOpen(false); }}
+                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${currentStep === 0 && !isReviewing && !activeCustomSection ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl ${currentStep === 0 && !isReviewing ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                  <div className={`p-2.5 rounded-xl ${currentStep === 0 && !isReviewing && !activeCustomSection ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
                     <Settings2 className="w-5 h-5" />
                   </div>
                   <div>
@@ -1673,12 +1948,12 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
                   <div className="grid grid-cols-1 gap-2">
                     {PART_STEPS.map((step, stepIdx) => {
-                      const isActive = currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing;
+                      const isActive = currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing && !activeCustomSection;
                       const { filled, total } = getStepProgress(step, part.responses, part);
                       return (
                         <button 
                           key={step.id}
-                          onClick={() => { setIsReviewing(false); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); setIsMobileMenuOpen(false); }}
+                          onClick={() => { setIsReviewing(false); setActiveCustomSection(null); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); setIsMobileMenuOpen(false); }}
                           className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all ${isActive ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'}`}
                         >
                           <div className="flex items-center gap-2.5">
@@ -1693,13 +1968,50 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 </div>
               ))}
 
-              {/* Final Verdict Card */}
+              {/* Extended Analysis Sections for Mobile */}
+              <div className="mt-8 mb-4">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2 px-3">Extended Analysis</h3>
+              </div>
+
+              {/* Business Case Card */}
               <button 
-                onClick={() => { setIsReviewing(true); setIsMobileMenuOpen(false); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
-                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${isReviewing ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
+                onClick={() => { setIsReviewing(false); setActiveCustomSection('business-case'); setIsMobileMenuOpen(false); }}
+                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${activeCustomSection === 'business-case' ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl ${isReviewing ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                  <div className={`p-2.5 rounded-xl ${activeCustomSection === 'business-case' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    <Briefcase className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold">Business Case</h4>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">ROI & installation cost calculator placeholder</p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Additional Opportunities Card */}
+              <button 
+                onClick={() => { setIsReviewing(false); setActiveCustomSection('additional-opportunities'); setIsMobileMenuOpen(false); }}
+                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${activeCustomSection === 'additional-opportunities' ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${activeCustomSection === 'additional-opportunities' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    <Factory className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold">Additional Opportunities</h4>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">Other potential cell automations</p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Final Verdict Card */}
+              <button 
+                onClick={() => { setIsReviewing(true); setActiveCustomSection(null); setIsMobileMenuOpen(false); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
+                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${isReviewing && !activeCustomSection ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${isReviewing && !activeCustomSection ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
