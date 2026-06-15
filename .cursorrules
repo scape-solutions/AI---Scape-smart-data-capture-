@@ -1,0 +1,9 @@
+# AI Assistant Project Rules
+
+Whenever you (the AI assistant) are pair programming or discussing development on this repository, you must follow these rules:
+
+1. **Feature Requests & Ideas:** Whenever a new feature, improvement, optimization, or future upgrade idea is discussed or suggested by the user, you MUST explicitly ask the user:
+   > *"Would you like me to add this idea to the [potential_upgrades.md](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/docs/potential_upgrades.md) file?"*
+   If they approve, document the concept, implementation path, and rationale under a clear heading in that file.
+
+2. **File Links:** Always format links to files using the full `file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/...` absolute path scheme, and never wrap the link text in backticks.
