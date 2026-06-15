@@ -21,6 +21,7 @@ The **SCAPE Bin-Picking Evaluator** is a smart data capture tool designed to col
 2. Complete the step-by-step questionnaire:
    * **Step 0 (Project & Cell Info)**: Enter the project name, number of parts, bin dimensions, preferred robot brand, and upload environmental photos of the cell location.
    * **Steps 1+ (Part Configuration)**: For each part, provide dimensions, material, target cycle times, expected temperatures, oil conditions, and upload part photos. If a 3D CAD model is available, upload it as a `.stl` file.
+   * **Foldable Part Sidebar**: When configuring projects with multiple parts, the left navigation bar organizes parts as collapsible folders. Click a part title (e.g. `Part #1: Shaft`) to expand/collapse its configuration steps (Dimensions, Characteristics, Visual Evidence) with smooth chevron animations.
 3. Use the **AI Assistant Chat** on the right sidebar if you need help auto-filling fields or have questions about bin-picking parameters.
 
 ### Step 3: Saving and Submitting
@@ -33,7 +34,7 @@ The **SCAPE Bin-Picking Evaluator** is a smart data capture tool designed to col
 
 The interface adjusts dynamically based on the active role of the logged-in user. SCAPE employees can toggle their active view in the top header:
 
-### A. External Mode (Customer View)
+### A. User Mode (Customer View)
 * **Who can use it**: All users (Customers and SCAPE employees).
 * **Interface**: Displays a clean customer dashboard. Users see only their own projects. They can edit drafts, upload media, request automated **AI Advice**, and view finalized reviews.
 
@@ -47,8 +48,13 @@ The interface adjusts dynamically based on the active role of the logged-in user
   * Approve specifications and toggle visibility of the verdict to the customer.
 
 ### C. Super User Mode
-* **Who can use it**: Restricted exclusively to `rune.k.larsen@scapesolutions.eu`.
+* **Who can use it**: Restricted exclusively to `rune.k.larsen@scapesolutions.eu` (configured dynamically in Firestore `config/access`).
 * **Interface**: Adds the **Super User Tools** dashboard toolbar. Grants access to bulk JSON data exports/imports, bulk staging acceptance, and administrator demo data seeds.
+* **AI System Prompts Editor**: Superusers can edit system prompt templates dynamically in the app (clicking **Edit AI Prompts**). It hosts three tabs:
+  1. *Data Capture Advice* (for client feedback)
+  2. *Technical Evaluation* (for evaluator drafts)
+  3. *AI Chat Assistant* (for auto-fill helper)
+* **LLM Image Toggles**: The prompt editor contains a toggle switch for each prompt tab: **"Include uploaded project & part images as visual attachments"**. Toggling this ON sends image attachments to Gemini (multimodal), while toggling it OFF strips them to save token usage and improve speed.
 
 ---
 
@@ -106,7 +112,16 @@ Each project card displays its status badge on the dashboard. Use this table to 
 
 ---
 
-## 5. Control & Button Reference
+## 5. Questionnaire Field Observations & Warnings
+
+When the user requests **Data Capture Advice**, the system runs an automated evaluation:
+1. **Extraction:** A secondary structured AI call extracts observations and maps them to specific questionnaire field IDs (e.g. `1.03` or `2.04`).
+2. **Form Highlights:** In the questionnaire form, fields with concerns show inline colored warning badges (`⚠️` or `🔴`) next to their labels. Hovering or clicking these badges reveals a tooltip with the specific concern.
+3. **Factual Verification:** This lets users quickly identify which input value needs correction or refinement.
+
+---
+
+## 6. Control & Button Reference
 
 ### A. Dashboard Toolbar Buttons
 * **Filters**: Expands or collapses search inputs (by project name, org, owner) and sort selections (date, organization, user).
@@ -116,6 +131,7 @@ Each project card displays its status badge on the dashboard. Use this table to 
   * **Import JSON**: Upload a JSON project file to stage them with `Import Pending` status.
   * **Accept All Staged**: Batch approves and activates all staged import cards.
   * **Generate Demo / Clean Demo**: Seeds 20 realistic demo projects or clears them from Firestore.
+  * **Edit AI Prompts**: Opens the Prompts Editor Modal to modify prompts and toggle image attachments dynamically.
 
 ### B. Project Card Buttons
 * **View Details / View Data**: Opens the project questionnaire and review tabs.
@@ -128,40 +144,39 @@ Each project card displays its status badge on the dashboard. Use this table to 
 * **Activate / Deactivate** (Admin only): Toggles active vs inactive status.
 * **Export Dropdown**:
   * **Export as JSON**: Exports full project data (including image base64s) as a JSON file.
-  * **Export as PDF**: Generates and downloads a branded PDF feasibility report (using jsPDF) including metadata, parts list table, project review text, and photos appendix.
-* **Accept / Discard** (Staged cards only): Accepts a pending imported project to activate it, or discards it.
+  * **Export as PDF**: Generates and downloads a branded PDF feasibility report.
 
 ### C. Questionnaire & Review Buttons
 * **Save Draft**: Saves the current questionnaire progress.
 * **Submit Case**: Transmits the questionnaire details to SCAPE and locks editing.
 * **Download All Media Files**: Sequential bulk download of all project CAD and image files.
-* **Get Advice on Data** (External user review tab): Triggers Gemini AI to analyze the draft and provide constructive advice on missing fields or media uploads.
+* **Get Advice on Data** (User review tab): Triggers Gemini AI to analyze the draft and provide constructive advice on missing fields or media uploads.
 * **Generate Evaluator Draft** (Admin review tab): Prompts Gemini AI to draft a detailed technical feasibility review and recommends vision systems.
 * **Submit Technical Verdict** (Admin review tab): Publishes the written technical report and feasibility decision to the database.
 * **Toggle Verdict Visibility** (Admin review tab): Controls whether the customer can view the project review and recommendations on their review page.
 
 ---
 
-## 6. Detailed Action Guide
+## 7. Detailed Action Guide
+
+### Branded PDF Feasibility Report Layout
+The exported PDF report is structured into clean, role-aware sections:
+* **Section A (Factual Data):** Lists all questionnaire parameters in tables. If a field has an observation warning associated with it, it gets a colored marker `[!]` (critical) or `[⚠]` (warning) next to its value.
+* **Section B (Data Capture Advice):** Displays a compact list of all flagged fields with their explanations, followed by the full narrative advice report.
+* **Section C:** Contains uploaded part and cell photos as an appendix.
+* **Section D (Review & Verdict):** Shows the most authoritative technical review text available:
+  * For *Users (Customers)*, it displays the published **Project Review from Scape Solutions** verdict.
+  * For *Admins (Evaluators)*, if no verdict is published yet, it displays the dynamic **Evaluator AI Draft** text.
+  * Fallbacks to general advice if no verdict or draft is generated.
 
 ### "Approve Spec" vs "Unspecify" in Detail
 During evaluation of bin-picking configurations, verification of the project's specifications (such as CAD files, cycle times, bin dimensions, and surface properties) is essential before ordering hardware.
 * **Approve Spec**: Used by an Evaluator to lock the verification process of physical parameters. Clicking it sets the project state `isFullySpecified` to `true`, displaying the green **Specified** badge on the project card.
 * **Unspecify**: Used to revert this state. If requirements change or a mistake is discovered, clicking **Unspecify** returns `isFullySpecified` to `false`, removing the **Specified** badge so details can be edited/re-evaluated.
 
-### Staging Imports ("Accept" vs "Discard")
-When importing projects from external systems in JSON format:
-1. They enter the database in a staged state (**Import Pending**) and are only visible in Super User mode.
-2. The Super User can click **Accept** on the project card (or **Accept All Staged** in the toolbar) to move them into active status (making them visible to the assigned owners).
-3. If the data is corrupted or unwanted, clicking **Discard** permanently clears the imported draft.
-
-### Project Review Visibility for Users
-* **Draft & Submitted State**: The "Project Review from Scape Solutions" report details and decisions are hidden from the external customer (unless manually published by an evaluator using "Publish Verdict to User").
-* **Approved & Rejected State**: Once an evaluator approves or rejects a submission, the **Project Review from Scape Solutions** technical conclusions and recommendation texts are automatically and immediately visible to the customer under their **Review** tab.
-
 ---
 
-## 7. Administrering af Adgang og Roller (For Administratorer)
+## 8. Administrering af Adgang og Roller (For Administratorer)
 
 For at tilføje eller fjerne brugere, ændre tilladte domæner eller tildele rettigheder (Evaluator/Super User) under drift, skal du redigere konfigurationsdokumentet i **Cloud Firestore**:
 
@@ -171,12 +186,10 @@ For at tilføje eller fjerne brugere, ændre tilladte domæner eller tildele ret
 3. Find samlingen `config` og vælg dokumentet `access`.
 4. Du kan nu tilføje eller fjerne elementer i de fire array-felter:
    * **`allowedDomains`**: Liste over domæner, der må oprette sig og logge ind i appen (f.eks. `scapesolutions.eu`, `scapesolutions.com`).
-   * **`allowedEmails`**: Specifikke eksterne e-mailadresser, der må logge ind (f.eks. eksterne samarbejdspartnere uden for firmaet).
+   * **`allowedEmails`**: Specifikke eksterne e-mailadresser, der må logge ind.
    * **`allowedEvaluators`**: E-mails på medarbejdere, der skal have adgang til **Evaluator Mode** (administrationspanelet, tildele cases, skrive technical reviews, osv.).
-   * **`superusers`**: E-mails på medarbejdere med adgang til **Super User Mode** (bulk data import/export og demo-data generation).
+   * **`superusers`**: E-mails på medarbejdere med adgang til **Super User Mode** (bulk data import/export, demo-data generation, og AI system prompts editor).
 
 ### Vigtigt om ændringer:
 * **Øjeblikkelig virkning:** Når du gemmer ændringer i Firestore, opdateres både serveren og browser-appen **med det samme (i realtid)** uden genstart eller udrulning.
-* **Sikkerhed:** Kun godkendte medarbejdere (`isScapeEmployee`) har skrivetilladelse til `config/access` dokumentet i databasen for at forhindre uautoriserede ændringer. Standardbrugere har kun læserettigheder til validering under login.
-
-
+* **Sikkerhed:** Kun godkendte medarbejdere (`isScapeEmployee`) har skrivetilladelse til `config/access` dokumentet i databasen.
