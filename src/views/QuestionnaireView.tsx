@@ -1177,7 +1177,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   About the Business Case Tool
                 </p>
                 <p className="text-xs text-blue-800 leading-relaxed">
-                  This section serves as a placeholder for a future interactive ROI calculator. In final production, we will help you make a precise calculation using both already entered project values (such as robot brand, cycles, and parts complexity) and additional operational questions. The goal is to help estimate project cost, payback period, and overall rate of return ("forrentning") based on simulated Scape installation prices.
+                  This section serves as a placeholder for a future interactive ROI calculator. In final production, we will help you make a precise calculation using both already entered project values (such as robot brand, cycles, and parts complexity) and additional operational questions. The goal is to help estimate project cost, payback period, and overall rate of return based on simulated Scape installation prices.
                 </p>
               </div>
 
@@ -1365,6 +1365,20 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm leading-relaxed"
                   placeholder="e.g. We also have manual CNC machine feeding for our cast iron parts after bin picking. Additionally, visual inspection of parts is done manually at the end of the belt conveyor..."
                 />
+              </div>
+
+              {/* Fake / Inactive Image Upload field */}
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-3xs space-y-4">
+                <label className="text-xs font-bold text-slate-600 block">Upload Photos of Other Processes (Future Feature)</label>
+                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 flex flex-col items-center justify-center gap-2 bg-slate-50/50 cursor-not-allowed opacity-75">
+                  <div className="p-3 bg-slate-100 rounded-full text-slate-400">
+                    <Camera className="w-6 h-6" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-slate-500">Image upload placeholder</p>
+                    <p className="text-[10px] text-slate-400 mt-1">This field is currently inactive. In a future update, you will be able to attach photos or videos of other automation areas directly here.</p>
+                  </div>
+                </div>
               </div>
 
               {/* Bottom Custom Navigation buttons */}
