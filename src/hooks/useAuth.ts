@@ -8,6 +8,8 @@
 import { useState, useEffect } from 'react';
 import { 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider, 
   onAuthStateChanged, 
   signOut,
@@ -79,6 +81,16 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   // Her bruger vi den til at lytte efter: "Er brugeren logget ind nu?" (onAuthStateChanged).
   // Den tomme liste [] i bunden betyder "kør kun dette én gang, når appen starter".
   useEffect(() => {
+    // Tjek for redirect-resultater (hvis login blev foretaget via redirect på mobil/PWA)
+    getRedirectResult(auth).catch((e: any) => {
+      console.error("Google Redirect Auth error:", e);
+      if (e.code === 'auth/unauthorized-domain') {
+        setAuthError("This domain is not authorized in Firebase. Please add it to 'Authorized domains' in the Firebase Console.");
+      } else {
+        setAuthError(e.message || "Failed to sign in with Google Redirect");
+      }
+    });
+
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
@@ -111,17 +123,25 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     });
   }, []);
 
-  // Logger ind via Google Popup
+  // Logger ind via Google Popup (på desktop) eller Redirect (på mobil/PWA)
   const login = async () => {
     setAuthError(null);
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
+
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      if (isStandalone || isMobile) {
+        await signInWithRedirect(auth, provider);
+      } else {
+        await signInWithPopup(auth, provider);
+      }
     } catch (e: any) {
       console.error("Login error:", e);
       if (e.code === 'auth/unauthorized-domain') {
-        setAuthError("This domain (localhost) is not authorized in Firebase. Please add it to 'Authorized domains' in the Firebase Console.");
+        setAuthError("This domain is not authorized in Firebase. Please add it to 'Authorized domains' in the Firebase Console.");
       } else {
         setAuthError(e.message || "Failed to sign in with Google");
       }
