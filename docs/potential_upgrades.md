@@ -29,9 +29,17 @@ Currently, CAD files uploaded to parts are stripped from the AI payload to save 
   }
   ```
 
+### Option C: 2D CAD Drawings (DWG / DXF / SVG) Handling
+* **Concept:** Support 2D layouts and mechanical blueprints.
+* **Implementation:**
+  * Since raw `.dwg` (binary) and `.dxf` (complex vector list) formats cannot be natively understood by Gemini, implement a server-side conversion tool (e.g., using `libreoffice`, `ezdxf`, or a PDF converter) to convert them to PDF or PNG on upload.
+  * Support `.svg` format natively, as Gemini can read SVG XML structures or render SVG files visually.
+* **AI Integration:** Send the rendered PDF/PNG drawing sheets directly to Gemini. Gemini has exceptional visual layout capabilities and can read dimensions, title blocks, and geometry annotations from blueprints.
+
 ---
 
 ## 2. Advanced Multi-Modal Vision Analysis
 
 * **Detailed Grip point recognition:** Train or prompt Gemini to identify optimal mechanical gripper jaw layouts and magnet alignment areas directly from photos of the parts/cell layout.
 * **Auto-crop & compress:** Add automated client-side downscaling and cropping of uploaded images to reduce data capture overhead while maintaining high resolution on target objects.
+
