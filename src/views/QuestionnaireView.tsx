@@ -17,13 +17,32 @@ import {
   Menu,
   ChevronDown,
   Download,
-  Trash2
+  Trash2,
+  Bot
 } from 'lucide-react';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 import { ProjectState, UserProfile } from '../types';
 import imageCompression from 'browser-image-compression';
 import { Header } from '../components/Header';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 import ReactMarkdown from 'react-markdown';
+import { AIAssistantTab, isProposalAlreadyApplied } from '../components/AIAssistantTab';
+
+const cleanMarkdownWrapper = (text: string): string => {
+  let cleaned = text.trim();
+  const fullMatch = cleaned.match(/^```(?:markdown)?\s*([\s\S]*?)\s*```$/i);
+  if (fullMatch) {
+    return fullMatch[1].trim();
+  }
+  const blockMatch = cleaned.match(/```(?:markdown)?\s*([\s\S]*?)\s*```/i);
+  if (blockMatch) {
+    const blockContent = blockMatch[1].trim();
+    if (blockContent.length > cleaned.length * 0.7) {
+      return blockContent;
+    }
+  }
+  return cleaned;
+};
 
 interface QuestionnaireViewProps {
   currentProject: ProjectState;
@@ -36,9 +55,14 @@ interface QuestionnaireViewProps {
   setActivePartIndex: (index: number) => void;
   isReviewing: boolean;
   setIsReviewing: (r: boolean) => void;
-  isGeneratingReport: boolean;
+  /** true while generateExternalAdvice() is running */
+  isGeneratingAdvice: boolean;
+  /** true while generateEvaluatorDraft() is running */
+  isGeneratingDraft: boolean;
+  /** true while sendMessageToAssistant() is waiting for the AI reply */
+  isAssistantThinking: boolean;
   isSubmitting: boolean;
-  saveProject: (status?: ProjectState['status']) => Promise<ProjectState | null>;
+  saveProject: (status?: ProjectState['status'], projectToSave?: ProjectState) => Promise<ProjectState | null>;
   toggleLock: (p: ProjectState) => void;
   toggleVerdictVisibility: (p: ProjectState) => void;
   setGlobalSuccess: (msg: string | null) => void;
@@ -51,7 +75,7 @@ interface QuestionnaireViewProps {
   generateEvaluatorDraft: any;
   user: any;
   logout: () => void;
-  switchMode: (role: 'evaluator' | 'external', onStatusChanged: (isAdmin: boolean) => void) => void;
+  switchMode: (role: 'evaluator' | 'user' | 'superuser', onStatusChanged: (isAdmin: boolean) => void) => void;
   isAllowedEvaluator: (email: string | null | undefined) => boolean;
   isScapeEmployee: (email: string | null | undefined, uid?: string | null) => boolean;
   saveProfile: (data: any) => Promise<void>;
@@ -73,7 +97,9 @@ export function QuestionnaireView({
   setActivePartIndex,
   isReviewing,
   setIsReviewing,
-  isGeneratingReport,
+  isGeneratingAdvice,
+  isGeneratingDraft,
+  isAssistantThinking,
   isSubmitting,
   saveProject,
   toggleLock,
@@ -101,8 +127,72 @@ export function QuestionnaireView({
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [isAdviceExpanded, setIsAdviceExpanded] = useState(true);
+  const [isDraftExpanded, setIsDraftExpanded] = useState(true);
+  const [draftViewMode, setDraftViewMode] = useState<'markdown' | 'raw'>('markdown');
+  const [isVerdictExpanded, setIsVerdictExpanded] = useState(true);
+  const [verdictViewMode, setVerdictViewMode] = useState<'edit' | 'markdown' | 'raw'>('edit');
+  /** ID of the field whose observation popover is currently open, or null */
+  const [openObservationId, setOpenObservationId] = useState<string | null>(null);
 
+  // Helper to extract JSON from model message
+  const extractJSONFromText = (text: string) => {
+    const match = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (match) {
+      try {
+        return JSON.parse(match[1]);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  // Compute if the most recent AI proposal in chat history is still unapplied.
+  // We ONLY look at the last AI message with a JSON proposal — older proposals are
+  // historical (superseded by newer ones or already applied) and must not count as pending.
+  const hasUnappliedProposals = React.useMemo(() => {
+    if (!currentProject.chatHistory || currentProject.chatHistory.length === 0) return false;
+    
+    // Find the LAST model message that contains a JSON proposal
+    let lastProposal: any = null;
+    for (let i = currentProject.chatHistory.length - 1; i >= 0; i--) {
+      const msg = currentProject.chatHistory[i];
+      if (msg.role === 'model') {
+        const proposal = extractJSONFromText(msg.text);
+        if (proposal) {
+          lastProposal = proposal;
+          break;
+        }
+      }
+    }
+    
+    if (!lastProposal) return false;
+    return !isProposalAlreadyApplied(lastProposal, currentProject, activePartIndex);
+  }, [currentProject, activePartIndex]);
+
+  const [expandedParts, setExpandedParts] = useState<Record<number, boolean>>({});
+  const [deletePartConfirm, setDeletePartConfirm] = useState<{
+    show: boolean;
+    partIndex: number;
+    partName: string;
+  }>({ show: false, partIndex: -1, partName: '' });
+
+  // Helper to determine if a part's steps are expanded in the sidebar
+  const isPartExpanded = (partIdx: number) => {
+    if (expandedParts[partIdx] !== undefined) {
+      return expandedParts[partIdx];
+    }
+    return activePartIndex === partIdx && !isReviewing;
+  };
+
+  const togglePartExpanded = (partIdx: number) => {
+    setExpandedParts(prev => ({
+      ...prev,
+      [partIdx]: !isPartExpanded(partIdx)
+    }));
+  };
 
   // Read-only state (locked or submitted/approved/rejected, unless the user is an admin)
   const isReadOnly = (currentProject.isLocked || currentProject.status === 'submitted' || currentProject.status === 'approved' || currentProject.status === 'rejected') && !profile?.isAdmin;
@@ -166,11 +256,12 @@ export function QuestionnaireView({
     );
   };
 
-  // Handle ESC key to close fullscreen image viewer
+  // Handle ESC key to close fullscreen image viewer or AI Assistant
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setFullscreenImage(null);
+        setIsAIAssistantOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -181,7 +272,7 @@ export function QuestionnaireView({
     if (!isReadOnly) {
       setIsSaving(true);
       try {
-        await saveProject('draft');
+        await saveProject(currentProject.status || 'draft', currentProject);
       } catch (err) {
         console.error("Auto-save failed on view change:", err);
       } finally {
@@ -194,23 +285,40 @@ export function QuestionnaireView({
   const handleAddPart = async () => {
     if (isReadOnly) return;
     const newParts = [...currentProject.parts, { responses: {}, images: [] }];
-    setCurrentProject({ ...currentProject, parts: newParts });
+    const updatedProject = { ...currentProject, parts: newParts };
+    setCurrentProject(updatedProject);
     setActivePartIndex(newParts.length - 1);
     setCurrentStep(1);
     setIsReviewing(false);
-    // Auto-save a draft
-    setTimeout(() => saveProject('draft'), 50);
+    // Save updated project directly to avoid stale closures
+    saveProject(currentProject.status || 'draft', updatedProject);
   };
 
-  const handleRemovePart = (index: number) => {
+  const handleRemovePartClick = (index: number) => {
     if (isReadOnly || currentProject.parts.length <= 1) return;
-    const newParts = currentProject.parts.filter((_, i) => i !== index);
+    const partName = currentProject.parts[index]?.responses?.['2.01'] || `Part #${index + 1}`;
+    setDeletePartConfirm({
+      show: true,
+      partIndex: index,
+      partName
+    });
+  };
+
+  const handleConfirmDeletePart = () => {
+    const { partIndex } = deletePartConfirm;
+    if (partIndex === -1) return;
+
+    const newParts = currentProject.parts.filter((_, i) => i !== partIndex);
     const newActiveIndex = Math.max(0, activePartIndex - 1);
-    setCurrentProject({ ...currentProject, parts: newParts });
+    const updatedProject = { ...currentProject, parts: newParts };
+
+    setCurrentProject(updatedProject);
     setActivePartIndex(newActiveIndex);
     setCurrentStep(1);
     setIsReviewing(false);
-    setTimeout(() => saveProject('draft'), 50);
+    saveProject(currentProject.status || 'draft', updatedProject);
+
+    setDeletePartConfirm({ show: false, partIndex: -1, partName: '' });
   };
 
   const handleUploadImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -320,6 +428,16 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           <div className="flex items-center gap-3">
             <Settings2 className="w-4 h-4" />
             <span>Project & Cell Info</span>
+            {/* Observation dot for general section */}
+            {(() => {
+              const generalIds = new Set(GENERAL_STEPS[0].questions.map(q => q.id));
+              const obs = Object.entries(currentProject.fieldObservations || {}).filter(([id]) => generalIds.has(id));
+              if (!obs.length) return null;
+              const hasCritical = obs.some(([, o]) => o.severity === 'critical');
+              return (
+                <span className={`w-2 h-2 rounded-full shrink-0 ${hasCritical ? 'bg-red-500' : 'bg-amber-400'}`} title={hasCritical ? 'Critical observation' : 'Observation'} />
+              );
+            })()}
           </div>
           {(() => {
             const { filled, total } = getStepProgress(GENERAL_STEPS[0], currentProject.generalResponses);
@@ -328,47 +446,85 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
         </button>
 
         {/* Dynamic Part Tabs */}
-        {currentProject.parts.map((part, partIdx) => (
-          <div key={partIdx} className="space-y-1">
-            <div className="text-[10px] font-bold text-slate-300 px-3 mt-4 flex justify-between items-center">
-              <span>PART {partIdx + 1}</span>
-              {currentProject.parts.length > 1 && !isReadOnly && (
-                <button 
-                  onClick={() => handleRemovePart(partIdx)}
-                  className="text-red-400 hover:text-red-600 font-bold text-[9px] uppercase tracking-wider animate-fadeIn"
-                >
-                  Delete
-                </button>
+        {currentProject.parts.map((part, partIdx) => {
+          const isExpanded = isPartExpanded(partIdx);
+          const partName = part.responses['2.01'] || 'Unnamed Part';
+          // Compute observation severity for this part's fields
+          const partObsEntries = Object.entries(currentProject.fieldObservations || {}).filter(([id]) =>
+            PART_STEPS.some(s => s.questions.some(q => q.id === id))
+          );
+          const partHasCritical = partObsEntries.some(([, o]) => o.severity === 'critical');
+          const partHasObs = partObsEntries.length > 0;
+          return (
+            <div key={partIdx} className="space-y-1">
+              <button 
+                onClick={() => togglePartExpanded(partIdx)}
+                className="w-full flex items-center justify-between p-2 mt-4 rounded-xl text-left hover:bg-slate-50 transition-all group select-none cursor-pointer"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <ChevronDown 
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${isExpanded ? '' : '-rotate-90'}`} 
+                  />
+                  <span className={`text-xs truncate transition-all ${
+                    activePartIndex === partIdx && !isReviewing 
+                      ? 'font-black text-slate-900' 
+                      : 'font-bold text-slate-500 group-hover:text-slate-800'
+                  }`}>
+                    Part #{partIdx + 1}: {partName}
+                  </span>
+                  {/* Observation dot on part header */}
+                  {partHasObs && (
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${partHasCritical ? 'bg-red-500' : 'bg-amber-400'}`}
+                      title={partHasCritical ? 'Critical observation in this part' : 'Observation in this part'}
+                    />
+                  )}
+                </div>
+                {currentProject.parts.length > 1 && !isReadOnly && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleRemovePartClick(partIdx); }}
+                    className="text-red-400 hover:text-red-600 font-bold text-[9px] uppercase tracking-wider animate-fadeIn shrink-0 cursor-pointer ml-2"
+                  >
+                    Delete
+                  </button>
+                )}
+              </button>
+              
+              {isExpanded && (
+                <div className="space-y-1 pl-4 border-l border-slate-100 ml-4 animate-fadeIn">
+                  {PART_STEPS.map((step, stepIdx) => {
+                    const { filled, total } = getStepProgress(step, part.responses, part);
+                    // Observation dot for this specific step
+                    const stepObsEntries = Object.entries(currentProject.fieldObservations || {}).filter(([id]) =>
+                      step.questions.some(q => q.id === id)
+                    );
+                    const stepHasCritical = stepObsEntries.some(([, o]) => o.severity === 'critical');
+                    const stepHasObs = stepObsEntries.length > 0;
+                    return (
+                      <button 
+                        key={step.id}
+                        onClick={() => { setIsReviewing(false); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); }}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {React.createElement(step.icon, { className: "w-3.5 h-3.5 shrink-0" })}
+                          <span>{step.title}</span>
+                          {stepHasObs && (
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${stepHasCritical ? 'bg-red-500' : 'bg-amber-400'}`}
+                              title={stepHasCritical ? 'Critical observation' : 'Observation'}
+                            />
+                          )}
+                        </div>
+                        {renderProgressBadge(filled, total)}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
-            {PART_STEPS.map((step, stepIdx) => {
-              const { filled, total } = getStepProgress(step, part.responses, part);
-              return (
-                <button 
-                  key={step.id}
-                  onClick={() => { setIsReviewing(false); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); }}
-                  className={`w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-all ${currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
-                >
-                  <div className="flex items-center gap-3">
-                    {React.createElement(step.icon, { className: "w-4 h-4" })}
-                    <span>{step.title}</span>
-                  </div>
-                  {renderProgressBadge(filled, total)}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-
-        {/* Final Verdict */}
-        <div className="mt-4 pt-4 border-t border-slate-100">
-          <button 
-            onClick={() => { setIsReviewing(true); if (!currentProject.report && !isGeneratingReport && !profile?.isAdmin) generateExternalAdvice(); }}
-            className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            <Sparkles className="w-4 h-4" /> Review
-          </button>
-        </div>
+          );
+        })}
 
         {/* Add Part Button */}
         <button 
@@ -378,6 +534,16 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
         >
           <PlusCircle className="w-4 h-4" /> Add Part
         </button>
+
+        {/* Final Verdict */}
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <button 
+            onClick={() => { setIsReviewing(true); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${isReviewing ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <Sparkles className="w-4 h-4" /> Review / Submit
+          </button>
+        </div>
       </aside>
 
       {/* Main Content Area */}
@@ -423,10 +589,10 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             >
               <span className="text-xs font-black text-slate-700">
                 {isReviewing 
-                  ? 'Final Review' 
+                  ? 'Review / Submit' 
                   : currentStep === 0 
                     ? 'Project & Cell Info' 
-                    : `Part #0${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
+                    : `Part #${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </div>
@@ -439,27 +605,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               <Menu className="w-5 h-5" />
             </button>
           </div>
-          
-          {/* Header Bar */}
-          <div className="mb-6 p-4 bg-white border border-slate-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-              <span className="uppercase tracking-wider text-[10px] text-slate-400">Project:</span>
-              <span className="text-slate-900 font-black text-xs md:text-sm bg-slate-100 px-3 py-1 rounded-lg flex items-center gap-1.5">
-                <span>{currentProject.projectName || 'Unnamed Project'}</span>
-                {currentProject.id && (
-                  <span className="text-[9px] font-mono font-bold text-slate-400 bg-white border border-slate-200/80 px-1 py-0.5 rounded select-all" title={`Case ID: ${currentProject.id}`}>
-                    #{currentProject.id.substring(0, 6).toUpperCase()}
-                  </span>
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-              <span className="uppercase tracking-wider text-[10px] text-slate-400">Location:</span>
-              <span className="text-blue-600 bg-blue-50 border border-blue-100/50 px-3 py-1 rounded-lg font-black text-[10px] md:text-xs">
-                {isReviewing ? 'Final Review' : currentStep === 0 ? 'Project & Cell Info' : `Part #0${activePartIndex + 1}: ${currentProject.parts[activePartIndex]?.responses?.['2.01'] || 'Unnamed Part'}`}
-              </span>
-            </div>
-          </div>
+
 
           {/* Locked / Read-Only Banner */}
           {isReadOnly && (
@@ -494,14 +640,11 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   <ShieldCheck className="w-5 h-5 text-rose-600 animate-pulse mt-0.5 shrink-0" />
                   <div>
                     <p className="font-bold">Project is in Draft State</p>
-                    <p className="text-xs text-rose-700 mt-1">This project has not been submitted by the external user. Evaluators cannot perform evaluations, write verdicts, or approve/reject/specify projects until the case is officially submitted.</p>
+                    <p className="text-xs text-rose-700 mt-1">This project has not been submitted by the user. Evaluators cannot perform evaluations, write verdicts, or approve/reject/specify projects until the case is officially submitted.</p>
                   </div>
                 </div>
               )}
-              <div className="flex justify-between items-center flex-wrap gap-4 border-b border-slate-200 pb-4">
-                <h1 className="text-5xl font-black tracking-tighter">
-                  {profile?.isAdmin ? 'Final Review' : 'Data Capture Advice'}
-                </h1>
+              <div className="flex justify-end items-center flex-wrap gap-4 border-b border-slate-200 pb-4">
                 {((currentProject.generalImages && currentProject.generalImages.length > 0) || currentProject.parts.some(p => p.cadFile || (p.images && p.images.length > 0))) && (
                   <button
                     onClick={(e) => {
@@ -577,7 +720,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   
                   {isAdviceExpanded && (
                     <div className="relative z-10 space-y-6 animate-fadeIn">
-                      {isGeneratingReport ? (
+                      {isGeneratingAdvice ? (
                         <div className="flex items-center gap-3 py-6">
                           <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
                           <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Analyzing Data...</span>
@@ -585,7 +728,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       ) : (
                         <div className="max-h-[55vh] overflow-y-auto pr-4 text-slate-300 leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-white custom-scrollbar">
                           <ReactMarkdown>
-                            {currentProject.report || 'No advice generated yet.'}
+                            {cleanMarkdownWrapper(currentProject.report || 'No advice generated yet.')}
                           </ReactMarkdown>
                         </div>
                       )}
@@ -593,7 +736,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       {!isReadOnly && (
                         <button 
                           onClick={generateExternalAdvice}
-                          disabled={isGeneratingReport}
+                          disabled={isGeneratingAdvice}
                           className="px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border border-slate-700 text-slate-300 hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50"
                         >
                           <RotateCcw className="w-4 h-4" /> Get Advice on Data
@@ -607,107 +750,193 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               {/* Evaluator AI Draft Box (Admin Only) */}
               {profile?.isAdmin && (
                 <div className="bg-blue-50/50 border border-blue-100 p-10 rounded-[3rem] shadow-sm relative">
-                  <h3 className="text-xl font-bold text-blue-900 mb-6 flex items-center gap-2">
-                    <Zap className="text-blue-600" /> Evaluator AI Draft
-                  </h3>
-                  
-                  {isGeneratingReport ? (
-                    <div className="flex items-center gap-3">
-                      <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                      <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Drafting Conclusion...</span>
+                  <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+                    <h3 className="text-xl font-bold text-blue-900 flex items-center gap-2">
+                      <Zap className="text-blue-600" /> Evaluator AI Draft
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      {currentProject.evaluatorDraft && isDraftExpanded && (
+                        <button 
+                          onClick={() => setDraftViewMode(prev => prev === 'markdown' ? 'raw' : 'markdown')}
+                          className="px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-white hover:bg-slate-50 text-blue-800 transition-all select-none border border-blue-200 cursor-pointer shadow-3xs"
+                        >
+                          {draftViewMode === 'markdown' ? 'Show Raw Text' : 'Show Markdown Preview'}
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => setIsDraftExpanded(!isDraftExpanded)}
+                        className="px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-blue-600 text-white hover:bg-blue-700 transition-all select-none shadow-sm cursor-pointer"
+                      >
+                        {isDraftExpanded ? 'Hide Draft' : 'Show Draft'}
+                      </button>
                     </div>
-                  ) : (
-                    <div className="bg-white p-6 rounded-2xl border border-blue-100 text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-mono">
-                      {currentProject.evaluatorDraft || 'No draft generated yet.'}
+                  </div>
+                  
+                  {isDraftExpanded && (
+                    <div className="space-y-6 animate-fadeIn">
+                      {isGeneratingDraft ? (
+                        <div className="flex items-center gap-3">
+                          <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Drafting Conclusion...</span>
+                        </div>
+                      ) : (
+                        <div>
+                          {draftViewMode === 'markdown' ? (
+                            <div className="bg-white p-6 rounded-2xl border border-blue-100 text-slate-700 text-sm leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-slate-900 custom-markdown">
+                              <ReactMarkdown>
+                                {cleanMarkdownWrapper(currentProject.evaluatorDraft || '*No draft generated yet.*')}
+                              </ReactMarkdown>
+                            </div>
+                          ) : (
+                            <pre className="bg-white p-6 rounded-2xl border border-blue-100 text-slate-700 text-xs leading-relaxed whitespace-pre-wrap font-mono overflow-x-auto">
+                              {currentProject.evaluatorDraft || 'No draft generated yet.'}
+                            </pre>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex gap-4 mt-6">
+                        <button 
+                          onClick={generateEvaluatorDraft}
+                          disabled={isGeneratingDraft}
+                          className="px-6 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-blue-700 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer shadow-md shadow-blue-500/10"
+                        >
+                          <Sparkles className="w-4 h-4" /> Generate Evaluator Draft
+                        </button>
+                        {currentProject.evaluatorDraft && (
+                          <button 
+                            onClick={() => {
+                              navigator.clipboard.writeText(currentProject.evaluatorDraft || '');
+                              setGlobalSuccess("Draft copied to clipboard!");
+                              setTimeout(() => setGlobalSuccess(null), 3000);
+                            }}
+                            className="px-6 py-3 bg-white text-blue-600 border border-blue-200 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-blue-50 transition-all cursor-pointer"
+                          >
+                            Copy Draft
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
-
-                  <div className="flex gap-4 mt-6">
-                    <button 
-                      onClick={generateEvaluatorDraft}
-                      disabled={isGeneratingReport || currentProject.status === 'draft'}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-blue-700 transition-all flex items-center gap-2 disabled:opacity-50"
-                    >
-                      <Sparkles className="w-4 h-4" /> Generate Evaluator Draft
-                    </button>
-                    {currentProject.evaluatorDraft && (
-                      <button 
-                        onClick={() => {
-                          navigator.clipboard.writeText(currentProject.evaluatorDraft || '');
-                          setGlobalSuccess("Draft copied to clipboard!");
-                          setTimeout(() => setGlobalSuccess(null), 3000);
-                        }}
-                        className="px-6 py-3 bg-white text-blue-600 border border-blue-200 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-blue-50 transition-all"
-                      >
-                        Copy Draft
-                      </button>
-                    )}
-                  </div>
                 </div>
               )}
 
               {/* Final Verdict Box (Visible to Admin, OR to User if NOT draft AND (Published or Approved/Rejected)) */}
               {(profile?.isAdmin || (currentProject.status !== 'draft' && (currentProject.isVerdictVisible || currentProject.status === 'approved' || currentProject.status === 'rejected'))) && (
                 <div className="bg-white border-2 border-slate-900 p-10 rounded-[3rem] shadow-xl relative">
-                  <h3 className="text-2xl font-black text-slate-900 mb-2">Project Review from Scape Solutions</h3>
-                  {!profile?.isAdmin && (
-                    <p className="text-sm text-slate-500 font-medium mb-8">Official conclusion from Scape Solutions.</p>
-                  )}
-                  
-                  {profile?.isAdmin ? (
-                    <div className="space-y-4">
-                      <p className="text-sm text-slate-500 font-medium mb-4">Edit and paste your project review below. Once published, the external user can view it.</p>
-                      <textarea
-                        disabled={currentProject.status === 'draft'}
-                        className={`w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all font-mono min-h-[300px] ${currentProject.status === 'draft' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        placeholder="Paste AI draft here and edit, or write from scratch..."
-                        value={currentProject.finalVerdict || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setCurrentProject({ ...currentProject, finalVerdict: val });
-                          // Auto-save logic on blur or manual save could be used, for now we save on publish
-                        }}
-                      />
-                      <div className="flex items-center justify-end gap-4 mt-6">
-                        <button 
-                          onClick={async () => {
-                            try {
-                              await updateProjectField(currentProject, 'finalVerdict', currentProject.finalVerdict, "Evaluator updated final verdict");
-                              setGlobalSuccess("Verdict text saved.");
-                              setTimeout(() => setGlobalSuccess(null), 3000);
-                            } catch (e) {
-                              handleAppError(e);
-                            }
-                          }}
-                          disabled={currentProject.status === 'draft'}
-                          className={`px-6 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-200 transition-all ${currentProject.status === 'draft' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          Save Draft
-                        </button>
-                        <button 
-                          onClick={async () => {
-                            try {
-                              await updateProjectField(currentProject, 'isVerdictVisible', !currentProject.isVerdictVisible, `Verdict visibility changed to ${!currentProject.isVerdictVisible}`);
-                              if (!currentProject.isVerdictVisible) {
-                                // If turning on, make sure we save the text too
-                                await updateProjectField(currentProject, 'finalVerdict', currentProject.finalVerdict, "Verdict published");
-                              }
-                            } catch (e) {
-                              handleAppError(e);
-                            }
-                          }}
-                          disabled={currentProject.status === 'draft'}
-                          className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md ${currentProject.isVerdictVisible ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'} ${currentProject.status === 'draft' ? 'opacity-50 cursor-not-allowed shadow-none' : ''}`}
-                        >
-                          {currentProject.isVerdictVisible ? 'Unpublish Verdict' : 'Publish Verdict to User'}
-                        </button>
-                      </div>
+                  <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-900">Project Review from Scape Solutions</h3>
+                      {!profile?.isAdmin && (
+                        <p className="text-sm text-slate-500 font-medium mt-1">Official conclusion from Scape Solutions.</p>
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-slate-700 leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-slate-900">
-                      <ReactMarkdown>
-                        {currentProject.finalVerdict || '*The evaluator did not provide text for the verdict.*'}
-                      </ReactMarkdown>
+                    <div className="flex items-center gap-2">
+                      {profile?.isAdmin ? (
+                        isVerdictExpanded && (
+                          <button 
+                            onClick={() => setVerdictViewMode(prev => prev === 'edit' ? 'markdown' : 'edit')}
+                            className="px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-slate-200 text-slate-800 transition-all select-none border border-slate-300 cursor-pointer shadow-3xs"
+                          >
+                            {verdictViewMode === 'edit' ? 'Preview Markdown' : 'Edit Verdict'}
+                          </button>
+                        )
+                      ) : (
+                        currentProject.finalVerdict && isVerdictExpanded && (
+                          <button 
+                            onClick={() => setVerdictViewMode(prev => prev === 'raw' ? 'markdown' : 'raw')}
+                            className="px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-slate-200 text-slate-800 transition-all select-none border border-slate-300 cursor-pointer shadow-3xs"
+                          >
+                            {verdictViewMode === 'raw' ? 'Show Markdown Preview' : 'Show Raw Text'}
+                          </button>
+                        )
+                      )}
+                      <button 
+                        onClick={() => setIsVerdictExpanded(!isVerdictExpanded)}
+                        className="px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-slate-900 text-white hover:bg-slate-800 transition-all select-none shadow-sm cursor-pointer"
+                      >
+                        {isVerdictExpanded ? 'Hide Review' : 'Show Review'}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {isVerdictExpanded && (
+                    <div className="space-y-6 animate-fadeIn">
+                      {profile?.isAdmin ? (
+                        <div className="space-y-4">
+                          <p className="text-sm text-slate-500 font-medium mb-2">
+                            {verdictViewMode === 'edit' 
+                              ? 'Edit and paste your project review below. Once published, the user can view it.' 
+                              : 'Previewing markdown layout of your review:'}
+                          </p>
+                          
+                          {verdictViewMode === 'edit' ? (
+                            <textarea
+                              disabled={isReadOnly}
+                              className={`w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all font-mono min-h-[300px] ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              placeholder="Paste AI draft here and edit, or write from scratch..."
+                              value={currentProject.finalVerdict || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCurrentProject({ ...currentProject, finalVerdict: val });
+                              }}
+                            />
+                          ) : (
+                            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-slate-700 text-sm leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-slate-900 custom-markdown min-h-[300px]">
+                              <ReactMarkdown>
+                                {cleanMarkdownWrapper(currentProject.finalVerdict || '*No review text entered yet.*')}
+                              </ReactMarkdown>
+                            </div>
+                          )}
+                          
+                          <div className="flex items-center justify-end gap-4 mt-6">
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  await updateProjectField(currentProject, 'finalVerdict', currentProject.finalVerdict, "Evaluator updated final verdict");
+                                  setGlobalSuccess("Verdict text saved.");
+                                  setTimeout(() => setGlobalSuccess(null), 3000);
+                                } catch (e) {
+                                  handleAppError(e);
+                                }
+                              }}
+                              disabled={isReadOnly}
+                              className={`px-6 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-200 transition-all cursor-pointer ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              Save Draft
+                            </button>
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  await updateProjectField(currentProject, 'isVerdictVisible', !currentProject.isVerdictVisible, `Verdict visibility changed to ${!currentProject.isVerdictVisible}`);
+                                  if (!currentProject.isVerdictVisible) {
+                                    // If turning on, make sure we save the text too
+                                    await updateProjectField(currentProject, 'finalVerdict', currentProject.finalVerdict, "Verdict published");
+                                  }
+                                } catch (e) {
+                                  handleAppError(e);
+                                }
+                              }}
+                              disabled={isReadOnly}
+                              className={`px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer ${currentProject.isVerdictVisible ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'} ${isReadOnly ? 'opacity-50 cursor-not-allowed shadow-none' : ''}`}
+                            >
+                              {currentProject.isVerdictVisible ? 'Unpublish Verdict' : 'Publish Verdict to User'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-slate-700 leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-slate-900 custom-markdown">
+                          {verdictViewMode === 'raw' ? (
+                            <pre className="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-slate-700 text-xs leading-relaxed whitespace-pre-wrap font-mono overflow-x-auto">
+                              {currentProject.finalVerdict || '*No review text entered yet.*'}
+                            </pre>
+                          ) : (
+                            <ReactMarkdown>
+                              {cleanMarkdownWrapper(currentProject.finalVerdict || '*The evaluator did not provide text for the verdict.*')}
+                            </ReactMarkdown>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -774,120 +1003,82 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   ))}
                 </div>
 
-                <button 
-                  disabled={isReadOnly}
-                  onClick={handleAddPart}
-                  className="w-full py-4 border-2 border-dashed border-slate-200 hover:border-blue-300 rounded-2xl text-slate-500 hover:text-blue-600 font-bold transition-all flex items-center justify-center gap-2 mt-2 bg-white hover:bg-blue-50/20 disabled:opacity-50 disabled:cursor-not-allowed select-none"
-                >
-                  <PlusCircle className="w-4 h-4 text-blue-600" />
-                  <span>Add Another Part to Project</span>
-                </button>
               </div>
 
               {/* Lock / Submit buttons */}
               <div className="flex flex-col gap-4">
-                <div className="flex gap-4">
-                  <button 
-                    onClick={() => setIsReviewing(false)}
-                    disabled={isReadOnly}
-                    className={`flex-1 py-5 border-2 rounded-2xl font-bold transition-all ${isReadOnly ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed' : 'hover:border-slate-900 bg-white'}`}
-                  >
-                    Edit Details
-                  </button>
-
-                  {profile?.isAdmin ? (
-                    currentProject.status === 'submitted' ? (
-                      currentProject.isLocked ? (
-                        <button 
-                          onClick={async () => {
-                            setIsSaving(true);
-                            try {
-                              const updated = { ...currentProject, isLocked: false };
-                              setCurrentProject(updated);
-                              if (currentProject.id) {
-                                await updateDoc(doc(db, 'projects', currentProject.id), { isLocked: false });
-                                await logChange(currentProject.id, "Project unlocked for editing by evaluator");
-                                fetchProjects(true);
-                              }
-                            } finally {
-                              setIsSaving(false);
+                {profile?.isAdmin ? (
+                  currentProject.status === 'submitted' ? (
+                    currentProject.isLocked ? (
+                      <button 
+                        onClick={async () => {
+                          setIsSaving(true);
+                          try {
+                            const updated = { ...currentProject, isLocked: false };
+                            setCurrentProject(updated);
+                            if (currentProject.id) {
+                              await updateDoc(doc(db, 'projects', currentProject.id), { isLocked: false });
+                              await logChange(currentProject.id, "Project unlocked for editing by evaluator");
+                              fetchProjects(true);
                             }
-                          }}
-                          disabled={isSaving}
-                          className="flex-[2] py-5 rounded-2xl font-bold text-slate-700 border-2 border-slate-300 hover:border-slate-800 hover:bg-slate-50 transition-all select-none flex items-center justify-center gap-2"
-                        >
-                          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Unlock Project (Allow User Changes)"}
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={async () => {
-                            setIsSaving(true);
-                            try {
-                              const evaluatorName = profile?.name || 'Scape Engineer';
-                              const updated = { ...currentProject, isLocked: true, takenBy: profile?.email || 'N/A', takenByName: evaluatorName };
-                              setCurrentProject(updated);
-                              if (currentProject.id) {
-                                await updateDoc(doc(db, 'projects', currentProject.id), { 
-                                  isLocked: true, 
-                                  takenBy: profile?.email || 'N/A', 
-                                  takenByName: evaluatorName 
-                                });
-                                await logChange(currentProject.id, `Evaluation started by ${evaluatorName}`);
-                                fetchProjects(true);
-                              }
-                            } finally {
-                              setIsSaving(false);
-                            }
-                          }}
-                          disabled={isSaving}
-                          className="flex-[2] py-5 rounded-2xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2"
-                        >
-                          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Begin Evaluation (Lock Project)"}
-                        </button>
-                      )
-                    ) : (
-                      <span className="text-xs font-bold text-slate-400 self-center uppercase tracking-wider flex-[2] text-center">
-                        Awaiting User Submission (Draft)
-                      </span>
-                    )
-                  ) : (
-                    currentProject.status === 'submitted' ? (
-                      currentProject.isLocked ? (
-                        <button 
-                          disabled
-                          className="flex-[2] py-5 rounded-2xl font-bold text-slate-400 bg-slate-100 shadow-none cursor-not-allowed select-none"
-                        >
-                          Locked / Under Evaluation
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={async () => {
-                            setIsSaving(true);
-                            try {
-                              const res = await saveProject('draft');
-                              if (res) {
-                                setGlobalSuccess("Project submission cancelled. You can now edit it again.");
-                                setTimeout(() => setGlobalSuccess(null), 5000);
-                              }
-                            } finally {
-                              setIsSaving(false);
-                            }
-                          }}
-                          disabled={isSaving}
-                          className="flex-[2] py-5 rounded-2xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-100 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2"
-                        >
-                          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submitted (Click to Unsubmit)"}
-                        </button>
-                      )
+                          } finally {
+                            setIsSaving(false);
+                          }
+                        }}
+                        disabled={isSaving}
+                        className="w-full py-5 rounded-2xl font-bold text-slate-700 border-2 border-slate-300 hover:border-slate-800 hover:bg-slate-50 transition-all select-none flex items-center justify-center gap-2"
+                      >
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Unlock Project (Allow User Changes)"}
+                      </button>
                     ) : (
                       <button 
                         onClick={async () => {
                           setIsSaving(true);
                           try {
-                            const res = await saveProject('submitted');
+                            const evaluatorName = profile?.name || 'Scape Engineer';
+                            const updated = { ...currentProject, isLocked: true, takenBy: profile?.email || 'N/A', takenByName: evaluatorName };
+                            setCurrentProject(updated);
+                            if (currentProject.id) {
+                              await updateDoc(doc(db, 'projects', currentProject.id), { 
+                                isLocked: true, 
+                                takenBy: profile?.email || 'N/A', 
+                                takenByName: evaluatorName 
+                              });
+                              await logChange(currentProject.id, `Evaluation started by ${evaluatorName}`);
+                              fetchProjects(true);
+                            }
+                          } finally {
+                            setIsSaving(false);
+                          }
+                        }}
+                        disabled={isSaving}
+                        className="w-full py-5 rounded-2xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2"
+                      >
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Begin Evaluation (Lock Project)"}
+                      </button>
+                    )
+                  ) : (
+                    <span className="text-xs font-bold text-slate-400 self-center uppercase tracking-wider w-full text-center py-5 bg-slate-50 border border-slate-100 rounded-2xl">
+                      Awaiting User Submission (Draft)
+                    </span>
+                  )
+                ) : (
+                  currentProject.status === 'submitted' ? (
+                    currentProject.isLocked ? (
+                      <button 
+                        disabled
+                        className="w-full py-5 rounded-2xl font-bold text-slate-400 bg-slate-100 shadow-none cursor-not-allowed select-none"
+                      >
+                        Locked / Under Evaluation
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={async () => {
+                          setIsSaving(true);
+                          try {
+                            const res = await saveProject('draft', currentProject);
                             if (res) {
-                              setView('dashboard');
-                              setGlobalSuccess("Project submitted to Scape Solutions successfully!");
+                              setGlobalSuccess("Project submission cancelled. You can now edit it again.");
                               setTimeout(() => setGlobalSuccess(null), 5000);
                             }
                           } finally {
@@ -895,13 +1086,33 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           }
                         }}
                         disabled={isSaving}
-                        className="flex-[2] py-5 rounded-2xl font-bold text-white bg-blue-600 shadow-lg shadow-blue-200 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2"
+                        className="w-full py-5 rounded-2xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-100 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2"
                       >
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit to Scape Solutions"}
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submitted (Click to Unsubmit)"}
                       </button>
                     )
-                  )}
-                </div>
+                  ) : (
+                    <button 
+                      onClick={async () => {
+                        setIsSaving(true);
+                        try {
+                          const res = await saveProject('submitted', currentProject);
+                          if (res) {
+                            setView('dashboard');
+                            setGlobalSuccess("Project submitted to Scape Solutions successfully!");
+                            setTimeout(() => setGlobalSuccess(null), 5000);
+                          }
+                        } finally {
+                          setIsSaving(false);
+                        }
+                      }}
+                      disabled={isSaving}
+                      className="w-full py-5 rounded-2xl font-bold text-white bg-blue-600 shadow-lg shadow-blue-200 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2"
+                    >
+                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit to Scape Solutions"}
+                    </button>
+                  )
+                )}
 
                 {!currentProject.isFullySpecified && (
                   <button 
@@ -925,11 +1136,10 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             </div>
           ) : (
             /* Questionnaire Step Form Editing */
-            <div className="space-y-8 animate-fadeIn">
-              <h1 className="text-3xl font-black">
-                {currentStep === 0 ? 'Project & Cell Info' : `Part ${activePartIndex + 1}: ${(PART_STEPS[currentStep - 1]).title}`}
+            <div className="space-y-6 animate-fadeIn">
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">
+                {currentStep === 0 ? 'Project & Cell Info' : PART_STEPS[currentStep - 1].title}
               </h1>
-
               <div className="space-y-6">
                 {(currentStep === 0 ? GENERAL_STEPS[0] : PART_STEPS[currentStep - 1]).questions.map(q => {
                   const responses = currentStep === 0 ? currentProject.generalResponses : currentProject.parts[activePartIndex].responses;
@@ -972,7 +1182,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       }`}
                     >
                       <div className="flex items-center gap-2 flex-wrap">
-                        <label className="block text-sm font-bold text-slate-700">{q.label}</label>
+                        <label className="block text-sm font-bold text-slate-700">[{q.id}] {q.label}</label>
                         {!isReadOnly && !filled && (
                           <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md select-none shrink-0 ${
                             q.important 
@@ -982,6 +1192,38 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                             {q.important ? 'Important' : 'Optional'}
                           </span>
                         )}
+                        {/* Observation indicator from Data Capture Advice */}
+                        {currentProject.fieldObservations?.[q.id] && (() => {
+                          const obs = currentProject.fieldObservations![q.id];
+                          const isCritical = obs.severity === 'critical';
+                          return (
+                            <div className="relative inline-flex">
+                              <button
+                                type="button"
+                                onClick={() => setOpenObservationId(prev => prev === q.id ? null : q.id)}
+                                title={obs.text}
+                                className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md select-none shrink-0 cursor-pointer transition-all ${
+                                  isCritical
+                                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                    : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                }`}
+                              >
+                                {isCritical ? '🔴 Critical' : '⚠️ Note'}
+                              </button>
+                              {openObservationId === q.id && (
+                                <div className={`absolute z-50 bottom-full mb-2 left-0 w-72 p-3 rounded-xl shadow-xl text-xs font-medium leading-relaxed border animate-fadeIn ${
+                                  isCritical
+                                    ? 'bg-red-50 border-red-200 text-red-800'
+                                    : 'bg-amber-50 border-amber-200 text-amber-800'
+                                }`}>
+                                  <p className="font-bold mb-1">{isCritical ? '🔴 Critical Observation' : '⚠️ Observation'}</p>
+                                  <p>{obs.text}</p>
+                                  <p className="text-[10px] mt-2 opacity-60">From: Data Capture Advice</p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       {q.description && (
                         <p className="text-xs text-slate-400 mb-1">{q.description}</p>
@@ -1304,9 +1546,24 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 <button 
                   disabled={isSaving}
                   onClick={async () => {
+                    if (isReadOnly) {
+                      // If read-only, do not save database status. Simply proceed with navigation locally.
+                      if (currentStep === PART_STEPS.length) {
+                        if (activePartIndex < currentProject.parts.length - 1) {
+                          setActivePartIndex(activePartIndex + 1);
+                          setCurrentStep(1);
+                        } else {
+                          setIsReviewing(true);
+                        }
+                      } else {
+                        setCurrentStep(currentStep + 1);
+                      }
+                      return;
+                    }
+
                     setIsSaving(true);
                     try {
-                      const res = await saveProject('draft');
+                      const res = await saveProject(currentProject.status || 'draft', currentProject);
                       if (res) {
                         if (currentStep === PART_STEPS.length) {
                           // If we are at the last fane of a part
@@ -1317,7 +1574,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           } else {
                             // Go to final review page
                             setIsReviewing(true);
-                            if (!currentProject.report && !isGeneratingReport && !profile?.isAdmin) generateExternalAdvice();
+                            if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice();
                           }
                         } else {
                           // Move to next step
@@ -1406,7 +1663,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">PART #0{partIdx + 1}</span>
                     {currentProject.parts.length > 1 && !isReadOnly && (
                       <button 
-                        onClick={() => { handleRemovePart(partIdx); setIsMobileMenuOpen(false); }}
+                        onClick={() => { handleRemovePartClick(partIdx); setIsMobileMenuOpen(false); }}
                         className="text-red-400 hover:text-red-600 font-bold text-[9px] uppercase tracking-wider transition-colors"
                       >
                         Delete Part
@@ -1438,7 +1695,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
               {/* Final Verdict Card */}
               <button 
-                onClick={() => { setIsReviewing(true); setIsMobileMenuOpen(false); if (!currentProject.report && !isGeneratingReport && !profile?.isAdmin) generateExternalAdvice(); }}
+                onClick={() => { setIsReviewing(true); setIsMobileMenuOpen(false); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
                 className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${isReviewing ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
               >
                 <div className="flex items-center gap-3">
@@ -1446,7 +1703,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold">Review</h4>
+                    <h4 className="text-sm font-bold">Review / Submit</h4>
                     <p className="text-[10px] text-slate-400 font-medium mt-0.5">Submit & view AI Advisor feasibility</p>
                   </div>
                 </div>
@@ -1557,6 +1814,80 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             </div>
           </div>
         </div>
+      )}
+
+      <ConfirmationModal 
+        show={deletePartConfirm.show}
+        title="Delete Part"
+        message={`Are you sure you want to delete project part "${deletePartConfirm.partName}"? All images and answers for this part will be permanently lost.`}
+        confirmText="Delete Part"
+        type="danger"
+        onConfirm={handleConfirmDeletePart}
+        onCancel={() => setDeletePartConfirm({ show: false, partIndex: -1, partName: '' })}
+      />
+
+      {/* Floating AI Assistant Toggle Button */}
+      <button
+        onClick={() => setIsAIAssistantOpen(!isAIAssistantOpen)}
+        className={`fixed bottom-6 z-40 p-4 rounded-full shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 items-center justify-center cursor-pointer ${
+          isAIAssistantOpen 
+            ? 'bg-slate-900 text-white hover:bg-slate-800 right-6 md:right-[408px] hidden md:flex' 
+            : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-600/20 right-6 flex'
+        }`}
+        title={
+          isAIAssistantOpen 
+            ? "Close AI Assistant" 
+            : hasUnappliedProposals 
+              ? "Open AI Assistant (You have pending updates)" 
+              : "Open AI Assistant"
+        }
+      >
+        {isAIAssistantOpen ? (
+          <X className="w-6 h-6" />
+        ) : (
+          <>
+            <Bot className="w-6 h-6 animate-pulse" />
+            {hasUnappliedProposals && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500 border-2 border-indigo-600"></span>
+              </span>
+            )}
+          </>
+        )}
+      </button>
+
+      {/* AI Assistant Drawer Panel */}
+      {isAIAssistantOpen && (
+        <>
+          {/* Backdrop for mobile */}
+          <div 
+            className="fixed inset-0 bg-slate-950/20 backdrop-blur-3xs z-30 md:hidden"
+            onClick={() => setIsAIAssistantOpen(false)}
+          />
+          <aside className="fixed inset-y-0 right-0 z-35 w-full md:w-96 bg-white border-l border-slate-200 shadow-2xl flex flex-col h-full animate-slideIn select-text">
+            <div className="relative flex-1 flex flex-col h-full overflow-hidden">
+              <button 
+                onClick={() => setIsAIAssistantOpen(false)}
+                className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 z-50 transition-all cursor-pointer"
+                title="Close AI Assistant"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <AIAssistantTab 
+                currentProject={currentProject}
+                setCurrentProject={setCurrentProject}
+                sendMessageToAssistant={sendMessageToAssistant}
+                isGeneratingReport={isAssistantThinking}
+                updateProjectField={updateProjectField}
+                saveProject={saveProject}
+                activePartIndex={activePartIndex}
+                isReadOnly={isReadOnly}
+                hasUnappliedProposals={hasUnappliedProposals}
+              />
+            </div>
+          </aside>
+        </>
       )}
     </>
   );

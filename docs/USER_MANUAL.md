@@ -159,4 +159,24 @@ When importing projects from external systems in JSON format:
 * **Draft & Submitted State**: The "Project Review from Scape Solutions" report details and decisions are hidden from the external customer (unless manually published by an evaluator using "Publish Verdict to User").
 * **Approved & Rejected State**: Once an evaluator approves or rejects a submission, the **Project Review from Scape Solutions** technical conclusions and recommendation texts are automatically and immediately visible to the customer under their **Review** tab.
 
+---
+
+## 7. Administrering af Adgang og Roller (For Administratorer)
+
+For at tilføje eller fjerne brugere, ændre tilladte domæner eller tildele rettigheder (Evaluator/Super User) under drift, skal du redigere konfigurationsdokumentet i **Cloud Firestore**:
+
+### Trin-for-trin Vejledning:
+1. Gå til [Firebase Console](https://console.firebase.google.com/) og åbn dit projekt (**Scape Data Capture**).
+2. Gå til **Firestore Database** i venstre sidepanel.
+3. Find samlingen `config` og vælg dokumentet `access`.
+4. Du kan nu tilføje eller fjerne elementer i de fire array-felter:
+   * **`allowedDomains`**: Liste over domæner, der må oprette sig og logge ind i appen (f.eks. `scapesolutions.eu`, `scapesolutions.com`).
+   * **`allowedEmails`**: Specifikke eksterne e-mailadresser, der må logge ind (f.eks. eksterne samarbejdspartnere uden for firmaet).
+   * **`allowedEvaluators`**: E-mails på medarbejdere, der skal have adgang til **Evaluator Mode** (administrationspanelet, tildele cases, skrive technical reviews, osv.).
+   * **`superusers`**: E-mails på medarbejdere med adgang til **Super User Mode** (bulk data import/export og demo-data generation).
+
+### Vigtigt om ændringer:
+* **Øjeblikkelig virkning:** Når du gemmer ændringer i Firestore, opdateres både serveren og browser-appen **med det samme (i realtid)** uden genstart eller udrulning.
+* **Sikkerhed:** Kun godkendte medarbejdere (`isScapeEmployee`) har skrivetilladelse til `config/access` dokumentet i databasen for at forhindre uautoriserede ændringer. Standardbrugere har kun læserettigheder til validering under login.
+
 

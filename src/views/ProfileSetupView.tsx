@@ -76,10 +76,10 @@ export function ProfileSetupView({
                   Evaluator
                 </button>
                 <button 
-                  onClick={() => setProfile(profile ? { ...profile, requestedRole: 'external' } : { requestedRole: 'external' } as any)}
-                  className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${profile?.requestedRole === 'external' ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-400'}`}
+                  onClick={() => setProfile(profile ? { ...profile, requestedRole: 'user' } : { requestedRole: 'user' } as any)}
+                  className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${profile?.requestedRole === 'user' ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-400'}`}
                 >
-                  External Partner
+                  User
                 </button>
               </div>
               {!isAllowedEvaluator(userEmail) && profile?.requestedRole === 'evaluator' && (

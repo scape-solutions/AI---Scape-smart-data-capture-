@@ -4,8 +4,9 @@
  * Den modtager en masse data ("projects") og funktioner fra App.tsx som props.
  */
 import { useState } from 'react';
-import { PlusCircle, LayoutDashboard, SlidersHorizontal, Sparkles, Trash2, Loader2, Upload, Download, CheckCircle } from 'lucide-react';
+import { PlusCircle, LayoutDashboard, SlidersHorizontal, Sparkles, Trash2, Loader2, Upload, Download, CheckCircle, Settings } from 'lucide-react';
 import { ProjectCard } from '../components/ProjectCard';
+import { PromptsEditorModal } from '../components/PromptsEditorModal';
 import { ProjectState, UserProfile } from '../types';
 
 interface DashboardViewProps {
@@ -40,6 +41,7 @@ interface DashboardViewProps {
   acceptAllPendingProjects: () => void;
   importProjectsFromJson: (arr: any[]) => void;
   fetchProjectImages: (p: ProjectState) => Promise<ProjectState>;
+  setGlobalSuccess: (msg: string | null) => void;
 }
 
 export function DashboardView({
@@ -73,11 +75,13 @@ export function DashboardView({
   acceptProject,
   acceptAllPendingProjects,
   importProjectsFromJson,
-  fetchProjectImages
+  fetchProjectImages,
+  setGlobalSuccess
 }: DashboardViewProps) {
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
   const [isExportingBulk, setIsExportingBulk] = useState(false);
+  const [showPromptsEditor, setShowPromptsEditor] = useState(false);
 
   const handleExportFiltered = async () => {
     if (filteredProjects.length === 0) return;
@@ -126,11 +130,16 @@ export function DashboardView({
   const uniqueContacts = Array.from(
     new Map(
       projects
-        .filter(p => p.ownerName && p.ownerName !== 'Unknown')
-        .map(p => [
-          p.ownerEmail && p.ownerEmail !== 'Unknown' ? p.ownerEmail : p.ownerName, 
-          { name: p.ownerName!, company: p.ownerCompany || '', email: p.ownerEmail || '' }
-        ])
+        .filter(p => (p.ownerName && p.ownerName !== 'Unknown') || (p.ownerEmail && p.ownerEmail !== 'Unknown'))
+        .map(p => {
+          const email = p.ownerEmail && p.ownerEmail !== 'Unknown' ? p.ownerEmail : '';
+          const name = p.ownerName && p.ownerName !== 'Unknown' ? p.ownerName : (email || 'Unknown');
+          const key = email || name;
+          return [
+            key.toLowerCase(), 
+            { name, company: p.ownerCompany && p.ownerCompany !== 'Unknown' ? p.ownerCompany : '', email }
+          ];
+        })
     ).values()
   );
 
@@ -170,7 +179,10 @@ export function DashboardView({
         !(p.id && p.id.toLowerCase().includes(filterOrg.toLowerCase()))
     ) return false;
     
-    if (filterUser && !p.ownerEmail?.toLowerCase().includes(filterUser.toLowerCase())) return false;
+    if (filterUser && 
+        !p.ownerEmail?.toLowerCase().includes(filterUser.toLowerCase()) &&
+        !p.ownerName?.toLowerCase().includes(filterUser.toLowerCase())
+    ) return false;
     
     return true; // Bestod alle checks, så behold projektet!
   });
@@ -289,6 +301,14 @@ export function DashboardView({
                       <Trash2 className="w-3.5 h-3.5 shrink-0" />
                     )}
                     <span>{isCleaningDemo ? 'Cleaning...' : 'Clean Demo'}</span>
+                  </button>
+
+                  <button 
+                    onClick={() => setShowPromptsEditor(true)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white px-3 md:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer"
+                  >
+                    <Settings className="w-3.5 h-3.5 shrink-0" />
+                    <span>Edit AI Prompts</span>
                   </button>
                 </div>
               </div>
@@ -410,6 +430,12 @@ export function DashboardView({
           </div>
         </div>
       </div>
+      
+      <PromptsEditorModal 
+        show={showPromptsEditor} 
+        onClose={() => setShowPromptsEditor(false)} 
+        setGlobalSuccess={setGlobalSuccess}
+      />
     </div>
   );
 }

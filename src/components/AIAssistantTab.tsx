@@ -18,6 +18,8 @@ interface AIAssistantTabProps {
   updateProjectField: (p: ProjectState, field: keyof ProjectState, value: any, comment: string) => Promise<void>;
   saveProject?: (status?: ProjectState['status'], projectToSave?: ProjectState) => Promise<ProjectState | null>;
   activePartIndex: number;
+  isReadOnly?: boolean;
+  hasUnappliedProposals?: boolean;
 }
 
 // ─── Parse structured AI response ────────────────────────────────────────────
@@ -56,6 +58,58 @@ function parseAIResponse(text: string): ParsedAIResponse {
   return { facts, questions, prose, jsonProposal };
 }
 
+export function isProposalAlreadyApplied(proposal: any, currentProject: ProjectState, activePartIndex: number): boolean {
+  if (!proposal) return false;
+  
+  const areValuesEqual = (currentVal: any, proposalVal: any): boolean => {
+    const isCurrentEmpty = currentVal === undefined || currentVal === null || String(currentVal).trim() === '';
+    const isProposalEmpty = proposalVal === undefined || proposalVal === null || String(proposalVal).trim() === '';
+    if (isCurrentEmpty && isProposalEmpty) return true;
+    if (isCurrentEmpty !== isProposalEmpty) return false;
+    // Normalize both to strings for comparison, trimming whitespace
+    // This handles cases like number 5 vs string "5" (AI often returns numbers for numeric fields)
+    const normalize = (v: any) => String(v).trim();
+    return normalize(currentVal) === normalize(proposalVal);
+  };
+
+  if (proposal.generalResponses) {
+    for (const [key, val] of Object.entries(proposal.generalResponses)) {
+      const currentVal = currentProject.generalResponses?.[key];
+      const match = areValuesEqual(currentVal, val);
+      console.log(`[isProposalAlreadyApplied] General key "${key}": currentVal="${currentVal}" vs proposalVal="${val}" -> match=${match}`);
+      if (!match) {
+        return false;
+      }
+    }
+  }
+  
+  if (proposal.parts && Array.isArray(proposal.parts)) {
+    const isSinglePartProposal = proposal.parts.length === 1;
+    for (let idx = 0; idx < proposal.parts.length; idx++) {
+      const aiPart = proposal.parts[idx];
+      const targetIdx = (isSinglePartProposal && activePartIndex > 0) ? activePartIndex : idx;
+      const part = currentProject.parts?.[targetIdx];
+      if (!part) {
+        console.log(`[isProposalAlreadyApplied] Part idx ${idx} (targetIdx ${targetIdx}) does not exist in currentProject.parts`);
+        return false;
+      }
+      
+      if (aiPart.responses) {
+        for (const [key, val] of Object.entries(aiPart.responses)) {
+          const currentVal = part.responses?.[key];
+          const match = areValuesEqual(currentVal, val);
+          console.log(`[isProposalAlreadyApplied] Part ${targetIdx} key "${key}": currentVal="${currentVal}" vs proposalVal="${val}" -> match=${match}`);
+          if (!match) {
+            return false;
+          }
+        }
+      }
+    }
+  }
+  
+  return true;
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 export function AIAssistantTab({
   currentProject,
@@ -65,6 +119,8 @@ export function AIAssistantTab({
   updateProjectField,
   saveProject,
   activePartIndex,
+  isReadOnly = false,
+  hasUnappliedProposals = false,
 }: AIAssistantTabProps) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -81,6 +137,17 @@ export function AIAssistantTab({
     setInput('');
   };
 
+  // Find the index of the last AI message that contains a JSON proposal.
+  // Only that card will show the Apply button; older ones are treated as superseded.
+  const lastProposalMsgIdx = React.useMemo(() => {
+    const history = currentProject.chatHistory ?? [];
+    for (let i = history.length - 1; i >= 0; i--) {
+      const m = history[i];
+      if (m.role === 'model' && parseAIResponse(m.text).jsonProposal) return i;
+    }
+    return -1;
+  }, [currentProject.chatHistory]);
+
   return (
     <div className="flex flex-col h-full bg-slate-50">
       {/* Header */}
@@ -93,6 +160,13 @@ export function AIAssistantTab({
           Describe your project freely. The AI extracts facts and asks for what's missing.
         </p>
       </div>
+
+      {hasUnappliedProposals && !isReadOnly && (
+        <div className="bg-amber-50 border-b border-amber-200 px-5 py-2.5 text-xs text-amber-800 font-semibold flex items-center gap-1.5 animate-fadeIn select-none shrink-0">
+          <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+          You have proposed changes that haven't been applied yet. Scroll to review them.
+        </div>
+      )}
 
       {/* Message list */}
       <div className="flex-1 overflow-y-auto p-4 space-y-5" ref={scrollRef}>
@@ -196,6 +270,8 @@ export function AIAssistantTab({
                     updateProjectField={updateProjectField}
                     saveProject={saveProject}
                     activePartIndex={activePartIndex}
+                    isReadOnly={isReadOnly}
+                    isLatest={idx === lastProposalMsgIdx}
                   />
                 )}
               </div>
@@ -219,32 +295,37 @@ export function AIAssistantTab({
       </div>
 
       {/* Input bar */}
-      <div className="p-4 bg-white border-t border-slate-200 shrink-0">
-        <div className="flex items-end gap-2">
-          <textarea
-            className="flex-1 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
-            placeholder="Describe your project… (Enter to send, Shift+Enter for new line)"
-            rows={2}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-            }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={isGeneratingReport || !input.trim()}
-            className="p-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
+      <div className="p-4 bg-white border-t border-slate-200 shrink-0 animate-fadeIn">
+        {isReadOnly ? (
+          <div className="text-center py-3 px-4 bg-slate-100/80 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">
+            This project is submitted or locked and is read-only.
+          </div>
+        ) : (
+          <div className="flex items-end gap-2">
+            <textarea
+              className="flex-1 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
+              placeholder="Describe your project… (Enter to send, Shift+Enter for new line)"
+              rows={2}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={isGeneratingReport || !input.trim()}
+              className="p-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ─── Proposed-changes card ────────────────────────────────────────────────────
 interface ProposedChangesCardProps {
   proposal: any;
   currentProject: ProjectState;
@@ -252,12 +333,30 @@ interface ProposedChangesCardProps {
   updateProjectField: (p: ProjectState, field: keyof ProjectState, value: any, comment: string) => Promise<void>;
   saveProject?: (status?: ProjectState['status'], projectToSave?: ProjectState) => Promise<ProjectState | null>;
   activePartIndex: number;
+  isReadOnly?: boolean;
+  /** Only the most recent AI proposal shows the Apply button. Older ones are "superseded". */
+  isLatest?: boolean;
 }
 
-function ProposedChangesCard({ proposal, currentProject, setCurrentProject, updateProjectField, saveProject, activePartIndex }: ProposedChangesCardProps) {
+function ProposedChangesCard({ proposal, currentProject, setCurrentProject, updateProjectField, saveProject, activePartIndex, isReadOnly = false, isLatest = false }: ProposedChangesCardProps) {
   const [editedProposal, setEditedProposal] = useState(proposal);
-  const [isApplied, setIsApplied] = useState(false);
+  const [isApplied, setIsApplied] = useState(() => isProposalAlreadyApplied(proposal, currentProject, activePartIndex));
   const [isSaving, setIsSaving] = useState(false);
+  // Track if the user manually clicked "Apply Changes" in this session.
+  // Once set, we never let the real-time useEffect revert the card back to yellow.
+  const wasManuallyApplied = useRef(false);
+
+  // Sync isApplied state with database changes in real-time, but only
+  // revert to false if the user has NOT manually applied the changes yet.
+  useEffect(() => {
+    const alreadyApplied = isProposalAlreadyApplied(proposal, currentProject, activePartIndex);
+    if (alreadyApplied) {
+      setIsApplied(true);
+    } else if (!wasManuallyApplied.current) {
+      // Only reset to false if the user hasn't clicked Apply yet
+      setIsApplied(false);
+    }
+  }, [currentProject, proposal, activePartIndex]);
 
   const handleApply = async () => {
     setIsSaving(true);
@@ -299,6 +398,8 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
         }
       }
 
+      // Mark as manually applied BEFORE setting state, so the useEffect guard works
+      wasManuallyApplied.current = true;
       setIsApplied(true);
     } catch (err) {
       console.error('AI apply failed:', err);
@@ -306,6 +407,18 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
       setIsSaving(false);
     }
   };
+
+
+  // Non-latest proposals are "superseded" — show a compact read-only indicator.
+  // This prevents old Apply buttons from reappearing when the drawer is reopened.
+  if (!isLatest) {
+    return (
+      <div className="text-xs text-slate-400 italic px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 flex items-center gap-1.5">
+        <Check className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+        Superseded by a newer suggestion.
+      </div>
+    );
+  }
 
   if (isApplied) {
     return (
@@ -357,16 +470,23 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
   }
 
   return (
-    <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3 bg-amber-100 border-b border-amber-200">
-        <h3 className="font-bold text-amber-900 text-sm flex items-center gap-2">
+    <div className={`bg-amber-50 border-2 rounded-2xl overflow-hidden shadow-sm transition-all ${isReadOnly ? 'border-slate-200 bg-slate-50/50' : 'border-amber-300'}`}>
+      <div className={`flex items-center justify-between px-4 py-3 border-b transition-all ${isReadOnly ? 'bg-slate-100 border-slate-200' : 'bg-amber-100 border-amber-200'}`}>
+        <h3 className={`font-bold text-sm flex items-center gap-2 ${isReadOnly ? 'text-slate-600' : 'text-amber-900'}`}>
           <Edit2 className="w-4 h-4" />
-          Ready to fill in {rows.length} field{rows.length !== 1 ? 's' : ''}
+          {isReadOnly 
+            ? `Proposed updates for ${rows.length} field${rows.length !== 1 ? 's' : ''} (Read-Only)`
+            : `Ready to fill in ${rows.length} field${rows.length !== 1 ? 's' : ''}`
+          }
         </h3>
         <button
           onClick={handleApply}
-          disabled={isSaving}
-          className="bg-indigo-600 text-white text-xs px-4 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors font-bold"
+          disabled={isSaving || isReadOnly}
+          className={`text-xs px-4 py-1.5 rounded-lg transition-colors font-bold ${
+            isReadOnly 
+              ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300/50' 
+              : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50'
+          }`}
         >
           {isSaving ? 'Saving…' : 'Apply Changes'}
         </button>
@@ -374,7 +494,7 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
       <div className="p-4 space-y-3">
         {rows.map(row => (
           <div key={row.key}>
-            <label className="block text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1.5">
+            <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${isReadOnly ? 'text-slate-500' : 'text-amber-700'}`}>
               {row.label}
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -382,9 +502,14 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
                 {row.old || <span className="not-italic italic opacity-50">Empty</span>}
               </div>
               <input
-                className="border border-amber-300 bg-white p-2 rounded-lg text-xs text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                className={`border bg-white p-2 rounded-lg text-xs outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 ${
+                  isReadOnly 
+                    ? 'border-slate-200 bg-slate-50/50 text-slate-400 cursor-not-allowed' 
+                    : 'border-amber-300 text-slate-800'
+                }`}
                 value={row.newVal}
-                onChange={(e) => row.onChange(e.target.value)}
+                onChange={(e) => !isReadOnly && row.onChange(e.target.value)}
+                disabled={isReadOnly}
               />
             </div>
           </div>

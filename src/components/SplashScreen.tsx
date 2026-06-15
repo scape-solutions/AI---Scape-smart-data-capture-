@@ -44,14 +44,14 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
         {/* Glowing Scape Logo Mark */}
         <div className="relative mb-10 group">
           {/* Backlight Glow */}
-          <div className="absolute inset-0 bg-red-600/30 rounded-full blur-2xl group-hover:bg-red-600/40 transition-all duration-500 animate-ping [animation-duration:3s]" />
+          <div className="absolute inset-0 bg-red-600/20 rounded-[2rem] blur-2xl group-hover:bg-red-600/30 transition-all duration-500" />
           
-          <div className="relative bg-slate-950/80 border border-slate-800 p-8 rounded-3xl backdrop-blur-md shadow-2xl flex items-center justify-center">
-            <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="filter drop-shadow-[0_0_15px_rgba(191,30,46,0.3)]">
-              <path d="M 22,90 L 50,15 L 62,15 L 34,90 Z" fill="#f1f5f9" className="transition-all duration-300 group-hover:fill-white" />
-              <path d="M 50,15 L 68,55 L 56,55 L 42,23 Z" fill="#cbd5e1" className="transition-all duration-300 group-hover:fill-slate-100" />
-              <path d="M 61,62 L 70,62 L 78,82 L 69,82 Z" fill="#bf1e2e" className="animate-pulse [animation-duration:2s]" />
-            </svg>
+          <div className="relative bg-white border border-slate-100 p-6 rounded-3xl shadow-2xl flex items-center justify-center max-w-[280px]">
+            <img 
+              src="/scape-logo.jpg" 
+              alt="Scape Logo" 
+              className="h-14 w-auto object-contain" 
+            />
           </div>
         </div>
 

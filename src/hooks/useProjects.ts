@@ -3,7 +3,7 @@
  * Denne Hook håndterer alt der har med "Projekter" at gøre i databasen.
  * Det inkluderer at hente listen, gemme nye, opdatere status og slette.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   collection, 
   addDoc, 
@@ -14,7 +14,8 @@ import {
   query,
   where,
   deleteDoc,
-  orderBy
+  orderBy,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { ProjectState, OperationType, PartData } from '../types';
@@ -40,6 +41,9 @@ export function normalizeProject(p: any): ProjectState {
     parts: normalizedParts,
     generalImages: Array.isArray(p?.generalImages) ? p.generalImages : [],
     report: p?.report || null,
+    evaluatorDraft: p?.evaluatorDraft || null,
+    finalVerdict: p?.finalVerdict || null,
+    fieldObservations: p?.fieldObservations || null,
     status: p?.status || 'draft',
     userId: p?.userId || '',
     isLocked: !!p?.isLocked,
@@ -830,7 +834,7 @@ export function useProjects(
   sortBy: string, 
   handleAppError: (e: any, op?: OperationType, path?: string) => void,
   setGlobalSuccess: (msg: string | null) => void,
-  getEffectiveEmail: () => string | null
+  userEmail: string | null
 ) {
   // En liste (array) af ProjectState objekter. Starter som en tom liste [].
   const [projects, setProjects] = useState<ProjectState[]>([]);
@@ -845,29 +849,23 @@ export function useProjects(
 
   // Henter alle projekter fra Firestore-databasen
   const fetchProjects = async (isAdmin: boolean = false) => {
+    // Stubbed since the real-time listener (onSnapshot) handles updates automatically.
+  };
+
+  // Real-time listener for the projects list
+  useEffect(() => {
     if (!user) return;
     setIsLoadingProjects(true);
-    try {
-      let q;
-      // Hvis brugeren er Admin, henter vi ALLE projekter i kollektionen 'projects'.
-      // Hvis ikke, henter vi KUN dem, hvor 'userId' matcher brugerens eget ID.
-      if (isAdmin) {
-        q = query(collection(db, 'projects'));
-      } else {
-        q = query(collection(db, 'projects'), where('userId', '==', user.uid));
-      }
-      
-      // Hent dokumenterne fra databasen
-      const snap = await getDocs(q);
-      
-      // 'snap.docs' indeholder de rå data fra Firebase. Vi mapper (konverterer) 
-      // dem til vores eget ProjectState format med robust skema-normalisering.
-      // Sørg for at 'id: d.id' kommer EFTER d.data(), så eventuelle forældede 'id: null' i dokumentfelterne ikke overskriver det ægte ID!
+    let q;
+    if (profile?.isAdmin) {
+      q = query(collection(db, 'projects'));
+    } else {
+      q = query(collection(db, 'projects'), where('userId', '==', user.uid));
+    }
+
+    const unsubscribe = onSnapshot(q, (snap) => {
       let data = snap.docs.map(d => {
         const rawData = d.data() as any;
-        if (rawData && 'id' in rawData) {
-          console.warn(`[Firestore ID Audit] Document "${d.id}" ("${rawData.projectName || 'Untitled'}") contains a polluted internal 'id' field!`);
-        }
         return normalizeProject({ ...rawData, id: d.id });
       });
 
@@ -875,33 +873,119 @@ export function useProjects(
       if (profile?.requestedRole !== 'superuser') {
         data = data.filter(p => !p.isImportPending);
       }
-      
+
+      // If user is in user mode or not an admin, show only their own cards (matching their email),
+      // and do not show demo projects or other generated/imported projects.
+      if (profile?.requestedRole === 'user' || profile?.requestedRole === 'external' || !profile?.isAdmin) {
+        const normalizedEmail = userEmail?.toLowerCase();
+        if (normalizedEmail) {
+          data = data.filter(p => p.ownerEmail?.toLowerCase() === normalizedEmail);
+        }
+      }
+
       // Sortering af data. Først efter dato (nyeste først).
       data.sort((a: any, b: any) => {
         const t1 = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : (a.updatedAt instanceof Date ? a.updatedAt.getTime() : 0);
         const t2 = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : (b.updatedAt instanceof Date ? b.updatedAt.getTime() : 0);
-        return t2 - t1; // Et positivt tal betyder at b kommer før a.
+        return t2 - t1;
       });
 
-      // Hvis brugeren har valgt at sortere efter 'org' eller 'user' via UI'et
       if (sortBy === 'org') {
         data.sort((a, b) => (a.ownerCompany || '').localeCompare(b.ownerCompany || ''));
       } else if (sortBy === 'user') {
         data.sort((a, b) => (a.userId || '').localeCompare(b.userId || ''));
       }
-      
-      setProjects(data);
-    } catch (e) {
-      handleAppError(e, OperationType.LIST, 'projects');
-    } finally {
-      setIsLoadingProjects(false);
-    }
-  };
 
-  // Kør fetchProjects automatisk, hvis admin-status, requestedRole eller sort-valg ændrer sig
+      setProjects(data);
+      setIsLoadingProjects(false);
+    }, (e) => {
+      handleAppError(e, OperationType.LIST, 'projects');
+      setIsLoadingProjects(false);
+    });
+
+    return () => unsubscribe();
+  }, [user, profile?.isAdmin, profile?.requestedRole, sortBy, userEmail]);
+
+  // Sync active project state from database in real time without overwriting local typing/unsaved edits
+  const lastSyncedProjectRef = useRef<ProjectState | null>(null);
+
   useEffect(() => {
-    fetchProjects(profile?.isAdmin);
-  }, [profile?.isAdmin, profile?.requestedRole, sortBy, user]);
+    if (currentProject && currentProject.id) {
+      // If we switched projects, reset the ref to avoid stale comparisons
+      if (lastSyncedProjectRef.current?.id !== currentProject.id) {
+        lastSyncedProjectRef.current = null;
+      }
+
+      const updated = projects.find(p => p.id === currentProject.id);
+      if (updated) {
+        const lastSynced = lastSyncedProjectRef.current;
+
+        const hasStatusChange = !lastSynced || updated.status !== lastSynced.status;
+        const hasLockChange = !lastSynced || updated.isLocked !== lastSynced.isLocked;
+        const hasSpecChange = !lastSynced || updated.isFullySpecified !== lastSynced.isFullySpecified;
+        const hasReportChange = !lastSynced || updated.report !== lastSynced.report;
+        const hasDraftChange = !lastSynced || updated.evaluatorDraft !== lastSynced.evaluatorDraft;
+        const hasVerdictVisChange = !lastSynced || updated.isVerdictVisible !== lastSynced.isVerdictVisible;
+        const hasFinalVerdictChange = !lastSynced || updated.finalVerdict !== lastSynced.finalVerdict;
+        const hasTakenByChange = !lastSynced || updated.takenBy !== lastSynced.takenBy;
+        const hasTakenByNameChange = !lastSynced || updated.takenByName !== lastSynced.takenByName;
+
+        const lastGenStr = lastSynced ? JSON.stringify(lastSynced.generalResponses || {}) : '';
+        const updatedGenStr = JSON.stringify(updated.generalResponses || {});
+        const hasGenResponsesChange = !lastSynced || lastGenStr !== updatedGenStr;
+
+        const lastPartsResStr = lastSynced ? JSON.stringify(lastSynced.parts?.map(p => p.responses) || []) : '';
+        const updatedPartsResStr = JSON.stringify(updated.parts?.map(p => p.responses) || []);
+        const hasPartsResponsesChange = !lastSynced || lastPartsResStr !== updatedPartsResStr;
+
+        const lastChatHistoryStr = lastSynced ? JSON.stringify(lastSynced.chatHistory || []) : '';
+        const updatedChatHistoryStr = JSON.stringify(updated.chatHistory || []);
+        const hasChatHistoryChange = !lastSynced || lastChatHistoryStr !== updatedChatHistoryStr;
+
+        if (
+          hasStatusChange || hasLockChange || hasSpecChange || hasReportChange || 
+          hasDraftChange || hasVerdictVisChange || hasFinalVerdictChange || 
+          hasTakenByChange || hasTakenByNameChange || hasGenResponsesChange || 
+          hasPartsResponsesChange || hasChatHistoryChange
+        ) {
+          lastSyncedProjectRef.current = updated;
+
+          setCurrentProject(prev => {
+            if (!prev) return null;
+            
+            // Sync general responses and parts responses, but preserve local parts' images/cadFiles
+            const mergedParts = updated.parts.map((up: any, idx: number) => {
+              const prevPart = prev.parts?.[idx];
+              return {
+                ...up,
+                // Retain local base64 images and cadFile if they exist locally but not in the root db doc
+                images: (prevPart?.images && prevPart.images.length > 0) ? prevPart.images : (up.images || []),
+                cadFile: prevPart?.cadFile || up.cadFile || null
+              };
+            });
+
+            return {
+              ...prev,
+              generalResponses: updated.generalResponses,
+              parts: mergedParts,
+              chatHistory: updated.chatHistory || [],
+              status: updated.status,
+              isLocked: updated.isLocked,
+              isFullySpecified: updated.isFullySpecified,
+              report: updated.report,
+              evaluatorDraft: updated.evaluatorDraft,
+              isVerdictVisible: updated.isVerdictVisible,
+              finalVerdict: updated.finalVerdict,
+              takenBy: updated.takenBy,
+              takenByName: updated.takenByName
+            };
+          });
+        }
+      }
+    } else {
+      lastSyncedProjectRef.current = null;
+    }
+  }, [projects, currentProject]);
 
   // Gemmer en handling i projektets historik (f.eks. "Projekt låst" eller "Projekt oprettet")
   const logChange = async (projectId: string, action: string) => {
@@ -1013,7 +1097,7 @@ export function useProjects(
       return project;
     }
 
-    const email = getEffectiveEmail();
+    const email = userEmail;
     
     // Forhindr at gemme de store base64 billeder direkte i hoved-dokumentet (så vi undgår 1MB grænsen!)
     const partsWithoutImages = project.parts.map(p => ({
@@ -1366,6 +1450,7 @@ export function useProjects(
           report: p.report || null,
           evaluatorDraft: p.evaluatorDraft || null,
           finalVerdict: p.finalVerdict || null,
+          fieldObservations: p.fieldObservations || null,
           status: p.status || 'draft',
           userId: p.userId || user?.uid,
           ownerName: p.ownerName || 'Unknown Owner',

@@ -1,22 +1,23 @@
 import { jsPDF } from 'jspdf';
-import { ProjectState } from '../types';
+import { ProjectState, UserProfile } from '../types';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 
 // Helper to translate labels from question IDs
 const getGeneralQuestionLabel = (id: string): string => {
   const q = GENERAL_STEPS[0].questions.find(item => item.id === id);
-  return q ? q.label : id;
+  return q ? `[${id}] ${q.label}` : id;
 };
 
 const getPartQuestionLabel = (id: string): string => {
   for (const step of PART_STEPS) {
     const q = step.questions.find(item => item.id === id);
-    if (q) return q.label;
+    if (q) return `[${id}] ${q.label}`;
   }
   return id;
 };
 
-export const generateProjectPdf = (project: ProjectState) => {
+export const generateProjectPdf = (project: ProjectState, profile?: UserProfile | null) => {
+  const isAdmin = !!profile?.isAdmin;
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -125,6 +126,8 @@ export const generateProjectPdf = (project: ProjectState) => {
     if (!valueStr || valueStr.trim() === '') return;
 
     const label = getGeneralQuestionLabel(key);
+    const obs = project.fieldObservations?.[key];
+    const obsMarker = obs ? (obs.severity === 'critical' ? ' [!]' : ' [⚠]') : '';
     
     // Check if we need to split text
     const maxValWidth = contentWidth - 65;
@@ -133,10 +136,10 @@ export const generateProjectPdf = (project: ProjectState) => {
 
     checkPageBreak(neededHeight);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(71, 85, 105);
+    doc.setTextColor(obs?.severity === 'critical' ? 180 : obs ? 146 : 71, obs ? 30 : 85, obs?.severity === 'critical' ? 46 : obs ? 0 : 105);
     
-    // Print label
-    const labelLines = doc.splitTextToSize(label, 60);
+    // Print label with obs marker
+    const labelLines = doc.splitTextToSize(label + obsMarker, 60);
     labelLines.forEach((lblLine: string, idx: number) => {
       doc.text(lblLine, margin, y + (idx * 5));
     });
@@ -230,15 +233,17 @@ export const generateProjectPdf = (project: ProjectState) => {
       if (!valueStr || valueStr.trim() === '') return;
 
       const label = getPartQuestionLabel(key);
+      const obs = project.fieldObservations?.[key];
+      const obsMarker = obs ? (obs.severity === 'critical' ? ' [!]' : ' [⚠]') : '';
       const maxValWidth = contentWidth - 65;
       const splitVal = doc.splitTextToSize(valueStr, maxValWidth);
       const neededHeight = Math.max(6, splitVal.length * 5);
 
       checkPageBreak(neededHeight);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(71, 85, 105);
+      doc.setTextColor(obs?.severity === 'critical' ? 180 : obs ? 146 : 71, obs ? 30 : 85, obs?.severity === 'critical' ? 46 : obs ? 0 : 105);
 
-      const labelLines = doc.splitTextToSize(label, 60);
+      const labelLines = doc.splitTextToSize(label + obsMarker, 60);
       labelLines.forEach((lblLine: string, idx: number) => {
         doc.text(lblLine, margin, y + (idx * 5));
       });
@@ -255,46 +260,40 @@ export const generateProjectPdf = (project: ProjectState) => {
     y += 6;
   });
 
-  // 6. Feasibility Report and Verdict Section (If available)
-  if (project.report || project.finalVerdict) {
+  // ==========================================================================
+  // SECTION B — Data Capture Advice (shown when advice has been run)
+  // ==========================================================================
+  if (project.report) {
     y += 4;
     checkPageBreak(25);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(15, 23, 42);
-    doc.text('Technical Feasibility Review', margin, y);
+    doc.text('Data Capture Advice', margin, y);
     y += 7;
-    doc.setDrawColor(15, 23, 42);
+    doc.setDrawColor(226, 232, 240);
     doc.line(margin, y, margin + contentWidth, y);
     y += 5;
 
-    // Helper to print markdown-like reports
+    // Helper to print markdown-like text
     const printMarkdownText = (rawText: string) => {
       const paragraphs = rawText.split('\n');
       paragraphs.forEach(p => {
         const cleaned = p.replace(/\*\*|###|##|#/g, '').trim();
-        if (cleaned === '') {
-          y += 2;
-          return;
-        }
-
-        const isHeader = p.startsWith('#') || p.startsWith('##') || p.startsWith('###');
+        if (cleaned === '') { y += 2; return; }
+        const isHeader = p.startsWith('#');
         const isBullet = p.trim().startsWith('*') || p.trim().startsWith('-');
-
         const fontSize = isHeader ? 11 : 9.5;
         const fontStyle = isHeader ? 'bold' : 'normal';
         const color = isHeader ? [15, 23, 42] : [51, 65, 85];
         const indent = isBullet ? 20 : 15;
-        
         doc.setFont('helvetica', fontStyle);
         doc.setFontSize(fontSize);
         doc.setTextColor(color[0], color[1], color[2]);
-
         const bulletPrefix = isBullet ? '• ' : '';
         const textToSplit = bulletPrefix + (isBullet ? cleaned.substring(1).trim() : cleaned);
         const splitLines = doc.splitTextToSize(textToSplit, contentWidth - (indent - 15));
         const paragraphHeight = splitLines.length * 5 + (isHeader ? 2 : 0);
-
         checkPageBreak(paragraphHeight);
         splitLines.forEach((line: string, idx: number) => {
           doc.text(line, indent, y + (idx * 5));
@@ -303,24 +302,120 @@ export const generateProjectPdf = (project: ProjectState) => {
       });
     };
 
-    if (project.report) {
-      printMarkdownText(project.report);
+    // Sub-section: structured field observations (if any)
+    const obsEntries = Object.entries(project.fieldObservations || {});
+    if (obsEntries.length > 0) {
+      checkPageBreak(15);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(71, 85, 105);
+      doc.text('Field Observations Summary', margin, y);
       y += 6;
+
+      obsEntries.forEach(([fieldId, obs]) => {
+        const allQuestions = [
+          ...GENERAL_STEPS.flatMap(s => s.questions),
+          ...PART_STEPS.flatMap(s => s.questions)
+        ];
+        const fieldLabel = allQuestions.find(q => q.id === fieldId)?.label || fieldId;
+        const isCritical = obs.severity === 'critical';
+        const marker = isCritical ? '[!]' : '[⚠]';
+        const entryText = `${marker} ${fieldLabel}: ${obs.text}`;
+        const splitEntry = doc.splitTextToSize(entryText, contentWidth - 8);
+        const entryHeight = Math.max(7, splitEntry.length * 5 + 2);
+
+        checkPageBreak(entryHeight + 2);
+
+        // Coloured left strip
+        doc.setFillColor(isCritical ? 254 : 254, isCritical ? 226 : 243, isCritical ? 226 : 199);
+        doc.rect(margin, y - 1, contentWidth, entryHeight, 'F');
+        doc.setFillColor(isCritical ? 239 : 245, isCritical ? 68 : 158, isCritical ? 68 : 11);
+        doc.rect(margin, y - 1, 2, entryHeight, 'F');
+
+        doc.setFont('helvetica', isCritical ? 'bold' : 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(isCritical ? 153 : 120, isCritical ? 27 : 53, isCritical ? 27 : 15);
+        splitEntry.forEach((line: string, idx: number) => {
+          doc.text(line, margin + 5, y + 3.5 + (idx * 5));
+        });
+        y += entryHeight + 2;
+      });
+
+      y += 4;
     }
 
-    if (project.finalVerdict) {
+    // Full advice narrative text
+    printMarkdownText(project.report);
+    y += 6;
+  }
+
+  // ==========================================================================
+  // SECTION D — Review (role-aware: finalVerdict > evaluatorDraft)
+  // ==========================================================================
+  const canSeeVerdict = isAdmin ||
+    project.isVerdictVisible ||
+    project.status === 'approved' ||
+    project.status === 'rejected';
+
+  const showVerdict = project.finalVerdict && canSeeVerdict;
+  const showDraft = !showVerdict && isAdmin && project.evaluatorDraft;
+
+  if (showVerdict || showDraft) {
+    y += 4;
+    checkPageBreak(25);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(15, 23, 42);
+    doc.text(
+      showVerdict ? 'Project Review from Scape Solutions' : 'Evaluator AI Draft',
+      margin,
+      y
+    );
+    y += 7;
+    doc.setDrawColor(15, 23, 42);
+    doc.line(margin, y, margin + contentWidth, y);
+    y += 5;
+
+    const printMarkdownSectionD = (rawText: string) => {
+      const paragraphs = rawText.split('\n');
+      paragraphs.forEach(p => {
+        const cleaned = p.replace(/\*\*|###|##|#/g, '').trim();
+        if (cleaned === '') { y += 2; return; }
+        const isHeader = p.startsWith('#');
+        const isBullet = p.trim().startsWith('*') || p.trim().startsWith('-');
+        const fontSize = isHeader ? 11 : 9.5;
+        const fontStyle = isHeader ? 'bold' : 'normal';
+        const color = isHeader ? [15, 23, 42] : [51, 65, 85];
+        const indent = isBullet ? 20 : 15;
+        doc.setFont('helvetica', fontStyle);
+        doc.setFontSize(fontSize);
+        doc.setTextColor(color[0], color[1], color[2]);
+        const bulletPrefix = isBullet ? '• ' : '';
+        const textToSplit = bulletPrefix + (isBullet ? cleaned.substring(1).trim() : cleaned);
+        const splitLines = doc.splitTextToSize(textToSplit, contentWidth - (indent - 15));
+        const paragraphHeight = splitLines.length * 5 + (isHeader ? 2 : 0);
+        checkPageBreak(paragraphHeight);
+        splitLines.forEach((line: string, idx: number) => {
+          doc.text(line, indent, y + (idx * 5));
+        });
+        y += paragraphHeight + 1.5;
+      });
+    };
+
+    const contentText = showVerdict ? project.finalVerdict! : project.evaluatorDraft!;
+    if (showVerdict) {
+      // Wrap verdict in a bordered panel
       checkPageBreak(20);
-      doc.setFillColor(248, 250, 252); // light background panel
+      doc.setFillColor(248, 250, 252);
       doc.setDrawColor(226, 232, 240);
       const startY = y;
       y += 5;
-      
-      printMarkdownText(project.finalVerdict);
-      
-      // Draw background border surrounding verdict
-      const endY = y;
-      doc.rect(margin, startY, contentWidth, endY - startY, 'S');
+      printMarkdownSectionD(contentText);
+      doc.rect(margin, startY, contentWidth, y - startY, 'S');
       y += 8;
+    } else {
+      printMarkdownSectionD(contentText);
+      y += 6;
     }
   }
 

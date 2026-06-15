@@ -17,10 +17,10 @@
 # TRIN 1 (STAGE 1): Byg React Applikationen (Kompilering)
 # =========================================================================
 # FROM fortæller Docker, hvilket fundament (base image) vi vil starte med.
-# Vi bruger en officiel Node.js version 20 installeret på "Alpine Linux"
+# Vi bruger en officiel Node.js version 22 installeret på "Alpine Linux"
 # (en ultra-letvægts Linux-distribution).
 # Vi kalder dette trin for "builder", så vi kan referere til det senere.
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 # WORKDIR (Working Directory) svarer til at køre "cd /app" inde i containeren.
 # Alle efterfølgende kommandoer køres i denne mappe.
@@ -51,7 +51,7 @@ RUN npm run build
 # Vi starter forfra med et helt rent Node-image.
 # Dette trin kalder vi "runner". Alt fra Trin 1 ( builder ) smides væk,
 # MEDMINDRE vi eksplicit kopierer det over (via COPY --from=builder).
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 # Vi sætter arbejdsmappen til /app igen (i det nye, rene image).
 WORKDIR /app

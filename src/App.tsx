@@ -7,8 +7,8 @@
  */
 import { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { updateDoc, doc } from 'firebase/firestore';
-import { db } from './lib/firebase';
+import { updateDoc, doc, onSnapshot } from 'firebase/firestore';
+import { db, auth } from './lib/firebase';
 
 import { useAuth, isScapeEmployee, getEffectiveAdminStatus } from './hooks/useAuth';
 import { isAllowedEvaluator } from './config/evaluators';
@@ -30,10 +30,25 @@ import { ProjectState, OperationType } from './types';
 import externalAdvicePromptRaw from './docs/externalAdvicePrompt.md?raw';
 import evaluatorDraftPromptRaw from './docs/evaluatorDraftPrompt.md?raw';
 import autoFillPromptRaw from './docs/autoFillPrompt.md?raw';
+import observationsExtractionPromptRaw from './docs/observationsExtractionPrompt.md?raw';
+
+let activeClientPrompts = {
+  externalAdvicePrompt: externalAdvicePromptRaw.trim(),
+  evaluatorDraftPrompt: evaluatorDraftPromptRaw.trim(),
+  autoFillPrompt: autoFillPromptRaw.trim(),
+  observationsExtractionPrompt: observationsExtractionPromptRaw.trim(),
+  includeImagesForAdvice: true,
+  includeImagesForDraft: true,
+  includeImagesForChat: false
+};
 
 // Initialiserer Gemini AI (Google's kunstige intelligens)
 // import.meta.env er den måde, Vite-bygge-værktøjet læser ".env" filer på.
-const GEMINI_API_KEY = (import.meta as any).env.VITE_GEMINI_API_KEY;
+// Vi bruger kun det direkte SDK på localhost (Vite dev server) for at undgå CORS-fejl
+// når appen tilgås fra en telefon eller anden vært. I alle andre tilfælde bruges serveren.
+const isLocalhost = typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const GEMINI_API_KEY = isLocalhost ? (import.meta as any).env.VITE_GEMINI_API_KEY : null;
 let ai: GoogleGenAI | null = null;
 if (GEMINI_API_KEY) {
   ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -43,21 +58,47 @@ if (GEMINI_API_KEY) {
  * Hjælpefunktion: Fjerner de gigantiske Base64-billeder fra JSON-strengen
  * og pakker dem i stedet som rigtige 'inlineData' filer, så Gemini kan "se" dem.
  */
-const prepareAIRequest = (project: ProjectState, basePrompt: string) => {
+const prepareAIRequest = (project: ProjectState, basePrompt: string, includeImages: boolean = true) => {
   // Klon projektet så vi ikke ødelægger det originale state
   const cleanProject = JSON.parse(JSON.stringify(project));
+  
+  // Exclude chatHistory and AI-generated fields so evaluations only use structured questionnaire fields
+  delete cleanProject.chatHistory;
+  delete cleanProject.report;
+  delete cleanProject.evaluatorDraft;
+  delete cleanProject.finalVerdict;
+  delete cleanProject.fieldObservations;
+  
   const imageParts: any[] = [];
 
-  cleanProject.parts.forEach((part: any) => {
-    // Ekstraher billeder
-    if (part.images && Array.isArray(part.images)) {
-      part.images.forEach((imgBase64: string) => {
+  // Handle general cell images
+  if (cleanProject.generalImages && Array.isArray(cleanProject.generalImages)) {
+    if (includeImages) {
+      cleanProject.generalImages.forEach((imgBase64: string) => {
         if (imgBase64.startsWith('data:')) {
           const mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
           const data = imgBase64.substring(imgBase64.indexOf(',') + 1);
           imageParts.push({ inlineData: { data, mimeType } });
         }
       });
+    }
+    cleanProject.generalImages = [`[${cleanProject.generalImages.length} general cell images provided as attachments]`];
+  } else {
+    cleanProject.generalImages = [];
+  }
+
+  cleanProject.parts.forEach((part: any) => {
+    // Ekstraher billeder
+    if (part.images && Array.isArray(part.images)) {
+      if (includeImages) {
+        part.images.forEach((imgBase64: string) => {
+          if (imgBase64.startsWith('data:')) {
+            const mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
+            const data = imgBase64.substring(imgBase64.indexOf(',') + 1);
+            imageParts.push({ inlineData: { data, mimeType } });
+          }
+        });
+      }
       // Erstat de gigantiske strenge med en simpel tekst placeholder i JSON
       part.images = [`[${part.images.length} images provided as attachments]`];
     }
@@ -82,17 +123,22 @@ const prepareAIRequest = (project: ProjectState, basePrompt: string) => {
 async function generateAdviceAPI(project: ProjectState): Promise<string> {
   if (GEMINI_API_KEY) {
     if (!ai) ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    const basePrompt = externalAdvicePromptRaw.trim();
-    const contents = prepareAIRequest(project, basePrompt);
+    const basePrompt = activeClientPrompts.externalAdvicePrompt;
+    const contents = prepareAIRequest(project, basePrompt, activeClientPrompts.includeImagesForAdvice);
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents,
     });
     return response.text || "";
   } else {
+    const user = auth.currentUser;
+    const token = user ? await user.getIdToken() : '';
     const response = await fetch('/api/ai/advice', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ project }),
     });
 
@@ -106,23 +152,73 @@ async function generateAdviceAPI(project: ProjectState): Promise<string> {
 }
 
 /**
+ * Extracts structured field-level observations from an advice text.
+ * Returns a JSON map of field IDs -> { severity, text } for use in UI indicators and PDF.
+ */
+async function extractObservationsAPI(
+  adviceText: string,
+  schema: any
+): Promise<Record<string, { severity: 'warning' | 'critical'; text: string }>> {
+  const prompt = `${activeClientPrompts.observationsExtractionPrompt}\n\n## QUESTIONNAIRE SCHEMA (field IDs and labels)\n${JSON.stringify(schema, null, 2)}\n\n## ADVICE REPORT TO ANALYSE\n${adviceText}`;
+
+  let rawText = '';
+  if (GEMINI_API_KEY) {
+    if (!ai) ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [prompt],
+    });
+    rawText = response.text || '';
+  } else {
+    const user = auth.currentUser;
+    const token = user ? await user.getIdToken() : '';
+    const response = await fetch('/api/ai/extract-observations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ adviceText, schema }),
+    });
+    if (!response.ok) return {};
+    const data = await response.json();
+    rawText = data.text || '';
+  }
+
+  // Parse the JSON code block from the AI response
+  try {
+    const match = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (match) return JSON.parse(match[1]);
+    return JSON.parse(rawText.trim());
+  } catch {
+    console.warn('extractObservationsAPI: failed to parse JSON response', rawText);
+    return {};
+  }
+}
+
+/**
  * Henter Evaluator Draft.
  * Bruger det lokale SDK hvis en API-nøgle er tilgængelig, ellers kaldes det sikre server-side endpoint.
  */
 async function generateDraftAPI(project: ProjectState): Promise<string> {
   if (GEMINI_API_KEY) {
     if (!ai) ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    const basePrompt = evaluatorDraftPromptRaw.trim();
-    const contents = prepareAIRequest(project, basePrompt);
+    const basePrompt = activeClientPrompts.evaluatorDraftPrompt;
+    const contents = prepareAIRequest(project, basePrompt, activeClientPrompts.includeImagesForDraft);
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents,
     });
     return response.text || "";
   } else {
+    const user = auth.currentUser;
+    const token = user ? await user.getIdToken() : '';
     const response = await fetch('/api/ai/draft', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ project }),
     });
 
@@ -149,18 +245,58 @@ async function sendChatAPI(
     if (!ai) ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     
     const cleanProject = JSON.parse(JSON.stringify(project));
+    const includeImages = activeClientPrompts.includeImagesForChat;
+    const imageParts: any[] = [];
+
+    // Process generalImages
+    if (cleanProject.generalImages && Array.isArray(cleanProject.generalImages)) {
+      if (includeImages) {
+        cleanProject.generalImages.forEach((imgBase64: string) => {
+          if (imgBase64.startsWith('data:')) {
+            const mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
+            const data = imgBase64.substring(imgBase64.indexOf(',') + 1);
+            imageParts.push({ inlineData: { data, mimeType } });
+          }
+        });
+      }
+      cleanProject.generalImages = [`[${cleanProject.generalImages.length} general cell images]`];
+    } else {
+      cleanProject.generalImages = [];
+    }
+
     cleanProject.parts.forEach((part: any) => {
-      if (part.images) part.images = [`[${part.images.length} images]`];
-      if (part.cadFile) part.cadFile.dataUrl = "[CAD removed]";
+      if (part.images && Array.isArray(part.images)) {
+        if (includeImages) {
+          part.images.forEach((imgBase64: string) => {
+            if (imgBase64.startsWith('data:')) {
+              const mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
+              const data = imgBase64.substring(imgBase64.indexOf(',') + 1);
+              imageParts.push({ inlineData: { data, mimeType } });
+            }
+          });
+        }
+        part.images = [`[${part.images.length} images]`];
+      }
+      if (part.cadFile && part.cadFile.dataUrl) {
+        part.cadFile.dataUrl = "[CAD removed]";
+      }
     });
 
     const contents = history.map((msg, i) => {
       let text = msg.text;
       if (i === history.length - 1 && msg.role === 'user') {
-         text = `${autoFillPromptRaw.trim()}\n\nQUESTIONNAIRE SCHEMA:\n${JSON.stringify(schema, null, 2)}\n\nCURRENT PROJECT STATE:\n${JSON.stringify(cleanProject, null, 2)}\n\nACTIVE PART INDEX (0-based): ${activePartIndex}\n\nUSER MESSAGE:\n${text}`;
+         text = `${activeClientPrompts.autoFillPrompt}\n\nQUESTIONNAIRE SCHEMA:\n${JSON.stringify(schema, null, 2)}\n\nCURRENT PROJECT STATE:\n${JSON.stringify(cleanProject, null, 2)}\n\nACTIVE PART INDEX (0-based): ${activePartIndex}\n\nUSER MESSAGE:\n${text}`;
       }
       return { role: msg.role, parts: [{ text }] };
     });
+
+    // Append images to the last user message's parts if includeImages is true and we have images
+    if (includeImages && imageParts.length > 0) {
+      const lastMsg = contents[contents.length - 1];
+      if (lastMsg && lastMsg.role === 'user') {
+        lastMsg.parts.push(...imageParts);
+      }
+    }
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -168,9 +304,14 @@ async function sendChatAPI(
     });
     return response.text || "";
   } else {
+    const user = auth.currentUser;
+    const token = user ? await user.getIdToken() : '';
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ project, activePartIndex, history, schema }),
     });
 
@@ -189,6 +330,33 @@ export default function App() {
   // useState hooks til at gemme globale fejl- eller succesbeskeder.
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [globalSuccess, setGlobalSuccess] = useState<string | null>(null);
+
+  // Synchronize dynamic prompts from Firestore in real-time.
+  // For the autoFillPrompt: only use the Firestore version if it contains the JSON proposal
+  // instruction (i.e. the ---END--- marker). If it's an older version without it, fall back
+  // to the local file so the "Apply Changes" card always appears correctly.
+  useEffect(() => {
+    return onSnapshot(doc(db, 'config', 'prompts'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        activeClientPrompts.externalAdvicePrompt = data.externalAdvicePrompt || externalAdvicePromptRaw.trim();
+        activeClientPrompts.evaluatorDraftPrompt = data.evaluatorDraftPrompt || evaluatorDraftPromptRaw.trim();
+        activeClientPrompts.includeImagesForAdvice = data.includeImagesForAdvice !== false;
+        activeClientPrompts.includeImagesForDraft = data.includeImagesForDraft !== false;
+        activeClientPrompts.includeImagesForChat = !!data.includeImagesForChat;
+        // Only use the Firestore autoFillPrompt if it has the JSON proposal block instruction
+        const firestoreAutoFill = data.autoFillPrompt || '';
+        if (firestoreAutoFill.includes('---END---') && firestoreAutoFill.includes('```json')) {
+          activeClientPrompts.autoFillPrompt = firestoreAutoFill;
+          console.log("Client AI Chat Prompt: using Firestore version (has JSON proposal block).");
+        } else {
+          activeClientPrompts.autoFillPrompt = autoFillPromptRaw.trim();
+          console.warn("Client AI Chat Prompt: Firestore version is outdated (missing JSON block). Using local file fallback. Please update via the Prompts Editor in the app.");
+        }
+        console.log("Client AI Prompts synchronized in real-time.");
+      }
+    });
+  }, []);
 
   // En hjælpefunktion til at vise pæne fejlbeskeder uanset hvor fejlen sker.
   const handleAppError = (e: any, op?: OperationType, path?: string) => {
@@ -255,7 +423,7 @@ export default function App() {
     acceptProject,
     acceptAllPendingProjects,
     importProjectsFromJson
-  } = useProjects(user, profile, sortBy, handleAppError, setGlobalSuccess, getEffectiveEmail);
+  } = useProjects(user, profile, sortBy, handleAppError, setGlobalSuccess, getEffectiveEmail());
 
   // State-variabler specifikt til Login/Sign-up processen
   const [authStep, setAuthStep] = useState<'signin' | 'signup' | 'forgot'>('signin');
@@ -278,7 +446,9 @@ export default function App() {
   const [activePartIndex, setActivePartIndex] = useState(0);
   const [isReviewing, setIsReviewing] = useState(false);
   const [reviewTab, setReviewTab] = useState<'advice' | 'evaluation'>('advice');
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+  const [isAssistantThinking, setIsAssistantThinking] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Splash screen state og inaktivitets-timer (5 minutter)
@@ -416,33 +586,44 @@ export default function App() {
    * før de indsender det endeligt.
    */
   const generateExternalAdvice = async () => {
-    // 1. Sikkerheds-tjek:
-    // - Er der et aktivt projekt? (!currentProject)
-    // - Er brugeren en Evaluator/Admin? (profile?.isAdmin) -> Hvis ja, stop! De bruger den anden funktion.
     if (!currentProject || profile?.isAdmin) return;
-    
-    // Viser "Analyzing Data..." spinner i UI'et
-    setIsGeneratingReport(true);
-
+    setIsGeneratingAdvice(true);
     try {
-      // 3. Kald Gemini API'et (via proxy eller lokalt SDK)
+      // Step 1: Generate the full advice narrative
       const text = await generateAdviceAPI(currentProject);
-      
-      // 4. Opdater det lokale state på frontend'en med det samme:
-      // Vi gemmer rådgivningen i feltet 'report'. (Tidligere brugt til verdicts).
-      setCurrentProject({...currentProject, report: text});
-      
-      // 5. Gem til Firestore databasen:
-      // Hvis projektet eksisterer (har et ID), gemmer vi det i databasen,
-      // således at brugeren kan lukke appen og stadig se AI-rådet næste gang.
+
+      // Step 2: Extract structured field-level observations from the advice
+      let observations: Record<string, { severity: 'warning' | 'critical'; text: string }> = {};
+      try {
+        const schema = { generalSteps: GENERAL_STEPS, partSteps: PART_STEPS };
+        observations = await extractObservationsAPI(text, schema);
+      } catch (obsErr) {
+        console.warn('Could not extract field observations:', obsErr);
+      }
+
+      // Step 3: Update state and persist both fields in one Firestore write
+      setCurrentProject({ ...currentProject, report: text, fieldObservations: observations });
       if (currentProject.id) {
-        await updateProjectField(currentProject, 'report', text, "AI generated data capture advice");
+        await updateProjectField(
+          { ...currentProject, report: text, fieldObservations: observations },
+          'report',
+          text,
+          'AI generated data capture advice'
+        );
+        if (Object.keys(observations).length > 0) {
+          await updateProjectField(
+            { ...currentProject, report: text, fieldObservations: observations },
+            'fieldObservations',
+            observations,
+            'AI field observations extracted'
+          );
+        }
       }
     } catch (e) {
       console.error(e);
-      handleAppError(e); // Viser evt. kvote-fejl (Quota exceeded) til brugeren i en toast.
+      handleAppError(e);
     } finally {
-      setIsGeneratingReport(false); // Skjul spinner uanset om det lykkedes eller fejlede
+      setIsGeneratingAdvice(false);
     }
   };
 
@@ -457,25 +638,11 @@ export default function App() {
    * der evt. skal bruges.
    */
   const generateEvaluatorDraft = async () => {
-    // 1. Sikkerheds-tjek: Forhindrer almindelige brugere i at generere en evaluator konklusion.
     if (!currentProject || !profile?.isAdmin) return;
-    
-    // Viser "Drafting Conclusion..." spinner i UI'et
-    setIsGeneratingReport(true);
-    
+    setIsGeneratingDraft(true);
     try {
-      // 3. Kald Gemini API'et (via proxy eller lokalt SDK)
       const text = await generateDraftAPI(currentProject);
-      
-      // 4. Opdater det lokale state:
-      // Vi gemmer draftet i et NYT felt kaldet 'evaluatorDraft'. 
-      // Dette overskriver IKKE den almindelige brugers 'report', og det bliver
-      // IKKE vist til den almindelige bruger.
       setCurrentProject({...currentProject, evaluatorDraft: text});
-      
-      // 5. Gem til Firestore databasen:
-      // Gemmer udkastet til skyen under feltet 'evaluatorDraft'.
-      // Evaluatoren kan nu kopiere denne tekst over i deres 'Final Verdict' tekstboks.
       if (currentProject.id) {
         await updateProjectField(currentProject, 'evaluatorDraft', text, "AI generated evaluator draft");
       }
@@ -483,7 +650,7 @@ export default function App() {
       console.error(e);
       handleAppError(e);
     } finally {
-      setIsGeneratingReport(false);
+      setIsGeneratingDraft(false);
     }
   };
 
@@ -494,54 +661,38 @@ export default function App() {
    */
   const sendMessageToAssistant = async (userMessage: string) => {
     if (!currentProject) return;
-
-    // 1. Add user message to history
     const history = currentProject.chatHistory ? [...currentProject.chatHistory] : [];
     const newHistory = [...history, { role: 'user' as const, text: userMessage }];
-    
-    // Update local UI immediately so it feels snappy
     setCurrentProject({ ...currentProject, chatHistory: newHistory });
-    setIsGeneratingReport(true);
-
+    setIsAssistantThinking(true);
     try {
-      // Construct a lightweight schema representation so the LLM knows all field IDs, types, and labels
       const questionnaireSchema = {
         generalFields: GENERAL_STEPS[0].questions.map(q => ({
-          id: q.id,
-          label: q.label,
-          type: q.type,
-          description: q.description,
-          important: q.important,
-          options: q.options?.map(o => o.value)
+          id: q.id, label: q.label, type: q.type, description: q.description,
+          important: q.important, options: q.options?.map(o => o.value)
         })),
         partFields: PART_STEPS.flatMap(step => step.questions.map(q => ({
-          id: q.id,
-          label: q.label,
-          type: q.type,
-          description: q.description,
-          important: q.important,
-          options: q.options?.map(o => o.value)
+          id: q.id, label: q.label, type: q.type, description: q.description,
+          important: q.important, options: q.options?.map(o => o.value)
         })))
       };
-
-      // 3. Kald Gemini API'et (via proxy eller lokalt SDK)
       const aiText = await sendChatAPI(currentProject, activePartIndex, newHistory, questionnaireSchema);
-
-      // Append AI response
       const finalHistory = [...newHistory, { role: 'model' as const, text: aiText }];
-      
-      // Update local state and Firestore
       const updatedProject = { ...currentProject, chatHistory: finalHistory };
       setCurrentProject(updatedProject);
       if (updatedProject.id) {
         await updateProjectField(updatedProject, 'chatHistory', finalHistory, "AI Assistant chat updated");
       }
-
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      // Show the error as a message bubble inside the chat so the user sees it in context
+      const errorText = `⚠️ AI error: ${e?.message || 'Unknown error. Check the browser console for details.'}`;
+      const errorHistory = [...newHistory, { role: 'model' as const, text: errorText }];
+      setCurrentProject({ ...currentProject, chatHistory: errorHistory });
+      // Also surface it in the global toast for visibility
       handleAppError(e);
     } finally {
-      setIsGeneratingReport(false);
+      setIsAssistantThinking(false);
     }
   };
 
@@ -605,10 +756,10 @@ export default function App() {
           ownerPhone={view === 'questionnaire' && currentProject ? currentProject.ownerPhone : undefined}
           locationLabel={view === 'questionnaire' && currentProject ? (
             isReviewing 
-              ? (reviewTab === 'advice' ? 'Data Capture Advice' : 'Technical Evaluation') 
+              ? 'Review / Submit' 
               : currentStep === 0 
                 ? 'Project & Cell Info' 
-                : `Part #0${activePartIndex + 1}: ${currentProject.parts[activePartIndex]?.responses?.['2.01'] || 'Unnamed Part'}`
+                : `Part #${activePartIndex + 1}: ${currentProject.parts[activePartIndex]?.responses?.['2.01'] || 'Unnamed Part'}`
           ) : undefined}
         />
       </div>
@@ -641,6 +792,7 @@ export default function App() {
             acceptAllPendingProjects={acceptAllPendingProjects}
             importProjectsFromJson={importProjectsFromJson}
             fetchProjectImages={fetchProjectImages}
+            setGlobalSuccess={setGlobalSuccess}
           />
         )}
 
@@ -652,7 +804,10 @@ export default function App() {
             activePartIndex={activePartIndex} setActivePartIndex={setActivePartIndex}
             isReviewing={isReviewing} setIsReviewing={setIsReviewing}
             reviewTab={reviewTab} setReviewTab={setReviewTab}
-            isGeneratingReport={isGeneratingReport} isSubmitting={isSubmitting}
+            isGeneratingAdvice={isGeneratingAdvice}
+            isGeneratingDraft={isGeneratingDraft}
+            isAssistantThinking={isAssistantThinking}
+            isSubmitting={isSubmitting}
             saveProject={saveProject}
             toggleLock={(p) => updateProjectField(p, 'isLocked', !p.isLocked, `Project lock state changed to ${!p.isLocked}`)}
             toggleVerdictVisibility={(p) => updateProjectField(p, 'isVerdictVisible', !p.isVerdictVisible, `Verdict visibility changed to ${!p.isVerdictVisible}`)}

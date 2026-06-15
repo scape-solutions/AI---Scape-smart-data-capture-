@@ -41,6 +41,10 @@ export interface ProjectState {
   evaluatorDraft?: string | null;
   finalVerdict?: string | null;
   chatHistory?: { role: 'user' | 'model'; text: string }[];
+  /** Structured field-level observations extracted from the Data Capture Advice.
+   *  Keys are questionnaire field IDs (e.g. "1.03", "2.04").
+   *  Populated automatically after advice is generated. */
+  fieldObservations?: Record<string, { severity: 'warning' | 'critical'; text: string }> | null;
   // 'status' kan KUN være en af disse præcise strenge. Det kaldes en "Union Type".
   status: 'draft' | 'submitted' | 'cancelled' | 'approved' | 'rejected';
   userId: string;
@@ -75,6 +79,6 @@ export interface UserProfile {
   email: string;
   phone?: string;
   isAdmin?: boolean;
-  requestedRole?: 'evaluator' | 'external' | 'superuser';
+  requestedRole?: 'evaluator' | 'user' | 'superuser';
 }
 

@@ -4,6 +4,34 @@ Denne vejledning beskriver trin-for-trin, hvordan du kører og tester **Scape Bi
 
 ---
 
+## Hurtigt Udviklingsflow (Lav ændring ➔ Test ➔ Udrul)
+
+Hvis du blot skal bruge en hurtig tjekliste til dit daglige arbejde med at ændre og udrulle kode:
+
+1. **Lav dine ændringer** i kildekoden (f.eks. under `src/` eller i `server.js`).
+2. **Test lokalt (hurtigste metode):**
+   * **Terminal 1 (Vite frontend):** Kør `npm run dev` (åbner på http://localhost:3000).
+   * **Terminal 2 (Express server):** Kør `npm run serve` (starter API-proxy på port 8080).
+   * Åbn [http://localhost:3000](http://localhost:3000) i din browser og test ændringerne.
+3. **Udrul den nye version til produktion (Cloud Run):**
+   * Byg i skyen:
+     ```bash
+     gcloud builds submit --tag europe-west3-docker.pkg.dev/scape-data-capture/scape-evaluator/scape-evaluator
+     ```
+   * Udrul til Cloud Run:
+     ```bash
+     gcloud run deploy scape-evaluator \
+       --image europe-west3-docker.pkg.dev/scape-data-capture/scape-evaluator/scape-evaluator:latest \
+       --platform managed \
+       --region europe-west3 \
+       --allow-unauthenticated \
+       --set-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest
+     ```
+
+*(For detaljerede instruktioner og avancerede valgmuligheder, se de efterfølgende afsnit).*
+
+---
+
 ## 1. Lokal Afvikling (Uden Docker)
 
 Dette er den nemmeste måde at teste server-proxyen og den færdige frontend på din egen computer.
@@ -76,14 +104,16 @@ Google Cloud Run er en fuldt styret serverless platform. Den kører din containe
 3. Sæt dit aktive projekt (erstat `DIT_PROJEKT_ID` med f.eks. `scape-data-capture`):
    ```bash
    gcloud config set project DIT_PROJEKT_ID
-   ```
 
+   ```
+## DIT_PROJEKT_ID
+scape-data-capture
 ### Udrulningstrin
 
 ### Trin 1: Send containeren til Google Artifact Registry (Cloud Build)
 Vi lader Google Cloud bygge container-filen i skyen og gemme den i dit register. Kør denne kommando fra rodmappen:
 ```bash
-gcloud builds submit --tag gcr.io/DIT_PROJEKT_ID/scape-evaluator
+gcloud builds submit --tag europe-west3-docker.pkg.dev/DIT_PROJEKT_ID/scape-evaluator/scape-evaluator
 ```
 
 ### Trin 2: Opret en Secret til din API-nøgle (Anbefalet sikkerhed)
@@ -94,11 +124,12 @@ For at undgå at skrive din Gemini API-nøgle i klartekst i dine udrulningsfiler
 4. Gem secret'en.
 
 ### Trin 3: Udrul containeren til Cloud Run
-Kør denne kommando for at udrulle containeren. Vi henviser til din `GEMINI_API_KEY` secret, som automatisk indsættes sikkert i containerens miljø:
+Kør denne kommando for at udrulle containeren. Vi henviser to din `GEMINI_API_KEY` secret, som automatisk indsættes sikkert i containerens miljø:
 ```bash
 gcloud run deploy scape-evaluator \
-  --image gcr.io/DIT_PROJEKT_ID/scape-evaluator \
+  --image europe-west3-docker.pkg.dev/DIT_PROJEKT_ID/scape-evaluator/scape-evaluator \
   --platform managed \
+  --region europe-west3 \
   --allow-unauthenticated \
   --set-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest
 ```
@@ -118,8 +149,55 @@ Da din applikation bruger Firebase Authentication (Google Login og e-mail/adgang
 3. Klik **Add Domain** og tilføj dit Cloud Run-domæne (f.eks. `scape-evaluator-xxxx.run.app` – udelad `https://`).
 
 ### 2. Opsætning af eget domæne (Valgfrit)
-Hvis du ønsker at køre applikationen på et af dine egne domæner (f.eks. `evaluator.scapesolutions.com`):
 1. Gå til **Cloud Run** i Google Cloud Console.
 2. Klik på **Manage Custom Domains** øverst.
 3. Klik **Add Mapping**, vælg din `scape-evaluator` tjeneste og indtast dit domænenavn.
 4. Google vil give dig nogle DNS-records (CNAME/TXT), som du skal tilføje hos din domæneudbyder. Google opretter derefter et gratis SSL/TLS-certifikat til dit domæne automatisk.
+
+## 5. Styring af Adgangsrettigheder & Roller (Firestore)
+
+Applikationen er sikret på app-niveau med **Firebase Authentication**. Når appen er gjort offentlig på Google Cloud (via **Mulighed C** ovenfor), kan du styre adgangen og tildele rettigheder dynamisk via Firestore-databasen **uden** at genstarte eller genudrulle serveren.
+
+### Sådan tilføjer og fjerner du adgang/roller i Firestore:
+1. Åbn **Firebase Console** (https://console.firebase.google.com/).
+2. Vælg dit projekt (**Scape Data Capture**).
+3. Gå til **Firestore Database** i venstre menu.
+4. Opret (eller find) samlingen `config` og dokumentet `access`:
+   * **Collection ID (Samling):** `config`
+   * **Document ID (Dokument):** `access`
+5. Dokumentet skal indeholde følgende fire felter af typen **Array** (liste af strenge):
+   * **`allowedDomains` (Array):** Domæner, der må logge ind (f.eks. `["scapesolutions.eu", "scapesolutions.com"]`).
+   * **`allowedEmails` (Array):** Specifikke eksterne e-mailadresser, der må logge ind (f.eks. `["samarbejdspartner@gmail.com"]`).
+   * **`allowedEvaluators` (Array):** E-mailadresser på Scape-medarbejdere, der skal have Evaluator/Admin-rettigheder (f.eks. `["rde@scapesolutions.eu", "jeo@scapesolutions.eu"]`).
+   * **`superusers` (Array):** E-mailadresser på super-brugere, der må bruge import/export værktøjer (f.eks. `["rune.k.larsen@scapesolutions.eu"]`).
+
+### Sådan virker det i realtid:
+* **Ingen genstart:** Serveren (`server.js`) og klientsiden (`useAuth.ts`) lytter i realtid på dette dokument. Sekundet du tilføjer en mail eller et domæne i Firebase Console, træder ændringen i kraft for alle brugere!
+* **Offline Fallbacks:** Hvis dokumentet slettes eller ikke kan læses, bruger koden automatisk de standardværdier, der er indbygget i kildekoden (såsom `@scapesolutions.eu` domæner og din egen e-mail som superuser).
+
+---
+
+## 6. Netværksbaseret Adgang (Alternativ)
+
+Hvis din organisation kræver, at Cloud Run-tjenesten **ikke** må være offentligt tilgængelig på internettet (hvilket forhindrer brug af **Mulighed C**):
+
+### A. Giv adgang til alle i dit firma (Netværksniveau)
+For at tillade alle medarbejdere med en `@scapesolutions.eu`-adresse at hente sitet fra Cloud Run:
+```bash
+gcloud run services add-iam-policy-binding scape-evaluator \
+  --region=europe-west3 \
+  --member="domain:scapesolutions.eu" \
+  --role="roles/run.invoker"
+```
+Herefter skal alle medarbejdere køre en lokal proxy på deres computer for at tilgå appen:
+```bash
+gcloud run services proxy scape-evaluator --region=europe-west3
+```
+
+### B. Giv adgang til specifikke brugere (Netværksniveau)
+```bash
+gcloud run services add-iam-policy-binding scape-evaluator \
+  --region=europe-west3 \
+  --member="user:kollega@scapesolutions.eu" \
+  --role="roles/run.invoker"
+```

@@ -16,17 +16,26 @@ import {
   createUserWithEmailAndPassword,
   updateProfile
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile, OperationType } from '../types';
-import { isAllowedEvaluator, isSuperuser } from '../config/evaluators';
+import { isAllowedEvaluator, isSuperuser, ALLOWED_EVALUATORS } from '../config/evaluators';
+
+// Global cache for the allowed configuration from Firestore
+let globalAllowedConfig: any = null;
 
 // Tjekker om en email/bruger er en intern Scape-medarbejder
 export const isScapeEmployee = (email: string | null | undefined, uid?: string | null) => {
   if (uid === "PvdZWFVtE6YKsa16loWrUNwjuif1") return true;
   if (!email) return false;
   const e = email.toLowerCase();
-  return e.endsWith('@scapesolutions.eu') || e.endsWith('@scapesolutions.com');
+  const domain = e.split('@')[1];
+  
+  const allowedDomains = globalAllowedConfig?.allowedDomains || ['scapesolutions.eu', 'scapesolutions.com'];
+  const allowedEmails = globalAllowedConfig?.allowedEmails || [];
+  
+  return allowedDomains.some((d: string) => d.toLowerCase() === domain) || 
+         allowedEmails.some((m: string) => m.toLowerCase() === e);
 };
 
 // Bestemmer om en bruger rent faktisk har 'Admin'/'Evaluator' rettigheder
@@ -35,7 +44,9 @@ export const getEffectiveAdminStatus = (p: UserProfile | null, uid?: string | nu
   const email = p.email;
   const isEmployee = isScapeEmployee(email, uid);
   if (!isEmployee) return false;
-  return (p.requestedRole === 'evaluator' || p.requestedRole === 'superuser') && isAllowedEvaluator(email);
+  
+  const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+  return (p.requestedRole === 'evaluator' || p.requestedRole === 'superuser') && isAllowedEvaluator(email, allowedEvaluators);
 };
 
 export function useAuth(handleAppError: (e: any, op?: OperationType, path?: string) => void) {
@@ -47,6 +58,22 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [view, setView] = useState<'dashboard' | 'questionnaire' | 'profile_setup'>('dashboard');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [allowedConfig, setAllowedConfig] = useState<any>(null);
+
+  // Sync the access config in real time
+  useEffect(() => {
+    if (user) {
+      return onSnapshot(doc(db, 'config', 'access'), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          globalAllowedConfig = data;
+          setAllowedConfig(data);
+        }
+      }, (error) => {
+        console.warn("Could not load dynamic config from Firestore (expected for external users). Using offline defaults.", error);
+      });
+    }
+  }, [user]);
 
   // useEffect() er en Hook, der kører automatisk i baggrunden.
   // Her bruger vi den til at lytte efter: "Er brugeren logget ind nu?" (onAuthStateChanged).
@@ -62,6 +89,11 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
           const profileDoc = await getDoc(doc(db, 'users', u.uid));
           if (profileDoc.exists()) {
             const pData = profileDoc.data() as UserProfile;
+            // Migrate 'external' to 'user' role automatically
+            if ((pData.requestedRole as any) === 'external') {
+              pData.requestedRole = 'user';
+              updateDoc(doc(db, 'users', u.uid), { requestedRole: 'user' }).catch(console.error);
+            }
             const actualAdmin = getEffectiveAdminStatus(pData, u.uid);
             setProfile({ ...pData, isAdmin: actualAdmin });
             setView('dashboard');
@@ -140,18 +172,21 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     }
   };
 
-  // Lader Scape Evaluators skifte mellem "Admin", "External" og "Super User" visning
-  const switchMode = async (newRole: 'evaluator' | 'external' | 'superuser', onStatusChanged: (isAdmin: boolean) => void) => {
+  // Lader Scape Evaluators skifte mellem "Admin", "User" og "Super User" visning
+  const switchMode = async (newRole: 'evaluator' | 'user' | 'superuser', onStatusChanged: (isAdmin: boolean) => void) => {
     if (!user || !profile) return;
     const email = getEffectiveEmail();
     
     // Safety check for superuser
-    if (newRole === 'superuser' && !isSuperuser(email)) {
+    const superusers = globalAllowedConfig?.superusers || ['rune.k.larsen@scapesolutions.eu'];
+    if (newRole === 'superuser' && !isSuperuser(email, superusers)) {
       console.warn("Unauthorized attempt to switch to superuser role");
       return;
     }
 
-    const isAdmin = (newRole === 'evaluator' || newRole === 'superuser') && (isScapeEmployee(email, user.uid) || isAllowedEvaluator(email));
+    const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+    const isAdmin = (newRole === 'evaluator' || newRole === 'superuser') && 
+                    (isScapeEmployee(email, user.uid) || isAllowedEvaluator(email, allowedEvaluators));
     
     try {
       await updateDoc(doc(db, 'users', user.uid), { requestedRole: newRole, isAdmin });

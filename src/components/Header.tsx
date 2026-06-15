@@ -12,7 +12,7 @@ interface HeaderProps {
   setGlobalSuccess: (msg: string | null) => void;
   setView: (view: 'dashboard' | 'questionnaire' | 'profile_setup') => void;
   logout: () => void;
-  switchMode: (role: 'evaluator' | 'external' | 'superuser', onStatusChanged: (isAdmin: boolean) => void) => void;
+  switchMode: (role: 'evaluator' | 'user' | 'superuser', onStatusChanged: (isAdmin: boolean) => void) => void;
   isAllowedEvaluator: (email: string | null | undefined) => boolean;
   isScapeEmployee: (email: string | null | undefined, uid?: string | null) => boolean;
   saveProfile: (data: any) => Promise<void>;
@@ -125,7 +125,21 @@ export function Header({
           </span>
           PE
         </span>
+        {/* Version badge — only shown to Scape employees so external users don't see internal build info */}
+        {isScapeEmployee(user?.email, user?.uid) && (
+          <span
+            className="hidden sm:inline-flex items-center gap-1 text-[9px] font-mono font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-md leading-none select-all"
+            title={`Build: ${__APP_BUILD_DATE__}`}
+          >
+            v{__APP_VERSION__}
+            <span className="text-slate-300">·</span>
+            {__APP_GIT_HASH__}
+            <span className="text-slate-300">·</span>
+            {new Date(__APP_BUILD_DATE__).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
+          </span>
+        )}
       </div>
+
       
       {projectName && (
         <div className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-500 max-w-md lg:max-w-xl mx-4 select-none overflow-hidden animate-fadeIn">
@@ -144,7 +158,7 @@ export function Header({
                     <button
                       onClick={() => setShowContactPopover(!showContactPopover)}
                       className={`p-1 rounded-md transition-all select-none cursor-pointer hover:bg-slate-100 ${showContactPopover ? 'text-blue-600 bg-blue-50' : 'text-slate-400'}`}
-                      title="View external user contact info"
+                      title="View user contact info"
                     >
                       <UserIcon className="w-3 h-3" />
                     </button>
@@ -223,10 +237,10 @@ export function Header({
               Evaluator
             </button>
             <button 
-              onClick={() => switchMode('external', () => {})}
-              className={`text-[9px] font-black uppercase px-2 md:px-3 py-1.5 rounded-lg transition-all ${profile?.requestedRole === 'external' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              onClick={() => switchMode('user', () => {})}
+              className={`text-[9px] font-black uppercase px-2 md:px-3 py-1.5 rounded-lg transition-all ${profile?.requestedRole === 'user' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
             >
-              External
+              User
             </button>
           </div>
         )}
@@ -243,7 +257,7 @@ export function Header({
                 profile?.requestedRole === 'superuser' ? 'bg-amber-600 text-white border-amber-600' :
                 profile?.isAdmin ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-100 text-slate-500 border-slate-200'
               }`}>
-                {profile?.requestedRole === 'superuser' ? "Super User" : profile?.isAdmin ? "Scape Eng" : "External"}
+                {profile?.requestedRole === 'superuser' ? "Super User" : profile?.isAdmin ? "Scape Eng" : "User"}
               </span>
               <span className="text-xs font-bold text-slate-800 group-hover:text-slate-950 transition-colors">{profile?.name}</span>
             </div>

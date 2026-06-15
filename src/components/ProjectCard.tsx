@@ -410,7 +410,7 @@ export function ProjectCard({
                                 setIsExporting(true);
                                 try {
                                   const full = await fetchProjectImages(p);
-                                  generateProjectPdf(full);
+                                  generateProjectPdf(full, profile);
                                 } catch (err) {
                                   console.error(err);
                                 } finally {
