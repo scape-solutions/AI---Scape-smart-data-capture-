@@ -41,16 +41,16 @@ Provides a clean, modular questionnaire workspace with foldable navigation sideb
 
 ## Easiest Way to Test It
 
-To ensure a 100% successful login and evaluation demo during your meeting tomorrow, here are the testing options:
+To ensure a successful demo during your meeting tomorrow, here is how to log in and what to expect based on roles:
 
-### Option A: Pre-Registered Demo Account (Bulletproof & Quickest)
-Use our pre-configured demo credentials which bypass the need to verify email domains or type Google details. This works instantly on **all mobile web, desktop, and standalone PWA apps**:
+### Option A: Pre-Registered Demo Account (Highly Recommended)
+Use our pre-configured demo credentials which work instantly on **all mobile web, desktop, and standalone PWA apps**:
 
 * **Email:** `demo@scapesolutions.eu`
 * **Password:** `ScapeEvaluator2026`
-* *(Role: Scape Evaluator/Admin view)*
+* **What to Expect (Admin View):** This account has been whitelisted as a **SCAPE Evaluator/Admin**. Logging in with this account lets you toggle between **User Mode** (Customer View) and **Evaluator Mode** (Admin View) in the top header. You will be able to see and manage all customer projects, write verdicts, and test the Prompts Editor.
 
-### Option B: Google Sign-In (Official Domain Flow)
-* **Works on:** Any standard browser (Safari/Chrome/Edge) or standalone PWA on iOS/Android.
-* **Requirements:** Sign in using any Google account belonging to the registered Scape domains (e.g. `@scapesolutions.eu` or `@scapesolutions.com`).
-* *(To whitelist specific client emails, you can add them to `config/access` allowedEmails in Firestore).*
+### Option B: Registering a New Account (Customer Isolation View)
+* **Works on:** Sign up with email/password or Google Sign-In.
+* **Requirements:** The email domain must end in a whitelisted domain (e.g. `@scapesolutions.eu` or `@scapesolutions.com`) or be added manually to the whitelisted emails list in Firestore.
+* **What to Expect (Customer View):** Any new account will log in as a **Customer / End User** by default. To show off multi-tenant security, this user will have a clean, blank dashboard and **cannot** see anyone else's projects or access admin tools.
