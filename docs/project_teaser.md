@@ -6,6 +6,22 @@ Powered by the advanced **Gemini 2.5 Flash** model, the app uses state-of-the-ar
 
 ---
 
+## Strategic Vision & Purpose of this Version
+
+To scale SCAPE's sales by **10x**, we need to evaluate **100x more projects** to identify the best, most feasible applications. Because human technical resources (SCAPE evaluators) are limited, this assessment process must be automated. 
+
+This first version serves two primary purposes:
+1. **Help to Integrators & End-Users:** The app guides users through the complex data capture process. It embeds SCAPE's specialized knowledge about bin-picking conditions (Yes/No/? answers) to actively **nudge the user** toward optimal "Yes" specifications (e.g. clarifying cycle times, check for entanglement, surface shininess, and CAD availability).
+2. **Help to SCAPE Evaluators:** Ensure SCAPE receives complete, high-quality project data from day one, and generates an automated **AI Technical Evaluation Draft** that evaluators can use as a starting point to write their final review.
+
+### Image & Visual Consistency
+* **Current Version:** Uses uploaded cell and part images to run consistency checks, verifying that the text description matches the visual evidence.
+* **Future Upgrade Roadmap:** Future versions will include trained models on "good" vs. "bad" bin-picking parts/geometries to give even richer visual feedback to both the integrator and SCAPE evaluator.
+
+**The Ultimate Outcome:** Better, cleaner specifications and lightning-fast response times, enabling SCAPE to capture more customers without bottlenecking human evaluators.
+
+---
+
 ## Key Highlights
 
 ### 1. Multimodal AI Auto-fill Assistant (Gemini 2.5 Flash)
