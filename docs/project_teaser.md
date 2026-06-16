@@ -1,5 +1,7 @@
 # SCAPE Bin-Picking Evaluator - App Teaser & Testing Guide
 
+**Live Web App & PWA Link:** [https://scape-evaluator-782472107063.europe-west3.run.app](https://scape-evaluator-782472107063.europe-west3.run.app)
+
 Welcome to the **SCAPE Bin-Picking Evaluator**, a premium, smart data capture tool designed to streamline technical feasibility checks and hardware selection (vision systems & grippers) for bin-picking projects.
 
 Powered by the advanced **Gemini 2.5 Flash** model, the app uses state-of-the-art multimodal AI to automatically translate free-text descriptions and cell photos into structured project specifications.
@@ -82,7 +84,17 @@ Use our pre-configured demo credentials which work instantly on **all mobile web
 * **Password:** `ScapeEvaluator2026`
 * **What to Expect (Admin View):** This account has been whitelisted as a **SCAPE Evaluator/Admin**. Logging in with this account lets you toggle between **User Mode** (Customer View) and **Evaluator Mode** (Admin View) in the top header. You will be able to see and manage all customer projects, write verdicts, and test the Prompts Editor.
 
-### Option B: Registering a New Account (Customer Isolation View)
+### Option B: Direct Google Sign-In for SCAPE Evaluators
+If you are logging in as a SCAPE Employee, the following team accounts are already pre-qualified and whitelisted in Firestore:
+* **René Dencker Eriksen:** `rene.dencker.eriksen@scapesolutions.eu`
+* **John Erland Østergaard:** `john.erland.oestergaard@scapesolutions.eu`
+* **Per Juul Nielsen:** `per.juul.nielsen@scapesolutions.eu`
+* **Rune Klausen Larsen:** `rune.k.larsen@scapesolutions.eu`
+
+* **How to log in:** Simply click the **"Sign in with Google"** button on the sign-in screen and log in using your respective `@scapesolutions.eu` Google Workspace account.
+* **What to Expect (Admin View):** You will be authenticated immediately without needing a password. The system will match your verified email domain/address and log you in directly with full **Evaluator / Admin** rights.
+
+### Option C: Registering a New Account (Customer Isolation View)
 * **Works on:** Sign up with email/password or Google Sign-In.
 * **Requirements:** The email domain must end in a whitelisted domain (e.g. `@scapesolutions.eu` or `@scapesolutions.com`) or be added manually to the whitelisted emails list in Firestore.
 * **What to Expect (Customer View):** Any new account will log in as a **Customer / End User** by default. To show off multi-tenant security, this user will have a clean, blank dashboard and **cannot** see anyone else's projects or access admin tools.
