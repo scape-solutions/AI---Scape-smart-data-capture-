@@ -45,13 +45,17 @@ This first version serves two primary purposes:
 
 ## Screenshots
 
-### Evaluator Administrative Dashboard
-Shows the case overview page where evaluators can take cases, toggle locks, and submit verdicts.
-![Evaluator Dashboard](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/dashboard_evaluator_1780995012188.png)
+### 1. App Launch & Splash Screen
+Branded entry point showing system readiness.
+![App Splash Screen](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/app_home_1781075494417.png)
 
-### Project Creation & Form View
-Provides a clean, modular questionnaire workspace with foldable navigation sidebar folders.
-![Project Workspace](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/app_home_1781075494417.png)
+### 2. Customer Project Workspace & Questionnaire
+Modular step-by-step questionnaire form with active fields, help notes, and file upload fields.
+![Customer Project Workspace](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/local_app_home_real_1781085814796.png)
+
+### 3. Evaluator Administrative Dashboard
+Shows the case overview page where SCAPE evaluators can take cases, manage locks, review AI evaluator drafts, and submit verdicts.
+![Evaluator Dashboard](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/dashboard_evaluator_1780995012188.png)
 
 ---
 
