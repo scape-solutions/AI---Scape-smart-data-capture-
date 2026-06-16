@@ -11,6 +11,7 @@ The **SCAPE Bin-Picking Evaluator** is a smart data capture tool designed to col
 ### Step 1: Authentication & Profile Setup
 1. Open the application in your browser (e.g., [http://localhost:3000/](http://localhost:3000/)).
 2. Log in using your **Google account** or sign up with an **Email & Password**.
+   * **iOS PWA Support:** If you have installed the app as a Progressive Web App (PWA) on iOS, Google Sign-In is supported natively inside standalone PWA mode using a custom cookie-based session bridge.
 3. Complete your **Profile Setup** by entering your name, company/organization, phone number, and primary role:
    * **End User / Slutkunde**: Manufacturing plants, factories, etc.
    * **Integrator / Forhandler**: Robotics integrators building the automation cell.
@@ -22,6 +23,9 @@ The **SCAPE Bin-Picking Evaluator** is a smart data capture tool designed to col
    * **Step 0 (Project & Cell Info)**: Enter the project name, number of parts, bin dimensions, preferred robot brand, and upload environmental photos of the cell location.
    * **Steps 1+ (Part Configuration)**: For each part, provide dimensions, material, target cycle times, expected temperatures, oil conditions, and upload part photos. If a 3D CAD model is available, upload it as a `.stl` file.
    * **Foldable Part Sidebar**: When configuring projects with multiple parts, the left navigation bar organizes parts as collapsible folders. Click a part title (e.g. `Part #1: Shaft`) to expand/collapse its configuration steps (Dimensions, Characteristics, Visual Evidence) with smooth chevron animations.
+   * **Extended Analysis Folder**: Two extra folders are provided below the parts sections:
+     * **Business Case**: Enter shifts per day and labor cost savings to dynamically calculate a mock payback period (ROI calculation mockup).
+     * **Additional Opportunities**: Add descriptive notes about other automation tasks in the cell and attach optional images for review.
 3. Use the **AI Assistant Chat** on the right sidebar if you need help auto-filling fields or have questions about bin-picking parameters.
 
 ### Step 3: Saving and Submitting
@@ -154,6 +158,10 @@ When the user requests **Data Capture Advice**, the system runs an automated eva
 * **Generate Evaluator Draft** (Admin review tab): Prompts Gemini AI to draft a detailed technical feasibility review and recommends vision systems.
 * **Submit Technical Verdict** (Admin review tab): Publishes the written technical report and feasibility decision to the database.
 * **Toggle Verdict Visibility** (Admin review tab): Controls whether the customer can view the project review and recommendations on their review page.
+* **Apply Proposed Changes** (AI Assistant Panel): 
+  * Displays a comparison layout showing your current data vs. the AI's proposal.
+  * **Filtering:** The panel automatically hides unchanged fields, listing *only* values that are different.
+  * **Visual Wrapping:** All proposed text is rendered inside textareas to prevent clipping and horizontal scrolling.
 
 ---
 
@@ -193,3 +201,17 @@ For at tilføje eller fjerne brugere, ændre tilladte domæner eller tildele ret
 ### Vigtigt om ændringer:
 * **Øjeblikkelig virkning:** Når du gemmer ændringer i Firestore, opdateres både serveren og browser-appen **med det samme (i realtid)** uden genstart eller udrulning.
 * **Sikkerhed:** Kun godkendte medarbejdere (`isScapeEmployee`) har skrivetilladelse til `config/access` dokumentet i databasen.
+
+---
+
+## 9. Mobile Visual Viewport & Keyboard UX
+
+To provide a native-app feel on mobile devices and PWAs, the AI Assistant drawer has been engineered to handle soft keyboard adjustments smoothly:
+
+### A. Dynamic Viewport Resizing
+* When the virtual keyboard is shown or hidden, the drawer uses the **Visual Viewport API** (`window.visualViewport`) to measure the exact height of the screen *above* the keyboard.
+* The drawer automatically shrinks to fit the remaining visible area, ensuring that the message log remains scrollable and the input bar stays visible directly above the keyboard.
+
+### B. Auto-Scroll & Dismiss Gestures
+* **Focus Auto-Scroll:** Tapping the text input field triggers an automatic scroll that pushes the most recent AI questions to the bottom of the visible log, keeping them in plain view.
+* **Swipe-to-Dismiss:** Swiping or tapping on the chat message list (outside interactive buttons) automatically blurs the text area, collapsing the virtual keyboard.
