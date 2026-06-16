@@ -425,6 +425,17 @@ export default function App() {
     importProjectsFromJson
   } = useProjects(user, profile, sortBy, handleAppError, setGlobalSuccess, getEffectiveEmail());
 
+  const handleLogout = async () => {
+    if (view === 'questionnaire' && currentProject) {
+      try {
+        await saveProject(currentProject.status || 'draft', currentProject);
+      } catch (e) {
+        console.error("Auto-save failed on logout:", e);
+      }
+    }
+    logout();
+  };
+
   // State-variabler specifikt til Login/Sign-up processen
   const [authStep, setAuthStep] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [authEmail, setAuthEmail] = useState('');
@@ -745,7 +756,7 @@ export default function App() {
           user={user} profile={profile}
           globalError={globalError} setGlobalError={setGlobalError}
           globalSuccess={globalSuccess} setGlobalSuccess={setGlobalSuccess}
-          setView={setView} logout={logout} switchMode={switchMode}
+          setView={setView} logout={handleLogout} switchMode={switchMode}
           isAllowedEvaluator={isAllowedEvaluator} isScapeEmployee={isScapeEmployee}
           saveProfile={saveProfile}
           projectName={view === 'questionnaire' && currentProject ? currentProject.projectName : undefined}
@@ -817,7 +828,7 @@ export default function App() {
             generateEvaluatorDraft={generateEvaluatorDraft}
             sendMessageToAssistant={sendMessageToAssistant}
             user={user}
-            logout={logout}
+            logout={handleLogout}
             switchMode={switchMode}
             isAllowedEvaluator={isAllowedEvaluator}
             isScapeEmployee={isScapeEmployee}

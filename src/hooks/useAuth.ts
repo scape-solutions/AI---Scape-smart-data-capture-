@@ -115,12 +115,22 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
           // uden at fryse/stoppe resten af programmet imens.
           const profileDoc = await getDoc(doc(db, 'users', u.uid));
           if (profileDoc.exists()) {
-            const pData = profileDoc.data() as UserProfile;
+            let pData = profileDoc.data() as UserProfile;
             // Migrate 'external' to 'user' role automatically
             if ((pData.requestedRole as any) === 'external') {
               pData.requestedRole = 'user';
               updateDoc(doc(db, 'users', u.uid), { requestedRole: 'user' }).catch(console.error);
             }
+
+            // Auto-upgrade role to evaluator if user's email is whitelisted in allowedEvaluators
+            const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+            if (u.email && isAllowedEvaluator(u.email, allowedEvaluators) && pData.requestedRole !== 'evaluator' && pData.requestedRole !== 'superuser') {
+              pData.requestedRole = 'evaluator';
+              updateDoc(doc(db, 'users', u.uid), { requestedRole: 'evaluator' })
+                .then(() => console.log(`Auto-upgraded user ${u.email} to evaluator role in Firestore.`))
+                .catch(console.error);
+            }
+
             const actualAdmin = getEffectiveAdminStatus(pData, u.uid);
             setProfile({ ...pData, isAdmin: actualAdmin });
             setView('dashboard');
@@ -204,8 +214,17 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   const saveProfile = async (data: any) => {
     if (!user) return;
     const email = getEffectiveEmail();
-    const isAdmin = getEffectiveAdminStatus({ ...data, email }, user.uid);
-    const p: UserProfile = { ...data, email, isAdmin };
+    
+    // Auto-enforce evaluator role during profile setup if whitelisted
+    let requestedRole = data.requestedRole;
+    const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+    if (email && isAllowedEvaluator(email, allowedEvaluators) && requestedRole !== 'evaluator' && requestedRole !== 'superuser') {
+      requestedRole = 'evaluator';
+    }
+
+    const updatedData = { ...data, requestedRole };
+    const isAdmin = getEffectiveAdminStatus({ ...updatedData, email }, user.uid);
+    const p: UserProfile = { ...updatedData, email, isAdmin };
     try {
       await setDoc(doc(db, 'users', user.uid), p);
       setProfile(p);
