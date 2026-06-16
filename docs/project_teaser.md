@@ -49,11 +49,23 @@ This first version serves two primary purposes:
 Branded entry point showing system readiness.
 ![App Splash Screen](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/app_home_1781075494417.png)
 
-### 2. Customer Project Workspace & Questionnaire
+### 2. Customer Project Workspace & Questionnaire (Cell Info Step)
 Modular step-by-step questionnaire form with active fields, help notes, and file upload fields.
-![Customer Project Workspace](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/local_app_home_real_1781085814796.png)
+![Customer Project Workspace - Cell Info](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/workspace_screenshot-1.png)
 
-### 3. Evaluator Administrative Dashboard
+### 3. Questionnaire Active Warning Flags & Nudges (Part Dimensions Step)
+Colored warnings (`🔴 CRITICAL`, `⚠️ NOTE`) next to fields that do not fit "Yes" specs or are missing data (e.g. CAD availability or cycle time ambitions).
+![Customer Project Workspace - Warnings](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/workspace_screenshot-2.png)
+
+### 4. Interactive Multimodal AI Assistant Sidebar
+Real-time chat where users can describe their cell. The AI parses the parameters, extracts structured facts, and applies them to the form.
+![Customer Project Workspace - AI Assistant Sidebar](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/workspace_screenshot-3.png)
+
+### 5. Automated Data Capture Advice & Project Summary
+AI feedback summarizing feasibility risks, checklist points, and details before submitting the project.
+![Customer Project Workspace - Data Capture Advice](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/workspace_screenshot-4.png)
+
+### 6. Evaluator Administrative Dashboard
 Shows the case overview page where SCAPE evaluators can take cases, manage locks, review AI evaluator drafts, and submit verdicts.
 ![Evaluator Dashboard](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/dashboard_evaluator_1780995012188.png)
 
