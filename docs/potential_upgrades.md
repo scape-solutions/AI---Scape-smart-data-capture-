@@ -43,3 +43,26 @@ Currently, CAD files uploaded to parts are stripped from the AI payload to save 
 * **Detailed Grip point recognition:** Train or prompt Gemini to identify optimal mechanical gripper jaw layouts and magnet alignment areas directly from photos of the parts/cell layout.
 * **Auto-crop & compress:** Add automated client-side downscaling and cropping of uploaded images to reduce data capture overhead while maintaining high resolution on target objects.
 
+---
+
+## 3. In-App Voice Dictation (Web Speech API) for AI Assistant
+
+To improve the mobile and PWA data entry UX, replace the reliance on native virtual keyboards for voice dictation with an integrated, in-app speech-to-text system.
+
+### The Problem
+* Native iOS/Android virtual keyboards occupy 40-50% of the screen height on mobile/PWA.
+* Engaging native voice dictation keeps the keyboard open, leaving a very small layout height to view chat logs and auto-fill questions.
+
+### Proposed Solution
+* Add a dedicated **Microphone Button** and an **English/Danish Language Toggle (DA/EN)** directly in the chat input bar.
+* When tapped, programmatically call `.blur()` on the input area to **completely hide the virtual keyboard**, restoring 100% of the screen height for reading questions.
+* Leverage the native browser's Web Speech API (`window.webkitSpeechRecognition` or `window.SpeechRecognition`) to record and transcribe voice.
+* Display a clean bottom overlay showing a recording wave/pulsing indicator.
+* On completion, automatically populate or submit the transcribed text.
+
+### Platform & Browser Support
+* **Safari & iOS PWA:** Fully supported via `webkitSpeechRecognition`. Under Apple's App Store rules, iOS browsers (like Chrome on iPhone) use Apple's WebKit rendering engine and support it perfectly. Requires a one-time microphone permission grant.
+* **Android Chrome:** Fully supported natively.
+* **Firefox:** Partial support. The application can feature-detect compatibility (`'webkitSpeechRecognition' in window`) and degrade gracefully by hiding the microphone button if unsupported.
+
+
