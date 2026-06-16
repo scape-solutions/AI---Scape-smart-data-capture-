@@ -58,19 +58,20 @@ function parseAIResponse(text: string): ParsedAIResponse {
   return { facts, questions, prose, jsonProposal };
 }
 
+// Helper to compare values for changes (normalized comparison)
+export function areValuesEqual(currentVal: any, proposalVal: any): boolean {
+  const isCurrentEmpty = currentVal === undefined || currentVal === null || String(currentVal).trim() === '';
+  const isProposalEmpty = proposalVal === undefined || proposalVal === null || String(proposalVal).trim() === '';
+  if (isCurrentEmpty && isProposalEmpty) return true;
+  if (isCurrentEmpty !== isProposalEmpty) return false;
+  // Normalize both to strings for comparison, trimming whitespace
+  // This handles cases like number 5 vs string "5" (AI often returns numbers for numeric fields)
+  const normalize = (v: any) => String(v).trim();
+  return normalize(currentVal) === normalize(proposalVal);
+}
+
 export function isProposalAlreadyApplied(proposal: any, currentProject: ProjectState, activePartIndex: number): boolean {
   if (!proposal) return false;
-  
-  const areValuesEqual = (currentVal: any, proposalVal: any): boolean => {
-    const isCurrentEmpty = currentVal === undefined || currentVal === null || String(currentVal).trim() === '';
-    const isProposalEmpty = proposalVal === undefined || proposalVal === null || String(proposalVal).trim() === '';
-    if (isCurrentEmpty && isProposalEmpty) return true;
-    if (isCurrentEmpty !== isProposalEmpty) return false;
-    // Normalize both to strings for comparison, trimming whitespace
-    // This handles cases like number 5 vs string "5" (AI often returns numbers for numeric fields)
-    const normalize = (v: any) => String(v).trim();
-    return normalize(currentVal) === normalize(proposalVal);
-  };
 
   if (proposal.generalResponses) {
     for (const [key, val] of Object.entries(proposal.generalResponses)) {
@@ -449,14 +450,14 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
   }
 
   // Build rows from proposal
-  const rows: { key: string; label: string; old: string; newVal: string; onChange: (v: string) => void }[] = [];
+  const allRows: { key: string; label: string; old: string; newVal: string; onChange: (v: string) => void }[] = [];
 
   if (editedProposal.generalResponses) {
     Object.entries(editedProposal.generalResponses).forEach(([key, value]) => {
-      rows.push({
+      allRows.push({
         key: `gen-${key}`,
         label: `${key} · ${FIELD_LABEL_MAP[key] || key}`,
-        old: String(currentProject.generalResponses[key] ?? ''),
+        old: String(currentProject.generalResponses?.[key] ?? ''),
         newVal: String(value),
         onChange: (v) => setEditedProposal({
           ...editedProposal,
@@ -471,10 +472,10 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
       const targetIdx = (isSinglePartProposal && activePartIndex > 0) ? activePartIndex : pIdx;
       if (part.responses) {
         Object.entries(part.responses).forEach(([key, value]) => {
-          rows.push({
+          allRows.push({
             key: `part${targetIdx}-${key}`,
             label: `Part ${targetIdx + 1} – ${key} · ${FIELD_LABEL_MAP[key] || key}`,
-            old: String(currentProject.parts[targetIdx]?.responses[key] ?? ''),
+            old: String(currentProject.parts?.[targetIdx]?.responses?.[key] ?? ''),
             newVal: String(value),
             onChange: (v) => {
               const nextParts = editedProposal.parts.map((p: any, i: number) =>
@@ -487,6 +488,9 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
       }
     });
   }
+
+  // Filter to show only rows where values are actually different (have changed)
+  const rows = allRows.filter(row => !areValuesEqual(row.old, row.newVal));
 
   return (
     <div className={`bg-amber-50 border-2 rounded-2xl overflow-hidden shadow-sm transition-all ${isReadOnly ? 'border-slate-200 bg-slate-50/50' : 'border-amber-300'}`}>
@@ -517,15 +521,16 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
               {row.label}
             </label>
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white border border-slate-200 text-slate-400 p-2 rounded-lg text-xs line-through opacity-70 min-h-[32px] flex items-center">
+              <div className="bg-white border border-slate-200 text-slate-400 p-2 rounded-lg text-xs line-through opacity-70 min-h-[32px] break-words whitespace-pre-wrap">
                 {row.old || <span className="not-italic italic opacity-50">Empty</span>}
               </div>
-              <input
-                className={`border bg-white p-2 rounded-lg text-xs outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 ${
+              <textarea
+                className={`border bg-white p-2 rounded-lg text-xs outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none min-h-[32px] ${
                   isReadOnly 
                     ? 'border-slate-200 bg-slate-50/50 text-slate-400 cursor-not-allowed' 
                     : 'border-amber-300 text-slate-800'
                 }`}
+                rows={2}
                 value={row.newVal}
                 onChange={(e) => !isReadOnly && row.onChange(e.target.value)}
                 disabled={isReadOnly}
