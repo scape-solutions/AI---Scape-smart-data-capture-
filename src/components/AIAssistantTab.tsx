@@ -151,25 +151,37 @@ export function AIAssistantTab({
   return (
     <div className="flex flex-col h-full bg-slate-50">
       {/* Header */}
-      <div className="p-5 bg-white border-b border-slate-200 shrink-0">
-        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+      <div className="p-3 md:p-5 bg-white border-b border-slate-200 shrink-0">
+        <h2 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
           <Bot className="w-5 h-5 text-indigo-500" />
           AI Auto-fill Assistant
         </h2>
-        <p className="text-xs text-slate-500 mt-0.5">
+        <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
           Describe your project freely. The AI extracts facts and asks for what's missing.
         </p>
       </div>
 
       {hasUnappliedProposals && !isReadOnly && (
-        <div className="bg-amber-50 border-b border-amber-200 px-5 py-2.5 text-xs text-amber-800 font-semibold flex items-center gap-1.5 animate-fadeIn select-none shrink-0">
+        <div className="bg-amber-50 border-b border-amber-200 px-3.5 py-2 md:px-5 md:py-2.5 text-xs text-amber-800 font-semibold flex items-center gap-1.5 animate-fadeIn select-none shrink-0">
           <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
           You have proposed changes that haven't been applied yet. Scroll to review them.
         </div>
       )}
 
       {/* Message list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-5" ref={scrollRef}>
+      <div 
+        className="flex-1 overflow-y-auto p-3.5 md:p-4 space-y-4 md:space-y-5" 
+        ref={scrollRef}
+        onTouchStart={(e) => {
+          const active = document.activeElement;
+          if (active instanceof HTMLElement && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) {
+            const target = e.target as HTMLElement;
+            if (!target.closest('button') && !target.closest('input') && !target.closest('textarea')) {
+              active.blur();
+            }
+          }
+        }}
+      >
         {(!currentProject.chatHistory || currentProject.chatHistory.length === 0) && (
           <div className="text-center mt-12 text-slate-400 px-6">
             <Bot className="w-14 h-14 mx-auto mb-3 opacity-40" />
@@ -295,27 +307,34 @@ export function AIAssistantTab({
       </div>
 
       {/* Input bar */}
-      <div className="p-4 bg-white border-t border-slate-200 shrink-0 animate-fadeIn">
+      <div className="p-2.5 md:p-4 bg-white border-t border-slate-200 shrink-0 animate-fadeIn">
         {isReadOnly ? (
-          <div className="text-center py-3 px-4 bg-slate-100/80 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">
+          <div className="text-center py-2 px-3 bg-slate-100/80 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">
             This project is submitted or locked and is read-only.
           </div>
         ) : (
           <div className="flex items-end gap-2">
             <textarea
-              className="flex-1 border border-slate-300 rounded-xl p-3 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
-              placeholder="Describe your project… (Enter to send, Shift+Enter for new line)"
-              rows={2}
+              className="flex-1 border border-slate-300 rounded-xl p-2.5 md:p-3 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
+              placeholder="Describe your project…"
+              rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
               }}
+              onFocus={() => {
+                setTimeout(() => {
+                  if (scrollRef.current) {
+                    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                  }
+                }, 150);
+              }}
             />
             <button
               onClick={handleSend}
               disabled={isGeneratingReport || !input.trim()}
-              className="p-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+              className="p-2.5 md:p-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
             >
               <Send className="w-4 h-4" />
             </button>

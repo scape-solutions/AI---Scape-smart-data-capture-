@@ -131,6 +131,42 @@ export function QuestionnaireView({
   const [activeCustomSection, setActiveCustomSection] = useState<'business-case' | 'additional-opportunities' | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+
+  // ─── Visual Viewport height tracking for mobile virtual keyboard ──────────────
+  const [viewportStyle, setViewportStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+
+    const handleViewportChange = () => {
+      const vv = window.visualViewport;
+      if (!vv) return;
+
+      // Only apply dynamic viewport styling on mobile screens (width < 768px)
+      if (window.innerWidth < 768) {
+        setViewportStyle({
+          height: `${vv.height}px`,
+          top: `${vv.offsetTop}px`,
+          position: 'fixed',
+          bottom: 'auto',
+        });
+      } else {
+        setViewportStyle({});
+      }
+    };
+
+    const vv = window.visualViewport;
+    vv.addEventListener('resize', handleViewportChange);
+    vv.addEventListener('scroll', handleViewportChange);
+    
+    handleViewportChange();
+
+    return () => {
+      vv.removeEventListener('resize', handleViewportChange);
+      vv.removeEventListener('scroll', handleViewportChange);
+    };
+  }, [isAIAssistantOpen]);
+
   const [isAdviceExpanded, setIsAdviceExpanded] = useState(true);
   const [isDraftExpanded, setIsDraftExpanded] = useState(true);
   const [draftViewMode, setDraftViewMode] = useState<'markdown' | 'raw'>('markdown');
@@ -2191,7 +2227,10 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             className="fixed inset-0 bg-slate-950/20 backdrop-blur-3xs z-30 md:hidden"
             onClick={() => setIsAIAssistantOpen(false)}
           />
-          <aside className="fixed inset-y-0 right-0 z-35 w-full md:w-96 bg-white border-l border-slate-200 shadow-2xl flex flex-col h-full animate-slideIn select-text">
+          <aside 
+            className="fixed inset-y-0 right-0 z-35 w-full md:w-96 bg-white border-l border-slate-200 shadow-2xl flex flex-col h-full animate-slideIn select-text"
+            style={viewportStyle}
+          >
             <div className="relative flex-1 flex flex-col h-full overflow-hidden">
               <button 
                 onClick={() => setIsAIAssistantOpen(false)}
