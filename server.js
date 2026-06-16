@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -101,6 +102,155 @@ const app = express();
 // Set body limit to 50MB to accommodate high-resolution image uploads sent in the JSON payload
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cookieParser());
+
+// ─── Server-side Google OAuth for iOS PWA ─────────────────────────────────────
+// iOS PWA blocks popups AND signInWithRedirect never returns to the standalone
+// context. This server-side flow uses cookies (shared between Safari & PWA on
+// the same domain, unlike localStorage) to bridge the auth result back to the PWA.
+
+import crypto from 'crypto';
+
+const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || '782472107063-6shdo17lf2lsvvuifsmg15hhffuu0k4h.apps.googleusercontent.com';
+const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
+const APP_URL = process.env.APP_URL || 'https://scape-data-capture.web.app';
+const OAUTH_CALLBACK_URL = `${APP_URL}/api/auth/google/callback`;
+
+// In-memory session store: state token → { status, customToken, email, expiresAt }
+const oauthSessions = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, s] of oauthSessions.entries()) {
+    if (now > s.expiresAt) oauthSessions.delete(key);
+  }
+}, 60_000);
+
+// Step 1 – PWA navigates here (same origin, stays in PWA context)
+// Server redirects to Google OAuth. The session state is stored server-side.
+app.get('/api/auth/google/start', (req, res) => {
+  if (!GOOGLE_OAUTH_CLIENT_SECRET) {
+    return res.status(503).send('Google OAuth not configured on this server. Please add GOOGLE_OAUTH_CLIENT_SECRET.');
+  }
+  const state = crypto.randomUUID();
+  oauthSessions.set(state, { status: 'pending', expiresAt: Date.now() + 10 * 60_000 });
+
+  // Set a cookie so the PWA can later look up its session
+  // Cookies are shared between Safari and PWA on the same iOS domain
+  res.cookie('oauth_state', state, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    maxAge: 10 * 60 * 1000 // 10 minutes
+  });
+
+  const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+    client_id: GOOGLE_OAUTH_CLIENT_ID,
+    redirect_uri: OAUTH_CALLBACK_URL,
+    response_type: 'code',
+    scope: 'email profile',
+    state,
+    prompt: 'select_account',
+    access_type: 'online'
+  });
+
+  res.redirect(authUrl);
+});
+
+// Step 2 – Google redirects here after the user authenticates (runs in Safari)
+app.get('/api/auth/google/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+
+  if (error || !code || !state) {
+    return res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:sans-serif;padding:2rem;text-align:center">
+      <h2>❌ Sign-in cancelled</h2><p>Please return to the app and try again.</p></body></html>`);
+  }
+
+  const session = oauthSessions.get(state);
+  if (!session || session.status !== 'pending') {
+    return res.status(400).send('<html><body>Invalid or expired session. Please try again.</body></html>');
+  }
+
+  try {
+    // Exchange authorization code for tokens
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code, client_id: GOOGLE_OAUTH_CLIENT_ID,
+        client_secret: GOOGLE_OAUTH_CLIENT_SECRET,
+        redirect_uri: OAUTH_CALLBACK_URL,
+        grant_type: 'authorization_code'
+      })
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) throw new Error('No access token: ' + JSON.stringify(tokenData));
+
+    // Get user info
+    const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` }
+    });
+    const { sub, email, name, picture } = await userRes.json();
+    if (!email) throw new Error('No email in Google userinfo response');
+
+    // Get or create the Firebase user so the UID is consistent with normal Google Sign-In
+    let firebaseUid;
+    try {
+      const existing = await getAuth().getUserByEmail(email);
+      firebaseUid = existing.uid;
+    } catch (e) {
+      if (e.code === 'auth/user-not-found') {
+        const created = await getAuth().createUser({ email, displayName: name, photoURL: picture });
+        firebaseUid = created.uid;
+      } else throw e;
+    }
+
+    // Create a short-lived Firebase custom token (1 hour)
+    const customToken = await getAuth().createCustomToken(firebaseUid, { email });
+
+    // Mark session as complete (token expires in 5 minutes – must be picked up quickly)
+    oauthSessions.set(state, { status: 'complete', customToken, email, expiresAt: Date.now() + 5 * 60_000 });
+    console.log(`PWA OAuth: signed in ${email} (uid: ${firebaseUid})`);
+
+    // Show a friendly success page – iOS will open this in Safari, not the PWA.
+    // The user needs to manually return to the app, which will auto-complete sign-in
+    // by reading the shared cookie.
+    res.send(`<!DOCTYPE html><html><head>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <meta http-equiv="refresh" content="2;url=${APP_URL}">
+      <title>Signed in</title>
+      <style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f7}div{text-align:center;padding:2rem}h2{color:#1c1c1e}p{color:#6e6e73}</style>
+    </head><body><div>
+      <div style="font-size:3rem">✅</div>
+      <h2>Signed in as ${email}</h2>
+      <p>Returning to the app&hellip;</p>
+    </div></body></html>`);
+  } catch (err) {
+    console.error('PWA OAuth callback error:', err);
+    oauthSessions.set(state, { status: 'error', expiresAt: Date.now() + 2 * 60_000 });
+    res.send('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:sans-serif;padding:2rem;text-align:center"><h2>❌ Sign-in failed</h2><p>Please return to the app and try again.</p></body></html>');
+  }
+});
+
+// Step 3 – PWA calls this on startup (cookie is sent automatically, shared across Safari & PWA)
+// Returns the Firebase custom token if sign-in just completed in Safari.
+app.get('/api/auth/check-pending', (req, res) => {
+  const state = req.cookies?.oauth_state;
+  if (!state) return res.json({ status: 'none' });
+
+  const session = oauthSessions.get(state);
+  if (!session) return res.json({ status: 'none' });
+
+  if (session.status === 'complete') {
+    const { customToken, email } = session;
+    // Clear the session and cookie immediately (one-time use)
+    oauthSessions.delete(state);
+    res.clearCookie('oauth_state');
+    return res.json({ status: 'complete', customToken, email });
+  }
+
+  res.json({ status: session.status });
+});
+// ──────────────────────────────────────────────────────────────────────────────
 
 // Retrieve the Gemini API key from environment variables (e.g. injected via Secret Manager in Cloud Run)
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;

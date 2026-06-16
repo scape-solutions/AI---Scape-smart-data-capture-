@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { 
   signInWithPopup, 
   signInWithRedirect,
+  signInWithCustomToken,
   getRedirectResult,
   GoogleAuthProvider, 
   onAuthStateChanged, 
@@ -81,7 +82,21 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   // Her bruger vi den til at lytte efter: "Er brugeren logget ind nu?" (onAuthStateChanged).
   // Den tomme liste [] i bunden betyder "kør kun dette én gang, når appen starter".
   useEffect(() => {
-    // Tjek for redirect-resultater (hvis login blev foretaget via redirect på mobil/PWA)
+    // Check for a pending server-side OAuth result (iOS PWA flow).
+    // Cookies are shared between Safari and the PWA on the same domain, so after
+    // the user authenticates via the server-side Google OAuth in Safari, the PWA
+    // can pick up the resulting Firebase custom token here on startup.
+    fetch('/api/auth/check-pending', { credentials: 'include' })
+      .then(r => r.json())
+      .then(async data => {
+        if (data.status === 'complete' && data.customToken) {
+          console.log('PWA OAuth: resuming sign-in for', data.email);
+          await signInWithCustomToken(auth, data.customToken);
+        }
+      })
+      .catch(e => console.warn('Could not check pending auth:', e));
+
+    // Also handle standard Firebase redirect results
     getRedirectResult(auth).catch((e: any) => {
       console.error("Google Redirect Auth error:", e);
       if (e.code === 'auth/unauthorized-domain') {
@@ -123,7 +138,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     });
   }, []);
 
-  // Logger ind via Google Popup (på desktop/PWA) eller Redirect (på mobil)
+  // Logger ind via Google
   const login = async () => {
     setAuthError(null);
     try {
@@ -134,19 +149,11 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
       if (isStandalone) {
-        // iOS PWA standalone: signInWithRedirect opens Google in regular Safari and the
-        // redirect result NEVER returns to the PWA context. Use popup instead —
-        // Firebase uses window.postMessage which crosses the standalone/Safari boundary.
-        try {
-          await signInWithPopup(auth, provider);
-        } catch (popupErr: any) {
-          if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request') {
-            // Popup was blocked — fall back to redirect as last resort
-            await signInWithRedirect(auth, provider);
-          } else {
-            throw popupErr;
-          }
-        }
+        // iOS PWA standalone: neither signInWithRedirect (never returns to PWA context)
+        // nor signInWithPopup (blocked by iOS) work reliably.
+        // Use server-side OAuth via /api/auth/google/start (same-origin navigation –
+        // stays in PWA), then pick up the result via cookie on next startup.
+        window.location.href = '/api/auth/google/start';
       } else if (isMobile) {
         // Regular mobile browser: redirect gives smoother UX
         await signInWithRedirect(auth, provider);
