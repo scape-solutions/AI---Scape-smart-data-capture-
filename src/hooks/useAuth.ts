@@ -123,7 +123,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     });
   }, []);
 
-  // Logger ind via Google Popup (på desktop) eller Redirect (på mobil/PWA)
+  // Logger ind via Google Popup (på desktop/PWA) eller Redirect (på mobil)
   const login = async () => {
     setAuthError(null);
     try {
@@ -133,9 +133,25 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-      if (isStandalone || isMobile) {
+      if (isStandalone) {
+        // iOS PWA standalone: signInWithRedirect opens Google in regular Safari and the
+        // redirect result NEVER returns to the PWA context. Use popup instead —
+        // Firebase uses window.postMessage which crosses the standalone/Safari boundary.
+        try {
+          await signInWithPopup(auth, provider);
+        } catch (popupErr: any) {
+          if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request') {
+            // Popup was blocked — fall back to redirect as last resort
+            await signInWithRedirect(auth, provider);
+          } else {
+            throw popupErr;
+          }
+        }
+      } else if (isMobile) {
+        // Regular mobile browser: redirect gives smoother UX
         await signInWithRedirect(auth, provider);
       } else {
+        // Desktop: popup
         await signInWithPopup(auth, provider);
       }
     } catch (e: any) {
