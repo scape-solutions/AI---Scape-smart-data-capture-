@@ -78,6 +78,55 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     }
   }, [user]);
 
+  // Auto-upgrade role to evaluator and sync isAdmin status dynamically when allowedConfig or user/profile updates
+  useEffect(() => {
+    if (!user || !profile || !allowedConfig) return;
+
+    const email = getEffectiveEmail();
+    if (!email) return;
+
+    const allowedEvaluators = allowedConfig.allowedEvaluators || ALLOWED_EVALUATORS;
+    const isAllowed = isAllowedEvaluator(email, allowedEvaluators);
+
+    // If user's email is whitelisted as an evaluator, but their Firestore profile is not evaluator/superuser
+    const needsUpgrade = isAllowed && profile.requestedRole !== 'evaluator' && profile.requestedRole !== 'superuser';
+
+    // Recalculate effective admin status
+    const actualAdmin = getEffectiveAdminStatus(profile, user.uid);
+    const adminStatusChanged = profile.isAdmin !== actualAdmin;
+
+    if (needsUpgrade || adminStatusChanged) {
+      let updatedRole = profile.requestedRole;
+
+      if (needsUpgrade) {
+        updatedRole = 'evaluator';
+      }
+
+      // Recalculate actual admin status with the updated role
+      const actualAdminStatus = getEffectiveAdminStatus({ ...profile, requestedRole: updatedRole }, user.uid);
+
+      if (needsUpgrade) {
+        console.log(`Auto-upgrading user ${email} to evaluator role in Firestore.`);
+        updateDoc(doc(db, 'users', user.uid), { requestedRole: 'evaluator', isAdmin: actualAdminStatus })
+          .catch(console.error);
+      } else if (adminStatusChanged) {
+        console.log(`Updating user ${email} admin status to ${actualAdminStatus} in Firestore.`);
+        updateDoc(doc(db, 'users', user.uid), { isAdmin: actualAdminStatus })
+          .catch(console.error);
+      }
+
+      setProfile(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          requestedRole: updatedRole,
+          isAdmin: actualAdminStatus
+        };
+      });
+    }
+  }, [user, profile?.requestedRole, profile?.isAdmin, allowedConfig]);
+
+
   // useEffect() er en Hook, der kører automatisk i baggrunden.
   // Her bruger vi den til at lytte efter: "Er brugeren logget ind nu?" (onAuthStateChanged).
   // Den tomme liste [] i bunden betyder "kør kun dette én gang, når appen starter".

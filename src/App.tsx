@@ -7,7 +7,7 @@
  */
 import { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { updateDoc, doc, onSnapshot } from 'firebase/firestore';
+import { updateDoc, doc, onSnapshot, waitForPendingWrites } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 
 import { useAuth, isScapeEmployee, getEffectiveAdminStatus } from './hooks/useAuth';
@@ -432,6 +432,13 @@ export default function App() {
       } catch (e) {
         console.error("Auto-save failed on logout:", e);
       }
+    }
+    try {
+      console.log("Waiting for pending Firestore writes to complete before logout...");
+      await waitForPendingWrites(db);
+      console.log("Firestore writes completed.");
+    } catch (e) {
+      console.warn("Error waiting for pending writes:", e);
     }
     logout();
   };
