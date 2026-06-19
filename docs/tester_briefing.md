@@ -20,7 +20,7 @@ Vi skal have testet systemet af i praksis, og I skal derfor logge ind med jeres 
 I skal hver især udfylde **2 projektkort**. Det er vigtigt, at det er så virkelighedstro som muligt, så brug nogle af de kasser/emner, vi har stående ude på værkstedet, som grundlag for kortene.
 
 **Praktisk info inden start:**
-* **Link til appen:** Gå til [https://scape-evaluator-782472107063.europe-west3.run.app](https://scape-evaluator-782472107063.europe-west3.run.app)
+* **Link til appen:** Gå til [https://scape-data-capture.web.app](https://scape-data-capture.web.app)
 * **Login/Oprettelse:** Hvis I ikke har logget ind med de ovenstående e-mails før, trykker I blot på **"Sign Up"** på forsiden og opretter jer med jeres adgangskode.
 * **Test på både telefon og computer:** Appen er optimeret til begge dele. Prøv meget gerne at bruge jeres **telefon** ude på værkstedet (hvor I kan tage og uploade billeder af emner/kasser direkte med mobilkameraet ind i appen) og brug jeres **computer** til at udfylde og finpudse resten af detaljerne.
 
