@@ -10,7 +10,7 @@ Dette dokument indeholder e-mailudkastet til de første testere (John, Rene og P
 
 Hej John, Rene og Per,
 
-Formålet med denne test er at få jeres ærlige feedback på selve **brugerfladen (UI)**, eventuelle **fejl/bugs** I støder på undervejs, samt jeres generelle **tanker om brugbarheden** af programmet i det hele taget. De overordnede kommentarer omkring brugbarheden tager vi en fælles drøftelse af efterfølgende.
+Formålet med denne test er at få jeres ærlige feedback på selve **brugerfladen (UI)**, eventuelle **fejl/bugs** I inden for testen støder på undervejs, samt jeres generelle **tanker om brugbarheden** af programmet i det hele taget. De overordnede kommentarer omkring brugbarheden tager vi en fælles drøftelse af efterfølgende.
 
 Vi skal have testet systemet af i praksis, og I skal derfor logge ind med jeres respektive lange e-mailadresser:
 * **John:** `john.erland.oestergaard@scapesolutions.eu`
@@ -23,6 +23,21 @@ I skal hver især udfylde **2 projektkort**. Det er vigtigt, at det er så virke
 * **Link til appen:** Gå til [https://scape-evaluator-782472107063.europe-west3.run.app](https://scape-evaluator-782472107063.europe-west3.run.app)
 * **Login/Oprettelse:** Hvis I ikke har logget ind med de ovenstående e-mails før, trykker I blot på **"Sign Up"** på forsiden og opretter jer med jeres adgangskode.
 * **Test på både telefon og computer:** Appen er optimeret til begge dele. Prøv meget gerne at bruge jeres **telefon** ude på værkstedet (hvor I kan tage og uploade billeder af emner/kasser direkte med mobilkameraet ind i appen) og brug jeres **computer** til at udfylde og finpudse resten af detaljerne.
+
+---
+
+**Tip: Kør appen som en app på telefonen (PWA)**
+For at få den bedste oplevelse på telefonen (så browser-bjælkerne gemmes, og appen kører i fuld skærm), anbefales det at installere den på din startskærm:
+
+* **På iPhone (Safari):**
+  1. Åbn linket i **Safari**.
+  2. Tryk på **Del-ikonet** (firkanten med pil op i bunden).
+  3. Rul ned og vælg **"Føj til hjemmeskærm"** (Add to Home Screen).
+  
+* **På Android (Chrome):**
+  1. Åbn linket i **Chrome**.
+  2. Tryk på de **tre prikker** i øverste højre hjørne (eller se efter installations-banneret i bunden).
+  3. Vælg **"Installer app"** eller **"Føj til startskærm"** (Install app / Add to Home Screen).
 
 ---
 
@@ -42,7 +57,7 @@ Når John og Per har indsendt deres kort, vil jeg bede dig, Rene, om at:
 1. Skifte til **"Evaluator" mode** øverst i appen.
 2. Gennemgå et par af de indsendte projekter med "evaluator-briller".
 3. **Feedback på rapporten:** Giv specifik feedback på, hvordan **Draft Evaluator Report** ser ud. Bidrager den godt nok? Hvad mangler der, eller hvad skal ændres, for at en anden (f.eks. en mindre erfaren kollega) nemt kan gennemføre slutevalueringen ud fra rapporten?
-4. **Send evaluering retur:** Lav en evaluering i appen og send den retur til John og Per, så de kan se din feedback direkte på deres kort.
+4. **Send evaluering retur:** Lav en evaluering i appen og send den retur to John og Per, så de kan se din feedback direkte på deres kort.
 
 ---
 
