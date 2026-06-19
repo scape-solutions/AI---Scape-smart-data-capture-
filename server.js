@@ -131,6 +131,17 @@ app.get('/api/auth/google/start', (req, res) => {
   if (!GOOGLE_OAUTH_CLIENT_SECRET) {
     return res.status(503).send('Google OAuth not configured on this server. Please add GOOGLE_OAUTH_CLIENT_SECRET.');
   }
+
+  // Dynamically resolve protocol and host to avoid redirecting to the wrong domain
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.get('host');
+  const currentAppUrl = `${protocol}://${host}`;
+  const callbackUrl = `${currentAppUrl}/api/auth/google/callback`;
+
+  console.log(`[OAuth Start] headers:`, req.headers);
+  console.log(`[OAuth Start] resolved protocol: ${protocol}, host: ${host}`);
+  console.log(`[OAuth Start] constructed redirect_uri: ${callbackUrl}`);
+
   const state = crypto.randomUUID();
   oauthSessions.set(state, { status: 'pending', expiresAt: Date.now() + 10 * 60_000 });
 
@@ -141,12 +152,6 @@ app.get('/api/auth/google/start', (req, res) => {
     sameSite: 'lax',
     maxAge: 10 * 60 * 1000 // 10 minutes
   });
-
-  // Dynamically resolve protocol and host to avoid redirecting to the wrong domain
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.get('host');
-  const currentAppUrl = `${protocol}://${host}`;
-  const callbackUrl = `${currentAppUrl}/api/auth/google/callback`;
 
   const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
     client_id: GOOGLE_OAUTH_CLIENT_ID,
