@@ -392,7 +392,7 @@ app.post('/api/ai/advice', verifyFirebaseToken, async (req, res) => {
   try {
     const contents = prepareAIRequest(project, activePrompts.externalAdvicePrompt, activePrompts.includeImagesForAdvice);
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-pro',
       contents: contents,
     });
     res.json({ text: response.text });
@@ -429,7 +429,7 @@ app.post('/api/ai/draft', verifyFirebaseToken, async (req, res) => {
   try {
     const contents = prepareAIRequest(project, activePrompts.evaluatorDraftPrompt, activePrompts.includeImagesForDraft);
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-pro',
       contents: contents,
     });
     res.json({ text: response.text });
@@ -544,7 +544,7 @@ app.post('/api/ai/extract-observations', verifyFirebaseToken, async (req, res) =
   try {
     const prompt = `${activePrompts.observationsExtractionPrompt}\n\n## QUESTIONNAIRE SCHEMA (field IDs and labels)\n${JSON.stringify(schema, null, 2)}\n\n## ADVICE REPORT TO ANALYSE\n${adviceText}`;
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-pro',
       contents: [prompt],
     });
     res.json({ text: response.text || "" });

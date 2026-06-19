@@ -126,7 +126,7 @@ async function generateAdviceAPI(project: ProjectState): Promise<string> {
     const basePrompt = activeClientPrompts.externalAdvicePrompt;
     const contents = prepareAIRequest(project, basePrompt, activeClientPrompts.includeImagesForAdvice);
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-pro',
       contents,
     });
     return response.text || "";
@@ -165,7 +165,7 @@ async function extractObservationsAPI(
   if (GEMINI_API_KEY) {
     if (!ai) ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-pro',
       contents: [prompt],
     });
     rawText = response.text || '';
@@ -206,7 +206,7 @@ async function generateDraftAPI(project: ProjectState): Promise<string> {
     const basePrompt = activeClientPrompts.evaluatorDraftPrompt;
     const contents = prepareAIRequest(project, basePrompt, activeClientPrompts.includeImagesForDraft);
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-pro',
       contents,
     });
     return response.text || "";
