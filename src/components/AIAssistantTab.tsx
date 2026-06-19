@@ -3,46 +3,53 @@ import { Send, Bot, User, Check, Edit2, CheckCircle2, HelpCircle } from 'lucide-
 import { ProjectState } from '../types';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 
-// ─── Field label lookup map ───────────────────────────────────────────────────
+// ─── FELT-LABEL OPSLAGSTABEL ───────────────────────────────────────────────────
+// Vi opbygger en ordbog (map) over alle felt-ID'er og deres tilhørende tekst-labels.
+// Dette bruges til at vise pæne navne i UI'et (f.eks. "2.01 · Part Name") i stedet for bare rå ID'er.
 const FIELD_LABEL_MAP: Record<string, string> = {};
 [...GENERAL_STEPS, ...PART_STEPS].forEach(step => {
   step.questions.forEach(q => { FIELD_LABEL_MAP[q.id] = q.label; });
 });
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+// ─── PROPS FOR HOVEDKOMPONENTEN ───────────────────────────────────────────────
 interface AIAssistantTabProps {
-  currentProject: ProjectState;
-  setCurrentProject: (p: ProjectState) => void;
-  sendMessageToAssistant: (msg: string) => Promise<void>;
-  isGeneratingReport: boolean;
-  updateProjectField: (p: ProjectState, field: keyof ProjectState, value: any, comment: string) => Promise<void>;
-  saveProject?: (status?: ProjectState['status'], projectToSave?: ProjectState) => Promise<ProjectState | null>;
-  activePartIndex: number;
-  isReadOnly?: boolean;
-  hasUnappliedProposals?: boolean;
+  currentProject: ProjectState; // Det nuværende projekt-state
+  setCurrentProject: (p: ProjectState) => void; // Funktion til at opdatere projekt-state lokalt
+  sendMessageToAssistant: (msg: string) => Promise<void>; // Funktion til at sende en besked til AI-assistenten
+  isGeneratingReport: boolean; // Angiver om AI'en er i gang med at generere et svar (viser loading)
+  updateProjectField: (p: ProjectState, field: keyof ProjectState, value: any, comment: string) => Promise<void>; // Opdaterer et specifikt felt i Firestore
+  saveProject?: (status?: ProjectState['status'], projectToSave?: ProjectState) => Promise<ProjectState | null>; // Gemmer hele projektet i databasen
+  activePartIndex: number; // Indekset for det emne (part) brugeren redigerer lige nu (0-baseret)
+  isReadOnly?: boolean; // Angiver om siden er låst / skrivebeskyttet
+  hasUnappliedProposals?: boolean; // Tjekker om der ligger AI-forslag, som brugeren endnu ikke har godkendt
 }
 
-// ─── Parse structured AI response ────────────────────────────────────────────
+// ─── PARSNING AF AI'ENS SVAR ──────────────────────────────────────────────────
+// AI'ens rå svartekst splittes op i strukturerede sektioner baseret på markørerne:
+// ---FACTS---, ---QUESTIONS--- og ---END---
 interface ParsedAIResponse {
-  facts: string[];       // bullet points from ---FACTS--- section
-  questions: string[];   // bullet points from ---QUESTIONS--- section
-  prose: string;         // any text outside the structured sections (fallback)
-  jsonProposal: any;     // parsed JSON block if present
+  facts: string[];       // Liste af punkter fra ---FACTS--- sektionen (bekræftede fakta)
+  questions: string[];   // Liste af punkter fra ---QUESTIONS--- sektionen (mangler)
+  prose: string;         // Eventuel fritekst/introduktion skrevet af AI'en
+  jsonProposal: any;     // Det foreslåede JSON-objekt med feltopdateringer
 }
 
 function parseAIResponse(text: string): ParsedAIResponse {
-  // Extract JSON block first, then strip it
+  // 1. Ekstraher JSON-blokken (koder inden i ```json ... ```) og pil den ud af teksten
   let jsonProposal: any = null;
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (jsonMatch) {
-    try { jsonProposal = JSON.parse(jsonMatch[1]); } catch { /* ignore */ }
+    try { jsonProposal = JSON.parse(jsonMatch[1]); } catch { /* ignorer parse-fejl */ }
   }
+  // Fjern JSON-blokken fra den tekst, vi skal lede efter headers i
   const stripped = text.replace(/```(?:json)?\s*[\s\S]*?\s*```/i, '').trim();
 
-  // Extract FACTS section
+  // 2. Find FACTS- og QUESTIONS-sektionerne ved hjælp af Regular Expressions (RegEx)
+  // De kigger efter tekst mellem f.eks. ---FACTS--- og enten ---QUESTIONS--- eller ---END---
   const factsMatch = stripped.match(/---FACTS---\s*([\s\S]*?)(?=---QUESTIONS---|---END---|$)/i);
   const questionsMatch = stripped.match(/---QUESTIONS---\s*([\s\S]*?)(?=---END---|---FACTS---|$)/i);
 
+  // Hjælpefunktion til at splitte sektionen op i linjer og rense punkttegn (•, -, *, tal) væk
   const parseBullets = (raw: string): string[] =>
     raw
       .split('\n')
@@ -52,57 +59,54 @@ function parseAIResponse(text: string): ParsedAIResponse {
   const facts = factsMatch ? parseBullets(factsMatch[1]) : [];
   const questions = questionsMatch ? parseBullets(questionsMatch[1]) : [];
 
-  // Anything before the first marker is treated as prose (rare, but graceful fallback)
+  // 3. Alt tekst før den første markør betragtes som almindelig prosa (introduktion fra AI'en)
   const prose = stripped.split(/---FACTS---|---QUESTIONS---|---END---/i)[0].trim();
 
   return { facts, questions, prose, jsonProposal };
 }
 
-// Helper to compare values for changes (normalized comparison)
+// ─── SAMMENLIGNING AF VÆRDIER ─────────────────────────────────────────────────
+// Sammenligner en nuværende værdi med et AI-forslag. Normaliserer tomme felter og 
+// konverterer alt til tekst/trimmer, så f.eks. tallet 5 og strengen "5" betragtes som ens.
 export function areValuesEqual(currentVal: any, proposalVal: any): boolean {
   const isCurrentEmpty = currentVal === undefined || currentVal === null || String(currentVal).trim() === '';
   const isProposalEmpty = proposalVal === undefined || proposalVal === null || String(proposalVal).trim() === '';
   if (isCurrentEmpty && isProposalEmpty) return true;
   if (isCurrentEmpty !== isProposalEmpty) return false;
-  // Normalize both to strings for comparison, trimming whitespace
-  // This handles cases like number 5 vs string "5" (AI often returns numbers for numeric fields)
   const normalize = (v: any) => String(v).trim();
   return normalize(currentVal) === normalize(proposalVal);
 }
 
+// Tjekker om alle foreslåede felt-opdateringer i et JSON-forslag allerede er skrevet ind i projektet.
+// Hvis de er det, behøver vi ikke vise "Apply Changes"-knappen for dette kort.
 export function isProposalAlreadyApplied(proposal: any, currentProject: ProjectState, activePartIndex: number): boolean {
   if (!proposal) return false;
 
+  // Tjek generelle stamdata (generalResponses)
   if (proposal.generalResponses) {
     for (const [key, val] of Object.entries(proposal.generalResponses)) {
       const currentVal = currentProject.generalResponses?.[key];
       const match = areValuesEqual(currentVal, val);
-      console.log(`[isProposalAlreadyApplied] General key "${key}": currentVal="${currentVal}" vs proposalVal="${val}" -> match=${match}`);
-      if (!match) {
-        return false;
-      }
+      if (!match) return false;
     }
   }
   
+  // Tjek emne-specifikke data (parts responses)
   if (proposal.parts && Array.isArray(proposal.parts)) {
     const isSinglePartProposal = proposal.parts.length === 1;
     for (let idx = 0; idx < proposal.parts.length; idx++) {
       const aiPart = proposal.parts[idx];
+      // Hvis AI'en kun foreslår ét emne, og vi redigerer et emne med indeks > 0, 
+      // så mapper vi AI'ens forslag til det aktive emneindeks.
       const targetIdx = (isSinglePartProposal && activePartIndex > 0) ? activePartIndex : idx;
       const part = currentProject.parts?.[targetIdx];
-      if (!part) {
-        console.log(`[isProposalAlreadyApplied] Part idx ${idx} (targetIdx ${targetIdx}) does not exist in currentProject.parts`);
-        return false;
-      }
+      if (!part) return false;
       
       if (aiPart.responses) {
         for (const [key, val] of Object.entries(aiPart.responses)) {
           const currentVal = part.responses?.[key];
           const match = areValuesEqual(currentVal, val);
-          console.log(`[isProposalAlreadyApplied] Part ${targetIdx} key "${key}": currentVal="${currentVal}" vs proposalVal="${val}" -> match=${match}`);
-          if (!match) {
-            return false;
-          }
+          if (!match) return false;
         }
       }
     }
@@ -111,7 +115,7 @@ export function isProposalAlreadyApplied(proposal: any, currentProject: ProjectS
   return true;
 }
 
-// ─── Main component ──────────────────────────────────────────────────────────
+// ─── HOVEDKOMPONENT: AIAssistantTab ──────────────────────────────────────────
 export function AIAssistantTab({
   currentProject,
   setCurrentProject,
@@ -123,23 +127,26 @@ export function AIAssistantTab({
   isReadOnly = false,
   hasUnappliedProposals = false,
 }: AIAssistantTabProps) {
-  const [input, setInput] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [input, setInput] = useState(''); // Indtastningsfeltet til chatten
+  const scrollRef = useRef<HTMLDivElement>(null); // Reference til chat-vinduet til styring af scrollbar
 
+  // Scroll automatisk til bunden af chatten, hver gang historikken ændrer sig
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [currentProject.chatHistory]);
 
+  // Håndterer afsendelse af chat-beskeder
   const handleSend = () => {
     if (!input.trim() || isGeneratingReport) return;
     sendMessageToAssistant(input);
     setInput('');
   };
 
-  // Find the index of the last AI message that contains a JSON proposal.
-  // Only that card will show the Apply button; older ones are treated as superseded.
+  // Find indekset for det NYESTE AI-svar, som indeholder et JSON-forslag.
+  // Vi vil kun tillade brugeren at klikke "Apply Changes" på det nyeste forslag.
+  // Ældre forslag markeres som forældede (superseded).
   const lastProposalMsgIdx = React.useMemo(() => {
     const history = currentProject.chatHistory ?? [];
     for (let i = history.length - 1; i >= 0; i--) {
@@ -151,7 +158,7 @@ export function AIAssistantTab({
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
-      {/* Header */}
+      {/* Top bjælke med titel og ikon */}
       <div className="p-3 md:p-5 bg-white border-b border-slate-200 shrink-0">
         <h2 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
           <Bot className="w-5 h-5 text-indigo-500" />
@@ -162,6 +169,7 @@ export function AIAssistantTab({
         </p>
       </div>
 
+      {/* Advarselsbjælke i toppen, hvis der ligger ubehandlede ændringer */}
       {hasUnappliedProposals && !isReadOnly && (
         <div className="bg-amber-50 border-b border-amber-200 px-3.5 py-2 md:px-5 md:py-2.5 text-xs text-amber-800 font-semibold flex items-center gap-1.5 animate-fadeIn select-none shrink-0">
           <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
@@ -169,11 +177,12 @@ export function AIAssistantTab({
         </div>
       )}
 
-      {/* Message list */}
+      {/* Selve chat-beskedlisten */}
       <div 
         className="flex-1 overflow-y-auto p-3.5 md:p-4 space-y-4 md:space-y-5" 
         ref={scrollRef}
         onTouchStart={(e) => {
+          // På mobiler lukker vi tastaturet (blur), hvis brugeren scroller på baggrunden
           const active = document.activeElement;
           if (active instanceof HTMLElement && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) {
             const target = e.target as HTMLElement;
@@ -183,6 +192,7 @@ export function AIAssistantTab({
           }
         }}
       >
+        {/* Velkomstskærm hvis chatten er tom */}
         {(!currentProject.chatHistory || currentProject.chatHistory.length === 0) && (
           <div className="text-center mt-12 text-slate-400 px-6">
             <Bot className="w-14 h-14 mx-auto mb-3 opacity-40" />
@@ -193,9 +203,11 @@ export function AIAssistantTab({
           </div>
         )}
 
+        {/* Loop igennem chat-historikken */}
         {currentProject.chatHistory?.map((msg, idx) => {
           const isUser = msg.role === 'user';
 
+          // Hvis beskeden er fra brugeren (User)
           if (isUser) {
             return (
               <div key={idx} className="flex justify-end">
@@ -211,12 +223,12 @@ export function AIAssistantTab({
             );
           }
 
-          // AI message — parse structured response
+          // Hvis beskeden er fra AI-assistenten (Model) -> Split den op og vis kort
           const parsed = parseAIResponse(msg.text);
 
           return (
             <div key={idx} className="flex flex-col items-start gap-3">
-              {/* Avatar row */}
+              {/* AI-avatar */}
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
                   <Bot className="w-3.5 h-3.5 text-slate-600" />
@@ -225,14 +237,14 @@ export function AIAssistantTab({
               </div>
 
               <div className="ml-9 space-y-3 w-[90%]">
-                {/* Fallback prose (unstructured AI response) */}
+                {/* 1. Vis AI'ens indledende tekst/prosa */}
                 {parsed.prose && (
                   <div className="bg-white border border-slate-200 rounded-2xl p-3 text-sm text-slate-700 leading-relaxed shadow-xs">
                     {parsed.prose}
                   </div>
                 )}
 
-                {/* FACTS card – green */}
+                {/* 2. Det grønne FAKTA-kort (bekræftede feltværdier) */}
                 {parsed.facts.length > 0 && (
                   <div className="bg-emerald-50 border border-emerald-200 rounded-2xl overflow-hidden shadow-xs">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-100 border-b border-emerald-200">
@@ -252,7 +264,7 @@ export function AIAssistantTab({
                   </div>
                 )}
 
-                {/* QUESTIONS card – indigo */}
+                {/* 3. Det lilla SPØRGSMÅLS-kort (mangler, der udestår) */}
                 {parsed.questions.length > 0 && (
                   <div className="bg-indigo-50 border border-indigo-200 rounded-2xl overflow-hidden shadow-xs">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-100 border-b border-indigo-200">
@@ -274,7 +286,7 @@ export function AIAssistantTab({
                   </div>
                 )}
 
-                {/* Proposed-changes card */}
+                {/* 4. Det gule FORSLAGS-kort (hvis der er foreslåede feltændringer i JSON) */}
                 {parsed.jsonProposal && (
                   <ProposedChangesCard
                     proposal={parsed.jsonProposal}
@@ -292,7 +304,7 @@ export function AIAssistantTab({
           );
         })}
 
-        {/* Typing indicator */}
+        {/* Skrive-indikator (når AI'en tænker og genererer svar) */}
         {isGeneratingReport && (
           <div className="flex items-start gap-2.5">
             <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
@@ -307,7 +319,7 @@ export function AIAssistantTab({
         )}
       </div>
 
-      {/* Input bar */}
+      {/* Skrivefelt og send-knap i bunden */}
       <div className="p-2.5 md:p-4 bg-white border-t border-slate-200 shrink-0 animate-fadeIn">
         {isReadOnly ? (
           <div className="text-center py-2 px-3 bg-slate-100/80 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">
@@ -322,9 +334,11 @@ export function AIAssistantTab({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
+                // Enter sender beskeden, mens Shift+Enter laver et linjeskift
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
               }}
               onFocus={() => {
+                // Scroll til bunden efter et kort stykke tid for at gøre plads til tastaturet
                 setTimeout(() => {
                   if (scrollRef.current) {
                     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -346,6 +360,7 @@ export function AIAssistantTab({
   );
 }
 
+// ─── UNDERKOMPONENT: VISNING AF DET GULE FORSLAGSKORT ──────────────────────────
 interface ProposedChangesCardProps {
   proposal: any;
   currentProject: ProjectState;
@@ -354,38 +369,36 @@ interface ProposedChangesCardProps {
   saveProject?: (status?: ProjectState['status'], projectToSave?: ProjectState) => Promise<ProjectState | null>;
   activePartIndex: number;
   isReadOnly?: boolean;
-  /** Only the most recent AI proposal shows the Apply button. Older ones are "superseded". */
-  isLatest?: boolean;
+  isLatest?: boolean; // Kun det nyeste forslag kan godkendes.
 }
 
 function ProposedChangesCard({ proposal, currentProject, setCurrentProject, updateProjectField, saveProject, activePartIndex, isReadOnly = false, isLatest = false }: ProposedChangesCardProps) {
-  const [editedProposal, setEditedProposal] = useState(proposal);
-  const [isApplied, setIsApplied] = useState(() => isProposalAlreadyApplied(proposal, currentProject, activePartIndex));
-  const [isSaving, setIsSaving] = useState(false);
-  // Track if the user manually clicked "Apply Changes" in this session.
-  // Once set, we never let the real-time useEffect revert the card back to yellow.
-  const wasManuallyApplied = useRef(false);
+  const [editedProposal, setEditedProposal] = useState(proposal); // Gør det muligt for brugeren at redigere i AI'ens forslag før lagring
+  const [isApplied, setIsApplied] = useState(() => isProposalAlreadyApplied(proposal, currentProject, activePartIndex)); // Tjekker om ændringerne allerede er lagt ind
+  const [isSaving, setIsSaving] = useState(false); // Loading state under lagring
+  const wasManuallyApplied = useRef(false); // Holder styr på, om brugeren manuelt klikkede på "Apply" i denne session
 
-  // Sync isApplied state with database changes in real-time, but only
-  // revert to false if the user has NOT manually applied the changes yet.
+  // Synkroniserer knap-visningen i realtid, hvis databasen ændrer sig
   useEffect(() => {
     const alreadyApplied = isProposalAlreadyApplied(proposal, currentProject, activePartIndex);
     if (alreadyApplied) {
       setIsApplied(true);
     } else if (!wasManuallyApplied.current) {
-      // Only reset to false if the user hasn't clicked Apply yet
       setIsApplied(false);
     }
   }, [currentProject, proposal, activePartIndex]);
 
+  // Håndterer godkendelse og lagring af de foreslåede feltændringer til Firestore
   const handleApply = async () => {
     setIsSaving(true);
     try {
       const updatedProject: ProjectState = { ...currentProject };
 
+      // Læg de foreslåede generalResponses (stamdata) oveni projektet
       if (editedProposal.generalResponses) {
         updatedProject.generalResponses = { ...updatedProject.generalResponses, ...editedProposal.generalResponses };
       }
+      // Læg de foreslåede emnedata (parts) oveni projektet
       if (editedProposal.parts && Array.isArray(editedProposal.parts)) {
         const newParts = updatedProject.parts.map(p => ({ ...p, responses: { ...p.responses } }));
         const isSinglePartProposal = editedProposal.parts.length === 1;
@@ -398,8 +411,10 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
         updatedProject.parts = newParts;
       }
 
+      // Opdater den lokale React-tilstand med det samme
       setCurrentProject(updatedProject);
 
+      // Gem ændringerne permanent i Firestore databasen
       if (updatedProject.id) {
         if (saveProject) {
           await saveProject(updatedProject.status || 'draft', updatedProject);
@@ -418,7 +433,6 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
         }
       }
 
-      // Mark as manually applied BEFORE setting state, so the useEffect guard works
       wasManuallyApplied.current = true;
       setIsApplied(true);
     } catch (err) {
@@ -428,9 +442,7 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
     }
   };
 
-
-  // Non-latest proposals are "superseded" — show a compact read-only indicator.
-  // This prevents old Apply buttons from reappearing when the drawer is reopened.
+  // Hvis forslaget ikke er det nyeste i chatten, skjuler vi knappen og viser "Superseded"
   if (!isLatest) {
     return (
       <div className="text-xs text-slate-400 italic px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 flex items-center gap-1.5">
@@ -440,6 +452,7 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
     );
   }
 
+  // Hvis forslaget allerede er anvendt og gemt
   if (isApplied) {
     return (
       <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3.5 rounded-xl flex items-center gap-2 shadow-xs text-sm font-medium">
@@ -449,9 +462,10 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
     );
   }
 
-  // Build rows from proposal
+  // Opbyg rækkerne af forslåede ændringer til den sammenlignende tabel (Før vs. Efter)
   const allRows: { key: string; label: string; old: string; newVal: string; onChange: (v: string) => void }[] = [];
 
+  // Tilføj stamdata-rækker
   if (editedProposal.generalResponses) {
     Object.entries(editedProposal.generalResponses).forEach(([key, value]) => {
       allRows.push({
@@ -466,6 +480,7 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
       });
     });
   }
+  // Tilføj emne-rækker
   if (editedProposal.parts && Array.isArray(editedProposal.parts)) {
     const isSinglePartProposal = editedProposal.parts.length === 1;
     editedProposal.parts.forEach((part: any, pIdx: number) => {
@@ -489,11 +504,12 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
     });
   }
 
-  // Filter to show only rows where values are actually different (have changed)
+  // Filtrer rækkerne så vi KUN viser felter, hvor den foreslåede værdi er anderledes end den nuværende
   const rows = allRows.filter(row => !areValuesEqual(row.old, row.newVal));
 
   return (
     <div className={`bg-amber-50 border-2 rounded-2xl overflow-hidden shadow-sm transition-all ${isReadOnly ? 'border-slate-200 bg-slate-50/50' : 'border-amber-300'}`}>
+      {/* Topbjælke for forslagskortet med "Apply Changes" knappen */}
       <div className={`flex items-center justify-between px-4 py-3 border-b transition-all ${isReadOnly ? 'bg-slate-100 border-slate-200' : 'bg-amber-100 border-amber-200'}`}>
         <h3 className={`font-bold text-sm flex items-center gap-2 ${isReadOnly ? 'text-slate-600' : 'text-amber-900'}`}>
           <Edit2 className="w-4 h-4" />
@@ -514,6 +530,8 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
           {isSaving ? 'Saving…' : 'Apply Changes'}
         </button>
       </div>
+
+      {/* Listen af sammenligninger (Før (overstreget og gråt) vs. Efter (gult og redigerbart)) */}
       <div className="p-4 space-y-3">
         {rows.map(row => (
           <div key={row.key}>
@@ -521,9 +539,11 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
               {row.label}
             </label>
             <div className="grid grid-cols-2 gap-2">
+              {/* Gammel værdi */}
               <div className="bg-white border border-slate-200 text-slate-400 p-2 rounded-lg text-xs line-through opacity-70 min-h-[32px] break-words whitespace-pre-wrap">
                 {row.old || <span className="not-italic italic opacity-50">Empty</span>}
               </div>
+              {/* Ny foreslået værdi (kan redigeres direkte i chatten inden godkendelse!) */}
               <textarea
                 className={`border bg-white p-2 rounded-lg text-base md:text-xs outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none min-h-[32px] ${
                   isReadOnly 
