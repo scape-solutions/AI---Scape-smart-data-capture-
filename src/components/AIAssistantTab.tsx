@@ -316,7 +316,7 @@ export function AIAssistantTab({
         ) : (
           <div className="flex items-end gap-2">
             <textarea
-              className="flex-1 border border-slate-300 rounded-xl p-2.5 md:p-3 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
+              className="flex-1 border border-slate-300 rounded-xl p-2.5 md:p-3 text-base md:text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
               placeholder="Describe your project…"
               rows={1}
               value={input}
@@ -525,7 +525,7 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
                 {row.old || <span className="not-italic italic opacity-50">Empty</span>}
               </div>
               <textarea
-                className={`border bg-white p-2 rounded-lg text-xs outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none min-h-[32px] ${
+                className={`border bg-white p-2 rounded-lg text-base md:text-xs outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none min-h-[32px] ${
                   isReadOnly 
                     ? 'border-slate-200 bg-slate-50/50 text-slate-400 cursor-not-allowed' 
                     : 'border-amber-300 text-slate-800'

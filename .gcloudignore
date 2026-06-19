@@ -1,0 +1,22 @@
+# .gcloudignore
+# This file specifies which files and directories should not be uploaded
+# to Google Cloud Build. It overrides the default behavior of using .gitignore.
+
+# Keep githash.txt so Cloud Build can bake the correct commit hash into the UI build
+# (Do NOT add githash.txt here)
+
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+.git
+.hg
+.svn
+
+# Anchor root directories with a leading slash so subdirectories (like src/docs) are NOT ignored!
+/docs/
+/scratch/

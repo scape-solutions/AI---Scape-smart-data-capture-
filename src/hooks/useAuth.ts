@@ -89,7 +89,11 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     const isAllowed = isAllowedEvaluator(email, allowedEvaluators);
 
     // If user's email is whitelisted as an evaluator, but their Firestore profile is not evaluator/superuser
-    const needsUpgrade = isAllowed && profile.requestedRole !== 'evaluator' && profile.requestedRole !== 'superuser';
+    // and they have not explicitly selected 'user' mode preference
+    const needsUpgrade = isAllowed && 
+                         profile.requestedRole !== 'evaluator' && 
+                         profile.requestedRole !== 'superuser' &&
+                         !profile.userModePreferred;
 
     // Recalculate effective admin status
     const actualAdmin = getEffectiveAdminStatus(profile, user.uid);
@@ -175,7 +179,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
             const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
             if (u.email && isAllowedEvaluator(u.email, allowedEvaluators) && pData.requestedRole !== 'evaluator' && pData.requestedRole !== 'superuser') {
               pData.requestedRole = 'evaluator';
-              updateDoc(doc(db, 'users', u.uid), { requestedRole: 'evaluator' })
+              updateDoc(doc(db, 'users', u.uid), { requestedRole: 'evaluator', userModePreferred: false })
                 .then(() => console.log(`Auto-upgraded user ${u.email} to evaluator role in Firestore.`))
                 .catch(console.error);
             }
@@ -299,9 +303,10 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     const isAdmin = (newRole === 'evaluator' || newRole === 'superuser') && 
                     (isScapeEmployee(email, user.uid) || isAllowedEvaluator(email, allowedEvaluators));
     
+    const userModePreferred = newRole === 'user';
     try {
-      await updateDoc(doc(db, 'users', user.uid), { requestedRole: newRole, isAdmin });
-      setProfile({ ...profile, requestedRole: newRole, isAdmin });
+      await updateDoc(doc(db, 'users', user.uid), { requestedRole: newRole, isAdmin, userModePreferred });
+      setProfile({ ...profile, requestedRole: newRole, isAdmin, userModePreferred });
       onStatusChanged(isAdmin);
     } catch (e) {
       handleAppError(e, OperationType.UPDATE, `users/${user.uid}`);

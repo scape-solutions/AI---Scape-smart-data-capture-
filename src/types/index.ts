@@ -80,5 +80,6 @@ export interface UserProfile {
   phone?: string;
   isAdmin?: boolean;
   requestedRole?: 'evaluator' | 'user' | 'superuser';
+  userModePreferred?: boolean;
 }
 

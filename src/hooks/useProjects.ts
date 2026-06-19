@@ -52,7 +52,13 @@ export function normalizeProject(p: any): ProjectState {
     ownerName: p?.ownerName || 'Unknown',
     ownerCompany: p?.ownerCompany || 'Unknown',
     ownerEmail: p?.ownerEmail || 'Unknown',
-    ownerPhone: p?.ownerPhone || 'Unknown'
+    ownerPhone: p?.ownerPhone || 'Unknown',
+    takenBy: p?.takenBy || null,
+    takenByName: p?.takenByName || null,
+    isInactive: !!p?.isInactive,
+    isDeleted: !!p?.isDeleted,
+    isDemo: !!p?.isDemo,
+    isImportPending: !!p?.isImportPending
   };
 }
 
@@ -1125,10 +1131,18 @@ export function useProjects(
       ownerPhone: project.ownerPhone && project.ownerPhone !== 'Unknown' ? project.ownerPhone : (profile?.phone || 'Unknown')
     };
     
+    // Ensure no undefined fields are passed to Firestore
+    const cleanData = { ...data };
+    Object.keys(cleanData).forEach(key => {
+      if ((cleanData as any)[key] === undefined) {
+        delete (cleanData as any)[key];
+      }
+    });
+
     try {
       if (!project.id) {
         // Hvis der ikke er noget ID, opretter vi et NYT dokument (addDoc)
-        const docRef = await addDoc(collection(db, 'projects'), { ...data, createdAt: serverTimestamp() });
+        const docRef = await addDoc(collection(db, 'projects'), { ...cleanData, createdAt: serverTimestamp() });
         await saveProjectImages(docRef.id, project);
         const updated = { 
           ...project, 
@@ -1148,7 +1162,7 @@ export function useProjects(
         return updated;
       } else {
         // Hvis ID findes, overskriver vi det EKSISTERENDE dokument (updateDoc)
-        await updateDoc(doc(db, 'projects', project.id), data);
+        await updateDoc(doc(db, 'projects', project.id), cleanData);
         await saveProjectImages(project.id, project);
         await logChange(project.id, `Status updated to ${status}`);
         

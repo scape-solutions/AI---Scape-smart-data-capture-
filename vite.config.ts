@@ -3,18 +3,25 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 
 // Read version from package.json
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 // Get short git commit hash (falls back to 'local' if git is unavailable)
 let gitHash = 'local';
-try {
-  gitHash = execSync('git rev-parse --short HEAD', { stdio: ['pipe', 'pipe', 'pipe'] })
-    .toString()
-    .trim();
-} catch { /* not a git repo or git not available */ }
+if (existsSync('./githash.txt')) {
+  try {
+    gitHash = readFileSync('./githash.txt', 'utf-8').trim();
+  } catch {}
+}
+if (gitHash === 'local') {
+  try {
+    gitHash = execSync('git rev-parse --short HEAD', { stdio: ['pipe', 'pipe', 'pipe'] })
+      .toString()
+      .trim();
+  } catch { /* not a git repo or git not available */ }
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');

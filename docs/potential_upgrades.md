@@ -65,4 +65,23 @@ To improve the mobile and PWA data entry UX, replace the reliance on native virt
 * **Android Chrome:** Fully supported natively.
 * **Firefox:** Partial support. The application can feature-detect compatibility (`'webkitSpeechRecognition' in window`) and degrade gracefully by hiding the microphone button if unsupported.
 
+---
+
+## 4. Prompt Name Standardization Across UI, Database, and Code
+
+Der er behov for at få strømlinet og ensrettet navnene på prompts på tværs af hele systemet. Vi skal have lavet navnene på de prompts ens på tværs af:
+1. Navne brugt i brugerinterfacet (UI)
+2. Prompt filnavne i `src/docs`
+3. Koden og Firestore databasen
+
+There are current discrepancies in how prompts are referenced across the project. For example:
+* **UI Tab Name:** "Data Capture Advice" | **File:** `externalAdvicePrompt.md` | **Code/DB:** `externalAdvicePrompt`
+* **UI Tab Name:** "Technical Evaluation" | **File:** `evaluatorDraftPrompt.md` | **Code/DB:** `evaluatorDraftPrompt`
+* **UI Tab Name:** "AI Chat Assistant" | **File:** `autoFillPrompt.md` | **Code/DB:** `autoFillPrompt`
+
+### Goal
+Standardize all prompt identifiers, filenames, database keys, and UI labels to use matching terminology (e.g., `dataCaptureAdvice`, `technicalEvaluation`, and `chatAssistant`) across the user interface, filenames under [src/docs/](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/src/docs/), and the codebase.
+
+
+
 

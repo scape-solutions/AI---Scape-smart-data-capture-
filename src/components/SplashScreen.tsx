@@ -89,10 +89,6 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
       {/* Footer Info */}
       <div className="absolute bottom-6 left-6 right-6 flex justify-between items-center z-10 text-[10px] font-bold text-slate-600 font-mono">
         <span>SCAPE SOLUTIONS A/S</span>
-        <div className="flex items-center gap-1.5">
-          <Bot className="w-3 h-3 text-slate-500" />
-          <span>POWERED BY GEMINI 2.5</span>
-        </div>
       </div>
     </div>
   );

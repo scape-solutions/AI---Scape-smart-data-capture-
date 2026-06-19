@@ -935,7 +935,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           {verdictViewMode === 'edit' ? (
                             <textarea
                               disabled={isReadOnly}
-                              className={`w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all font-mono min-h-[300px] ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              className={`w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-base md:text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all font-mono min-h-[300px] ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                               placeholder="Paste AI draft here and edit, or write from scratch..."
                               value={currentProject.finalVerdict || ''}
                               onChange={(e) => {
@@ -1234,7 +1234,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         const updated = { ...currentProject.generalResponses, businessCaseSavedLabor: val };
                         setCurrentProject({ ...currentProject, generalResponses: updated });
                       }}
-                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-base md:text-sm"
                       placeholder="e.g. 50"
                     />
                   </div>
@@ -1250,7 +1250,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         const updated = { ...currentProject.generalResponses, businessCaseShifts: val };
                         setCurrentProject({ ...currentProject, generalResponses: updated });
                       }}
-                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm bg-white"
+                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-base md:text-sm bg-white"
                     >
                       <option value={1}>1 Shift</option>
                       <option value={2}>2 Shifts</option>
@@ -1270,7 +1270,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         const updated = { ...currentProject.generalResponses, businessCaseWorkDays: val };
                         setCurrentProject({ ...currentProject, generalResponses: updated });
                       }}
-                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-base md:text-sm"
                       placeholder="e.g. 220"
                     />
                   </div>
@@ -1287,7 +1287,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         const updated = { ...currentProject.generalResponses, businessCaseInstallCost: val };
                         setCurrentProject({ ...currentProject, generalResponses: updated });
                       }}
-                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-base md:text-sm"
                       placeholder="e.g. 120000"
                     />
                   </div>
@@ -1398,7 +1398,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     setCurrentProject({ ...currentProject, generalResponses: updated });
                   }}
                   rows={6}
-                  className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-sm leading-relaxed"
+                  className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-base md:text-sm leading-relaxed"
                   placeholder="e.g. We also have manual CNC machine feeding for our cast iron parts after bin picking. Additionally, visual inspection of parts is done manually at the end of the belt conveyor..."
                 />
               </div>
@@ -1561,7 +1561,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           type={q.type}
                           disabled={isReadOnly}
                           placeholder={q.placeholder}
-                          className="w-full p-4 bg-white border border-slate-200 rounded-2xl disabled:bg-slate-50 disabled:text-slate-400 text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all font-semibold"
+                          className="w-full p-4 bg-white border border-slate-200 rounded-2xl disabled:bg-slate-50 disabled:text-slate-400 text-base md:text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all font-semibold"
                           value={(currentStep === 0 ? currentProject.generalResponses[q.id] : currentProject.parts[activePartIndex].responses[q.id]) ?? ''}
                           onChange={e => {
                             const val = q.type === 'number' ? (parseFloat(e.target.value) || 0) : e.target.value;
@@ -1731,7 +1731,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         <textarea 
                           disabled={isReadOnly}
                           placeholder={q.placeholder}
-                          className="w-full h-32 p-4 bg-white border border-slate-200 rounded-2xl disabled:bg-slate-50 disabled:text-slate-400 text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all font-semibold resize-none"
+                          className="w-full h-32 p-4 bg-white border border-slate-200 rounded-2xl disabled:bg-slate-50 disabled:text-slate-400 text-base md:text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all font-semibold resize-none"
                           value={(currentStep === 0 ? currentProject.generalResponses[q.id] : currentProject.parts[activePartIndex].responses[q.id]) ?? ''}
                           onChange={e => {
                             const val = e.target.value;
