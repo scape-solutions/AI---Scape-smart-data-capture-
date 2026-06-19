@@ -134,7 +134,7 @@ app.get('/api/auth/google/start', (req, res) => {
 
   // Dynamically resolve protocol and host to avoid redirecting to the wrong domain
   const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.get('host');
+  const host = req.headers['x-forwarded-host'] || req.get('host');
   const currentAppUrl = `${protocol}://${host}`;
   const callbackUrl = `${currentAppUrl}/api/auth/google/callback`;
 
@@ -170,7 +170,7 @@ app.get('/api/auth/google/start', (req, res) => {
 app.get('/api/auth/google/callback', async (req, res) => {
   const { code, state, error } = req.query;
   const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.get('host');
+  const host = req.headers['x-forwarded-host'] || req.get('host');
   const currentAppUrl = `${protocol}://${host}`;
   const callbackUrl = `${currentAppUrl}/api/auth/google/callback`;
 
