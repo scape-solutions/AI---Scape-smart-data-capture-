@@ -47,6 +47,7 @@ export function Header({
   ownerPhone
 }: HeaderProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
   const [phone, setPhone] = useState('');
@@ -110,7 +111,11 @@ export function Header({
         </div>
       )}
       
-      <div className="flex items-center gap-2 cursor-pointer shrink-0 select-none hover:opacity-90 active:scale-[0.98] transition-all" onClick={() => setView('dashboard')}>
+      <div 
+        className="flex items-center gap-2 cursor-pointer shrink-0 select-none hover:opacity-90 active:scale-[0.98] transition-all" 
+        onClick={() => setIsAboutModalOpen(true)}
+        title="Om Scape Bin-Picking Evaluator"
+      >
         <span className="font-extrabold text-2xl tracking-[0.04em] text-slate-900 flex items-center select-none">
           SC
           <span className="inline-flex items-center justify-center mx-[0.5px] relative top-[0.5px]">
@@ -125,19 +130,10 @@ export function Header({
           </span>
           PE
         </span>
-        {/* Version badge — only shown to Scape employees so external users don't see internal build info */}
-        {isScapeEmployee(user?.email, user?.uid) && (
-          <span
-            className="hidden sm:inline-flex items-center gap-1 text-[9px] font-mono font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-md leading-none select-all"
-            title={`Build: ${__APP_BUILD_DATE__}`}
-          >
-            v{__APP_VERSION__}
-            <span className="text-slate-300">·</span>
-            {__APP_GIT_HASH__}
-            <span className="text-slate-300">·</span>
-            {new Date(__APP_BUILD_DATE__).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
-          </span>
-        )}
+        {/* En lille info-indikator ved siden af logoet for at vise at det kan klikkes */}
+        <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1 py-0.5 rounded-md leading-none select-none">
+          Info
+        </span>
       </div>
 
       
@@ -379,6 +375,118 @@ export function Header({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DET SMUKKE OM / ABOUT MODAL POPUP */}
+      {isAboutModalOpen && (
+        <div 
+          className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-fadeIn"
+          onClick={() => setIsAboutModalOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-[2.5rem] p-6 md:p-10 shadow-2xl max-w-lg w-full border border-slate-100 relative overflow-hidden animate-scaleIn select-text text-left max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Elegant top color band */}
+            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-red-600 to-amber-500" />
+            
+            <button 
+              onClick={() => setIsAboutModalOpen(false)}
+              className="absolute top-6 right-6 text-slate-400 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 p-2 rounded-full transition-all border border-slate-100 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Logo and Header */}
+            <div className="flex items-center gap-2 mb-6">
+              <span className="font-extrabold text-2xl tracking-[0.04em] text-slate-900 flex items-center select-none">
+                SC
+                <span className="inline-flex items-center justify-center mx-[0.5px] relative top-[0.5px]">
+                  <svg width="20" height="20" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-slate-900">
+                    <path d="M 22,90 L 50,15 L 62,15 L 34,90 Z" fill="currentColor" />
+                    <path d="M 50,15 L 68,55 L 56,55 L 42,23 Z" fill="currentColor" />
+                    <path d="M 61,62 L 70,62 L 78,82 L 69,82 Z" fill="#bf1e2e" />
+                  </svg>
+                </span>
+                PE
+              </span>
+              <span className="text-xs font-bold text-slate-400">Bin-Picking Evaluator</span>
+            </div>
+
+            {/* Content Sections */}
+            <div className="space-y-6">
+              {/* Build Info */}
+              <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4">
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">System Version Info</h4>
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono font-bold text-slate-600">
+                  <div>
+                    <span className="block text-[9px] font-sans text-slate-400 uppercase tracking-tight">Version</span>
+                    <span>v{__APP_VERSION__}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-sans text-slate-400 uppercase tracking-tight">Git Commit</span>
+                    <span>{__APP_GIT_HASH__}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-sans text-slate-400 uppercase tracking-tight">Build Date</span>
+                    <span>{new Date(__APP_BUILD_DATE__).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Purpose */}
+              <div>
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Formål / Purpose</h4>
+                <p className="text-xs text-slate-700 leading-relaxed">
+                  Dette værktøj hjælper med at indsamle og evaluere tekniske specifikationer for bin-picking opgaver. 
+                  Ved at dele data om emner, kasser og ydeevne kan vi hurtigt give rådgivning og vurdere gennemførligheden af en automatiseret løsning.
+                </p>
+              </div>
+
+              {/* Condensed How-To */}
+              <div>
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Sådan bruges appen / Quick Guide</h4>
+                <ul className="text-xs text-slate-700 space-y-1.5 leading-relaxed list-decimal pl-4">
+                  <li>Angiv kassestørrelse og foretrukket robot under <strong>Project & Cell Info</strong>.</li>
+                  <li>Tilføj dine emner, vægt, dimensioner og billeder (brug gerne mobilen til at uploade fotos).</li>
+                  <li>Brug <strong>AI Chat Assistant</strong> i sidepanelet til at udfylde formularen via tale eller skrift.</li>
+                  <li>Kør <strong>Data Capture Advice</strong> under <em>Review & Submit</em> for at tjekke for eventuelle mangler før indsendelse.</li>
+                  <li>Tryk på <strong>Submit</strong>, hvorefter Scape-personalet udfører den endelige tekniske slutevaluering.</li>
+                </ul>
+              </div>
+
+              {/* Data Security */}
+              <div className="border-t border-slate-100 pt-4">
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Datasikkerhed / Data Security</h4>
+                <p className="text-xs text-slate-500 leading-relaxed italic">
+                  Alle indtastede oplysninger, CAD-filer og uploadede billeder opbevares fortroligt og krypteret i vores private cloud-databaser. 
+                  Data er beskyttet mod uautoriseret adgang og tilgås udelukkende af autoriseret personale fra Scape Solutions.
+                </p>
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="mt-8 flex gap-3">
+              <button 
+                type="button"
+                onClick={() => setIsAboutModalOpen(false)}
+                className="flex-1 py-3 bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-all text-xs cursor-pointer"
+              >
+                Luk / Close
+              </button>
+              <button 
+                type="button"
+                onClick={() => {
+                  setView('dashboard');
+                  setIsAboutModalOpen(false);
+                }}
+                className="flex-1 py-3 rounded-2xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 hover:scale-[1.01] transition-all text-xs cursor-pointer"
+              >
+                Gå til Dashboard
+              </button>
+            </div>
           </div>
         </div>
       )}
