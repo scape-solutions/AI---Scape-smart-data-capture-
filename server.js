@@ -125,7 +125,7 @@ setInterval(() => {
   }
 }, 60_000);
 
-// Step 1 – PWA navigates here (same origin, stays in PWA context)
+// Step 1 – PWA/mobile browser navigates here (same origin, stays in context)
 // Server redirects to Google OAuth. The session state is stored server-side.
 app.get('/api/auth/google/start', (req, res) => {
   if (!GOOGLE_OAUTH_CLIENT_SECRET) {
@@ -134,8 +134,7 @@ app.get('/api/auth/google/start', (req, res) => {
   const state = crypto.randomUUID();
   oauthSessions.set(state, { status: 'pending', expiresAt: Date.now() + 10 * 60_000 });
 
-  // Set a cookie so the PWA can later look up its session
-  // Cookies are shared between Safari and PWA on the same iOS domain
+  // Set a cookie so the PWA/client can later look up its session
   res.cookie('oauth_state', state, {
     httpOnly: true,
     secure: true,
@@ -143,9 +142,15 @@ app.get('/api/auth/google/start', (req, res) => {
     maxAge: 10 * 60 * 1000 // 10 minutes
   });
 
+  // Dynamically resolve protocol and host to avoid redirecting to the wrong domain
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.get('host');
+  const currentAppUrl = `${protocol}://${host}`;
+  const callbackUrl = `${currentAppUrl}/api/auth/google/callback`;
+
   const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
     client_id: GOOGLE_OAUTH_CLIENT_ID,
-    redirect_uri: OAUTH_CALLBACK_URL,
+    redirect_uri: callbackUrl,
     response_type: 'code',
     scope: 'email profile',
     state,
@@ -156,9 +161,13 @@ app.get('/api/auth/google/start', (req, res) => {
   res.redirect(authUrl);
 });
 
-// Step 2 – Google redirects here after the user authenticates (runs in Safari)
+// Step 2 – Google redirects here after the user authenticates
 app.get('/api/auth/google/callback', async (req, res) => {
   const { code, state, error } = req.query;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.get('host');
+  const currentAppUrl = `${protocol}://${host}`;
+  const callbackUrl = `${currentAppUrl}/api/auth/google/callback`;
 
   if (error || !code || !state) {
     return res.send(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:sans-serif;padding:2rem;text-align:center">
@@ -171,14 +180,15 @@ app.get('/api/auth/google/callback', async (req, res) => {
   }
 
   try {
-    // Exchange authorization code for tokens
+    // Exchange authorization code for tokens using the dynamically resolved callbackUrl
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        code, client_id: GOOGLE_OAUTH_CLIENT_ID,
+        code, 
+        client_id: GOOGLE_OAUTH_CLIENT_ID,
         client_secret: GOOGLE_OAUTH_CLIENT_SECRET,
-        redirect_uri: OAUTH_CALLBACK_URL,
+        redirect_uri: callbackUrl,
         grant_type: 'authorization_code'
       })
     });
@@ -209,14 +219,12 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
     // Mark session as complete (token expires in 5 minutes – must be picked up quickly)
     oauthSessions.set(state, { status: 'complete', customToken, email, expiresAt: Date.now() + 5 * 60_000 });
-    console.log(`PWA OAuth: signed in ${email} (uid: ${firebaseUid})`);
+    console.log(`Mobile OAuth: signed in ${email} (uid: ${firebaseUid})`);
 
-    // Show a friendly success page – iOS will open this in Safari, not the PWA.
-    // The user needs to manually return to the app, which will auto-complete sign-in
-    // by reading the shared cookie.
+    // Show a friendly success page that redirects the user back to the correct app landing URL
     res.send(`<!DOCTYPE html><html><head>
       <meta name="viewport" content="width=device-width,initial-scale=1">
-      <meta http-equiv="refresh" content="2;url=${APP_URL}">
+      <meta http-equiv="refresh" content="2;url=${currentAppUrl}">
       <title>Signed in</title>
       <style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f7}div{text-align:center;padding:2rem}h2{color:#1c1c1e}p{color:#6e6e73}</style>
     </head><body><div>

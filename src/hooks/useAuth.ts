@@ -211,15 +211,12 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-      if (isStandalone) {
-        // iOS PWA standalone: neither signInWithRedirect (never returns to PWA context)
-        // nor signInWithPopup (blocked by iOS) work reliably.
-        // Use server-side OAuth via /api/auth/google/start (same-origin navigation –
-        // stays in PWA), then pick up the result via cookie on next startup.
+      if (isStandalone || isMobile) {
+        // Mobile platforms (both standalone PWA and regular mobile Safari/Chrome):
+        // Standard Firebase signInWithRedirect and signInWithPopup often fail or loop
+        // due to iOS/Android cross-site cookie restrictions (third-party storage partitioning).
+        // Using our server-side OAuth flow is 100% reliable as it runs same-origin.
         window.location.href = '/api/auth/google/start';
-      } else if (isMobile) {
-        // Regular mobile browser: redirect gives smoother UX
-        await signInWithRedirect(auth, provider);
       } else {
         // Desktop: popup
         await signInWithPopup(auth, provider);
