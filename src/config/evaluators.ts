@@ -2,10 +2,6 @@
 // and synced in real-time. The lists below are only used as local offline fallbacks.
 
 export const ALLOWED_EVALUATORS = [
-  'rde@scapesolutions.eu',
-  'jeo@scapesolutions.eu',
-  'rkl@scapesolutions.eu',
-  'evaluator-scape-solution',
   'rune.k.larsen@scapesolutions.eu'
 ];
 

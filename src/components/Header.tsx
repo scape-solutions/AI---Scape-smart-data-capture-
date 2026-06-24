@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LogOut, User as UserIcon, X, Settings } from 'lucide-react';
-import { isSuperuser } from '../config/evaluators';
+import { isDynamicSuperuser } from '../hooks/useAuth';
 import { UserProfile } from '../types';
 
 interface HeaderProps {
@@ -215,31 +215,7 @@ export function Header({
       )}
       
       <div className="flex items-center gap-2 md:gap-6">
-        {/* Vises kun for Scape ansatte. */}
-        {(isScapeEmployee(user?.email, user?.uid) || isAllowedEvaluator(user?.email)) && (
-          <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
-            {isSuperuser(user?.email) && (
-              <button 
-                onClick={() => switchMode('superuser', () => {})}
-                className={`text-[9px] font-black uppercase px-2 md:px-3 py-1.5 rounded-lg transition-all ${profile?.requestedRole === 'superuser' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                Super User
-              </button>
-            )}
-            <button 
-              onClick={() => switchMode('evaluator', () => {})}
-              className={`text-[9px] font-black uppercase px-2 md:px-3 py-1.5 rounded-lg transition-all ${profile?.requestedRole === 'evaluator' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              Evaluator
-            </button>
-            <button 
-              onClick={() => switchMode('user', () => {})}
-              className={`text-[9px] font-black uppercase px-2 md:px-3 py-1.5 rounded-lg transition-all ${profile?.requestedRole === 'user' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              User
-            </button>
-          </div>
-        )}
+
         
         {/* Interactive clickable Profile area */}
         <div 
@@ -247,17 +223,20 @@ export function Header({
           className="group flex items-center gap-3 px-3 py-1.5 rounded-2xl border border-transparent hover:border-slate-100 hover:bg-slate-50 cursor-pointer transition-all duration-200 select-none text-right"
           title="Vis / ret profil & kontaktdata"
         >
-          <div className="hidden sm:block">
-            <div className="flex items-center justify-end gap-2">
-              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border leading-none ${
-                profile?.requestedRole === 'superuser' ? 'bg-amber-600 text-white border-amber-600' :
-                profile?.isAdmin ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-100 text-slate-500 border-slate-200'
-              }`}>
-                {profile?.requestedRole === 'superuser' ? "Super User" : profile?.isAdmin ? "Scape Eng" : "User"}
-              </span>
-              <span className="text-xs font-bold text-slate-800 group-hover:text-slate-950 transition-colors">{profile?.name}</span>
+          <div className="flex flex-col sm:items-end justify-center">
+            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border leading-none self-end mb-0.5 ${
+              profile?.requestedRole === 'superuser' ? 'bg-amber-600 text-white border-amber-600' :
+              profile?.requestedRole === 'evaluator' ? 'bg-blue-600 text-white border-blue-600' : 
+              profile?.isAdmin ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-200'
+            }`}>
+              {profile?.requestedRole === 'superuser' ? "Super User" : 
+               profile?.requestedRole === 'evaluator' ? "Evaluator" :
+               profile?.isAdmin ? "Scape Eng" : "User"}
+            </span>
+            <div className="hidden sm:block text-right">
+              <span className="text-xs font-bold text-slate-800 group-hover:text-slate-950 transition-colors block">{profile?.name}</span>
+              <p className="text-[10px] text-slate-400 group-hover:text-slate-500 transition-colors font-medium leading-tight">{user?.email}</p>
             </div>
-            <p className="text-[10px] text-slate-400 group-hover:text-slate-500 transition-colors font-medium">{user?.email}</p>
           </div>
           <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center text-slate-500 group-hover:text-slate-700 border border-slate-200 transition-all duration-200 shrink-0">
             <UserIcon className="w-4 h-4" />
@@ -276,7 +255,7 @@ export function Header({
           onClick={() => setIsModalOpen(false)}
         >
           <div 
-            className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-2xl max-w-md w-full border border-slate-100 relative overflow-hidden animate-scaleIn"
+            className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-2xl max-w-md w-full border border-slate-100 relative overflow-hidden animate-scaleIn max-h-[85svh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             {/* Elegant top color band */}
@@ -298,6 +277,38 @@ export function Header({
                 <p className="text-xs text-slate-400 font-semibold mt-0.5">Ret dine kontaktoplysninger</p>
               </div>
             </div>
+
+            {/* Rolle-vælger til Scape Ansatte - Flyttet ind i modal for at spare plads i Header */}
+            {(isAllowedEvaluator(user?.email) || isDynamicSuperuser(user?.email)) && (
+              <div className="mb-6 p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Admin View Mode</label>
+                <div className="flex bg-slate-200/60 p-1 rounded-xl">
+                  {isDynamicSuperuser(user?.email) && (
+                    <button 
+                      onClick={() => switchMode('superuser', () => {})}
+                      type="button"
+                      className={`flex-1 text-[10px] font-black uppercase px-2 py-2 rounded-lg transition-all ${profile?.requestedRole === 'superuser' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Super User
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => switchMode('evaluator', () => {})}
+                    type="button"
+                    className={`flex-1 text-[10px] font-black uppercase px-2 py-2 rounded-lg transition-all ${profile?.requestedRole === 'evaluator' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Evaluator
+                  </button>
+                  <button 
+                    onClick={() => switchMode('user', () => {})}
+                    type="button"
+                    className={`flex-1 text-[10px] font-black uppercase px-2 py-2 rounded-lg transition-all ${profile?.requestedRole === 'user' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    User
+                  </button>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleSave} className="space-y-4">
               <div>
@@ -386,7 +397,7 @@ export function Header({
           onClick={() => setIsAboutModalOpen(false)}
         >
           <div 
-            className="bg-white rounded-[2.5rem] p-6 md:p-10 shadow-2xl max-w-lg w-full border border-slate-100 relative overflow-hidden animate-scaleIn select-text text-left max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-[2.5rem] p-6 md:p-10 shadow-2xl max-w-lg w-full border border-slate-100 relative overflow-hidden animate-scaleIn select-text text-left max-h-[85svh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             {/* Elegant top color band */}

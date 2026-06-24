@@ -10,8 +10,7 @@ import { GoogleGenAI } from '@google/genai';
 import { updateDoc, doc, onSnapshot, waitForPendingWrites } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 
-import { useAuth, isScapeEmployee, getEffectiveAdminStatus } from './hooks/useAuth';
-import { isAllowedEvaluator } from './config/evaluators';
+import { useAuth, isScapeEmployee, getEffectiveAdminStatus, isDynamicAllowedEvaluator, isDynamicSuperuser } from './hooks/useAuth';
 import { useProjects } from './hooks/useProjects';
 import { GENERAL_STEPS, PART_STEPS } from './questionnaire';
 
@@ -382,6 +381,7 @@ export default function App() {
     setView,
     authError,
     setAuthError,
+    authLoading,
     login,
     loginWithEmail,
     signupWithEmail,
@@ -737,6 +737,7 @@ export default function App() {
         loginWithEmail={() => loginWithEmail(authEmail, authPassword)}
         signupWithEmail={() => signupWithEmail(authEmail, authPassword, authDisplayName)}
         loginWithGoogle={login}
+        authLoading={authLoading}
       />
     );
   }
@@ -748,7 +749,8 @@ export default function App() {
         profile={profile} setProfile={setProfile}
         saveProfile={saveProfile}
         isScapeEmployee={isScapeEmployee}
-        isAllowedEvaluator={isAllowedEvaluator}
+        isAllowedEvaluator={isDynamicAllowedEvaluator}
+        isDynamicSuperuser={isDynamicSuperuser}
         userEmail={user.email}
       />
     );
@@ -764,7 +766,7 @@ export default function App() {
           globalError={globalError} setGlobalError={setGlobalError}
           globalSuccess={globalSuccess} setGlobalSuccess={setGlobalSuccess}
           setView={setView} logout={handleLogout} switchMode={switchMode}
-          isAllowedEvaluator={isAllowedEvaluator} isScapeEmployee={isScapeEmployee}
+          isAllowedEvaluator={isDynamicAllowedEvaluator} isScapeEmployee={isScapeEmployee}
           saveProfile={saveProfile}
           projectName={view === 'questionnaire' && currentProject ? currentProject.projectName : undefined}
           projectId={view === 'questionnaire' && currentProject ? currentProject.id : undefined}
@@ -837,7 +839,7 @@ export default function App() {
             user={user}
             logout={handleLogout}
             switchMode={switchMode}
-            isAllowedEvaluator={isAllowedEvaluator}
+            isAllowedEvaluator={isDynamicAllowedEvaluator}
             isScapeEmployee={isScapeEmployee}
             saveProfile={saveProfile}
             updateProjectField={(p, field, value, comment) => updateProjectField(p, field, value, comment)}

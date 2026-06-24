@@ -25,31 +25,45 @@ let allowedConfig = {
   allowedDomains: ['scapesolutions.eu', 'scapesolutions.com'],
   allowedEmails: [],
   allowedEvaluators: [
-    'rde@scapesolutions.eu',
-    'jeo@scapesolutions.eu',
-    'rkl@scapesolutions.eu',
-    'evaluator-scape-solution',
-    'rune.k.larsen@scapesolutions.eu'
+    'rene.dencker.eriksen@scapesolutions.eu',
+    'john.erland.oestergaard@scapesolutions.eu',
+    'rune.k.larsen@scapesolutions.eu',
+    'per.juul.nielsen@scapesolutions.eu',
+    'demo@scapesolutions.eu'
   ],
   superusers: ['rune.k.larsen@scapesolutions.eu']
 };
 
+// Helper function to update in-memory access configuration
+function updateAccessConfig(data) {
+  allowedConfig = {
+    allowedDomains: data.allowedDomains || [],
+    allowedEmails: data.allowedEmails || [],
+    allowedEvaluators: data.allowedEvaluators || [],
+    superusers: data.superusers || []
+  };
+  console.log("Updated access config successfully loaded from Firestore:", allowedConfig);
+}
+
+// Fetch configuration at startup to prevent cold-start race conditions
+try {
+  const startupSnap = await db.collection('config').doc('access').get();
+  if (startupSnap.exists) {
+    updateAccessConfig(startupSnap.data());
+  } else {
+    console.warn("config/access document does not exist in Firestore at startup! Using hardcoded offline defaults.");
+  }
+} catch (error) {
+  console.error("Error fetching Firestore config/access at server startup:", error);
+}
+
 // Listen to Firestore config changes in real-time
 db.collection('config').doc('access').onSnapshot((docSnap) => {
   if (docSnap.exists) {
-    const data = docSnap.data();
-    allowedConfig = {
-      allowedDomains: data.allowedDomains || [],
-      allowedEmails: data.allowedEmails || [],
-      allowedEvaluators: data.allowedEvaluators || [],
-      superusers: data.superusers || []
-    };
-    console.log("Updated access config successfully loaded from Firestore:", allowedConfig);
-  } else {
-    console.warn("config/access document does not exist in Firestore! Using hardcoded offline defaults.");
+    updateAccessConfig(docSnap.data());
   }
 }, (error) => {
-  console.error("Error listening to Firestore config/access changes (expected locally if not authenticated):", error);
+  console.warn("Error listening to Firestore config/access changes (expected locally if not authenticated):", error);
 });
 
 // Middleware to verify Firebase ID Token and check email domain/address.
@@ -98,6 +112,7 @@ async function verifyFirebaseToken(req, res, next) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 
 // Set body limit to 50MB to accommodate high-resolution image uploads sent in the JSON payload
 app.use(express.json({ limit: '50mb' }));
@@ -116,18 +131,29 @@ const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
 const APP_URL = process.env.APP_URL || 'https://scape-data-capture.web.app';
 const OAUTH_CALLBACK_URL = `${APP_URL}/api/auth/google/callback`;
 
-// In-memory session store: state token → { status, customToken, email, expiresAt }
-const oauthSessions = new Map();
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, s] of oauthSessions.entries()) {
-    if (now > s.expiresAt) oauthSessions.delete(key);
+// We use Firestore instead of an in-memory Map to store the OAuth session state.
+// This is necessary because Cloud Run might scale to multiple instances, 
+// causing the callback request to land on a different instance than the start request.
+const oauthSessionsRef = db.collection('oauth_sessions');
+
+// Periodically clean up expired sessions from Firestore (runs in the background)
+setInterval(async () => {
+  try {
+    const snapshot = await oauthSessionsRef.where('expiresAt', '<', Date.now()).get();
+    if (!snapshot.empty) {
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      console.log(`Cleaned up ${snapshot.size} expired OAuth sessions from Firestore.`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up expired OAuth sessions:', error);
   }
-}, 60_000);
+}, 5 * 60_000);
 
 // Step 1 – PWA/mobile browser navigates here (same origin, stays in context)
 // Server redirects to Google OAuth. The session state is stored server-side.
-app.get('/api/auth/google/start', (req, res) => {
+app.get('/api/auth/google/start', async (req, res) => {
   if (!GOOGLE_OAUTH_CLIENT_SECRET) {
     return res.status(503).send('Google OAuth not configured on this server. Please add GOOGLE_OAUTH_CLIENT_SECRET.');
   }
@@ -143,7 +169,18 @@ app.get('/api/auth/google/start', (req, res) => {
   console.log(`[OAuth Start] constructed redirect_uri: ${callbackUrl}`);
 
   const state = crypto.randomUUID();
-  oauthSessions.set(state, { status: 'pending', expiresAt: Date.now() + 10 * 60_000 });
+  
+  // Store session in Firestore to survive across Cloud Run instances
+  try {
+    await oauthSessionsRef.doc(state).set({
+      status: 'pending',
+      expiresAt: Date.now() + 10 * 60_000,
+      createdAt: Date.now()
+    });
+  } catch (error) {
+    console.error('Failed to create OAuth session in Firestore:', error);
+    return res.status(500).send('Internal Server Error while initializing login.');
+  }
 
   // Set a cookie so the PWA/client can later look up its session
   res.cookie('oauth_state', state, {
@@ -179,8 +216,20 @@ app.get('/api/auth/google/callback', async (req, res) => {
       <h2>❌ Sign-in cancelled</h2><p>Please return to the app and try again.</p></body></html>`);
   }
 
-  const session = oauthSessions.get(state);
-  if (!session || session.status !== 'pending') {
+  let sessionDoc;
+  try {
+    sessionDoc = await oauthSessionsRef.doc(state).get();
+  } catch (error) {
+    console.error('Error fetching OAuth session from Firestore:', error);
+    return res.status(500).send('<html><body>Internal server error checking session. Please try again.</body></html>');
+  }
+
+  if (!sessionDoc.exists) {
+    return res.status(400).send('<html><body>Invalid or expired session. Please try again.</body></html>');
+  }
+
+  const session = sessionDoc.data();
+  if (session.status !== 'pending' || Date.now() > session.expiresAt) {
     return res.status(400).send('<html><body>Invalid or expired session. Please try again.</body></html>');
   }
 
@@ -222,8 +271,13 @@ app.get('/api/auth/google/callback', async (req, res) => {
     // Create a short-lived Firebase custom token (1 hour)
     const customToken = await getAuth().createCustomToken(firebaseUid, { email });
 
-    // Mark session as complete (token expires in 5 minutes – must be picked up quickly)
-    oauthSessions.set(state, { status: 'complete', customToken, email, expiresAt: Date.now() + 5 * 60_000 });
+    // Mark session as complete in Firestore (token expires in 5 minutes – must be picked up quickly)
+    await oauthSessionsRef.doc(state).update({ 
+      status: 'complete', 
+      customToken, 
+      email, 
+      expiresAt: Date.now() + 5 * 60_000 
+    });
     console.log(`Mobile OAuth: signed in ${email} (uid: ${firebaseUid})`);
 
     // Show a friendly success page that redirects the user back to the correct app landing URL
@@ -236,32 +290,61 @@ app.get('/api/auth/google/callback', async (req, res) => {
       <div style="font-size:3rem">✅</div>
       <h2>Signed in as ${email}</h2>
       <p>Returning to the app&hellip;</p>
-    </div></body></html>`);
+    </div>
+    <script>
+      // Fallback robust passing of the token: LocalStorage and URL Hash
+      try {
+        localStorage.setItem('pwa_custom_token', '${customToken}');
+      } catch (e) { console.error("LocalStorage set failed", e); }
+      
+      // Return to the PWA app which is polling or picking up the token
+      setTimeout(() => {
+        window.location.href = '/#token=' + encodeURIComponent('${customToken}');
+      }, 1500);
+    </script>
+    </body></html>`);
   } catch (err) {
     console.error('PWA OAuth callback error:', err);
-    oauthSessions.set(state, { status: 'error', expiresAt: Date.now() + 2 * 60_000 });
+    try {
+      await oauthSessionsRef.doc(state).update({ status: 'error', expiresAt: Date.now() + 2 * 60_000 });
+    } catch (updateErr) {
+      console.error('Failed to update session error state:', updateErr);
+    }
     res.send('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:sans-serif;padding:2rem;text-align:center"><h2>❌ Sign-in failed</h2><p>Please return to the app and try again.</p></body></html>');
   }
 });
 
 // Step 3 – PWA calls this on startup (cookie is sent automatically, shared across Safari & PWA)
 // Returns the Firebase custom token if sign-in just completed in Safari.
-app.get('/api/auth/check-pending', (req, res) => {
+app.get('/api/auth/check-pending', async (req, res) => {
   const state = req.cookies?.oauth_state;
   if (!state) return res.json({ status: 'none' });
 
-  const session = oauthSessions.get(state);
-  if (!session) return res.json({ status: 'none' });
+  try {
+    const sessionDoc = await oauthSessionsRef.doc(state).get();
+    if (!sessionDoc.exists) return res.json({ status: 'none' });
 
-  if (session.status === 'complete') {
-    const { customToken, email } = session;
-    // Clear the session and cookie immediately (one-time use)
-    oauthSessions.delete(state);
-    res.clearCookie('oauth_state');
-    return res.json({ status: 'complete', customToken, email });
+    const session = sessionDoc.data();
+
+    if (session.status === 'complete') {
+      const { customToken, email } = session;
+      // Clear the session from Firestore and cookie immediately (one-time use)
+      await oauthSessionsRef.doc(state).delete();
+      res.clearCookie('oauth_state');
+      return res.json({ status: 'complete', customToken, email });
+    }
+
+    if (Date.now() > session.expiresAt) {
+       await oauthSessionsRef.doc(state).delete();
+       res.clearCookie('oauth_state');
+       return res.json({ status: 'none' });
+    }
+
+    res.json({ status: session.status });
+  } catch (error) {
+    console.error('Error checking pending OAuth session:', error);
+    res.json({ status: 'error', message: 'Failed to verify pending login.' });
   }
-
-  res.json({ status: session.status });
 });
 // ──────────────────────────────────────────────────────────────────────────────
 

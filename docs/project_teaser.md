@@ -1,8 +1,8 @@
 # SCAPE Bin-Picking Evaluator - App Teaser & Testing Guide
 
-**Live Web App & PWA Link:** [https://scape-evaluator-782472107063.europe-west3.run.app](https://scape-evaluator-782472107063.europe-west3.run.app)
+**Live Web App & PWA Link:** <https://scape-data-capture.web.app/>
 
-Welcome to the **SCAPE Bin-Picking Evaluator**, a premium, smart data capture tool designed to streamline technical feasibility checks and hardware selection (vision systems & grippers) for bin-picking projects.
+Welcome to the **SCAPE Bin-Picking Evaluator**, a premium, smart tool designed to streamline technical feasibility checks and hardware selection (vision systems & grippers) for bin-picking projects.
 
 Powered by the advanced **Gemini 2.5 Flash** model, the app uses state-of-the-art multimodal AI to automatically translate free-text descriptions and cell photos into structured project specifications.
 
@@ -13,11 +13,11 @@ Powered by the advanced **Gemini 2.5 Flash** model, the app uses state-of-the-ar
 To scale SCAPE's sales by **10x**, we need to evaluate **100x more projects** to identify the best, most feasible applications. Because human technical resources (SCAPE evaluators) are limited, this assessment process must be automated. 
 
 This first version serves two primary purposes:
-1. **Help to Integrators & End-Users:** The app guides users through the complex data capture process. It embeds SCAPE's specialized knowledge about bin-picking conditions (Yes/No/? answers) to actively **nudge the user** toward optimal "Yes" specifications (e.g. clarifying cycle times, check for entanglement, surface shininess, and CAD availability).
+1. **Help to Integrators & End-Users:** The app guides users through the complex "Bin-Picking Project Information" process. It embeds SCAPE's specialized knowledge about bin-picking conditions to actively **nudge the user** toward optimal specifications (e.g., distinguishing between absolute vs. average cycle times, checking for entanglement, surface shininess, and handling multiple part variants individually by adding new parts).
 2. **Help to SCAPE Evaluators:** Ensure SCAPE receives complete, high-quality project data from day one, and generates an automated **AI Technical Evaluation Draft** that evaluators can use as a starting point to write their final review.
 
 ### Image & Visual Consistency
-* **Current Version:** Uses uploaded cell and part images to run consistency checks, verifying that the text description matches the visual evidence.
+* **Current Version:** Uses uploaded cell and part images to run consistency checks, verifying that the text description matches the visual evidence. *Note: Due to file size limits, users are encouraged to upload screenshots of their CAD models rather than full heavy CAD files.*
 * **Future Upgrade Roadmap:** Future versions will include trained models on "good" vs. "bad" bin-picking parts/geometries to give even richer visual feedback to both the integrator and SCAPE evaluator.
 
 **The Ultimate Outcome:** Better, cleaner specifications and lightning-fast response times, enabling SCAPE to capture more customers without bottlenecking human evaluators.
@@ -32,12 +32,12 @@ This first version serves two primary purposes:
 * **Smart Filtering & UX:** Displays only the modified fields in a clean accept-card with automatic text-wrapping (no clipped inputs).
 
 ### 2. Auto-Feasibility & Warning Badges
-* When you request **AI Advice**, the system scans your draft data and highlights empty or concerning fields with colored warning markers (`🔴` or `⚠️`) directly next to form labels.
+* When you request **Bin-Picking Information Advice**, the system scans your draft data and highlights empty or concerning fields with colored warning markers (`🔴` eller `⚠️`) directly next to form labels.
 * Tooltips explain what is missing or suboptimal (e.g. cycle time ambitions or light interference risks).
 
-### 3. Business Case & Additional Opportunities
-* **ROI Mockup:** Enter shift counts and labor savings to instantly calculate project payback periods.
-* **Cell Automation Scans:** A text logger and photo upload field to document other manual processes in the environment that are candidates for automation.
+### 3. Iterative Feedback Workflow
+* **Submit & Review:** Users submit their completed projects to Scape. Evaluators review them on their Dashboard and generate an AI Evaluator Draft.
+* **Release & Unsubmit:** If a project lacks critical info (like bin dimensions or part weights), the Evaluator can "Release" it. The User can then "Unsubmit" the project, make edits, and resubmit, creating a seamless feedback loop.
 
 ### 4. Seamless PWA & Mobile layout
 * Fully optimized as a **Progressive Web App (PWA)** on mobile devices.
@@ -56,7 +56,7 @@ Modular step-by-step questionnaire form with active fields, help notes, and file
 ![Customer Project Workspace - Cell Info](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/workspace_screenshot-1.png)
 
 ### 3. Questionnaire Active Warning Flags & Nudges (Part Dimensions Step)
-Colored warnings (`🔴 CRITICAL`, `⚠️ NOTE`) next to fields that do not fit "Yes" specs or are missing data (e.g. CAD availability or cycle time ambitions).
+Colored warnings (`🔴 CRITICAL`, `⚠️ NOTE`) next to fields that do not fit specs or are missing data.
 ![Customer Project Workspace - Warnings](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/workspace_screenshot-2.png)
 
 ### 4. Interactive Multimodal AI Assistant Sidebar
@@ -75,26 +75,26 @@ Shows the case overview page where SCAPE evaluators can take cases, manage locks
 
 ## Easiest Way to Test It
 
-To ensure a successful demo during your meeting tomorrow, here is how to log in and what to expect based on roles:
+To ensure a successful demo, here is how to log in and what to expect based on roles. **Important Note:** Always use "User Mode" to input and document a project. "Evaluator Mode" is strictly for reviewing submitted projects.
 
-### Option A: Pre-Registered Demo Account (Highly Recommended)
-Use our pre-configured demo credentials which work instantly on **all mobile web, desktop, and standalone PWA apps**:
+### Option A: Pre-Registered Demo Account
+Use our pre-configured demo credentials which work instantly:
 
 * **Email:** `demo@scapesolutions.eu`
 * **Password:** `ScapeEvaluator2026`
-* **What to Expect (Admin View):** This account has been whitelisted as a **SCAPE Evaluator/Admin**. Logging in with this account lets you toggle between **User Mode** (Customer View) and **Evaluator Mode** (Admin View) in the top header. You will be able to see and manage all customer projects, write verdicts, and test the Prompts Editor.
+* **What to Expect:** This account has been whitelisted as an **Evaluator**. You can toggle between **User Mode** (to create projects) and **Evaluator Mode** (to review submitted projects). 
 
 ### Option B: Direct Google Sign-In for SCAPE Evaluators
-If you are logging in as a SCAPE Employee, the following team accounts are already pre-qualified and whitelisted in Firestore:
+If you log in via Google, our system dynamically maps your identity. Even if you use an email alias (like `rde@scapesolutions.eu`), Google safely resolves it to your primary email, ensuring you get the correct access instantly. 
+
+The following team accounts are pre-qualified as **Evaluators**:
 * **René Dencker Eriksen:** `rene.dencker.eriksen@scapesolutions.eu`
 * **John Erland Østergaard:** `john.erland.oestergaard@scapesolutions.eu`
 * **Per Juul Nielsen:** `per.juul.nielsen@scapesolutions.eu`
 * **Rune Klausen Larsen:** `rune.k.larsen@scapesolutions.eu`
 
-* **How to log in:** Simply click the **"Sign in with Google"** button on the sign-in screen and log in using your respective `@scapesolutions.eu` Google Workspace account.
-* **What to Expect (Admin View):** You will be authenticated immediately without needing a password. The system will match your verified email domain/address and log you in directly with full **Evaluator / Admin** rights.
+* **How to log in:** Click the **"Sign in with Google"** button and log in using your Google Workspace account. You will be authenticated immediately with full Evaluator rights.
 
 ### Option C: Registering a New Account (Customer Isolation View)
 * **Works on:** Sign up with email/password or Google Sign-In.
-* **Requirements:** The email domain must end in a whitelisted domain (e.g. `@scapesolutions.eu` or `@scapesolutions.com`) or be added manually to the whitelisted emails list in Firestore.
-* **What to Expect (Customer View):** Any new account will log in as a **Customer / End User** by default. To show off multi-tenant security, this user will have a clean, blank dashboard and **cannot** see anyone else's projects or access admin tools.
+* **What to Expect (Customer View):** Any new account not on the whitelist will log in as a **Customer / End User** by default. To show off multi-tenant security, this user will have a clean, blank dashboard and **cannot** see anyone else's projects or access admin tools.

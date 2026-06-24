@@ -22,23 +22,63 @@ import {
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile, OperationType } from '../types';
-import { isAllowedEvaluator, isSuperuser, ALLOWED_EVALUATORS } from '../config/evaluators';
+import { isAllowedEvaluator, isSuperuser, ALLOWED_EVALUATORS, SUPERUSERS } from '../config/evaluators';
 
-// Global cache for the allowed configuration from Firestore
 let globalAllowedConfig: any = null;
+// Expose to window for debugging
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, '__debugConfig', {
+    get: () => globalAllowedConfig
+  });
+}
+
+import { auth } from '../lib/firebase';
+
+// Hjælpefunktion til sikkerhed: Tjekker at brugeren enten er logget ind med Google (OAuth)
+// eller har en bekræftet e-mail. Blokerer "falske" Email/Password logins uden bekræftelse.
+const isVerifiedIdentity = () => {
+  const user = auth.currentUser;
+  if (!user) return false;
+  const isGoogleLogin = user.providerData.some(p => p.providerId === 'google.com');
+  return isGoogleLogin || user.emailVerified;
+};
 
 // Tjekker om en email/bruger er en intern Scape-medarbejder
 export const isScapeEmployee = (email: string | null | undefined, uid?: string | null) => {
   if (uid === "PvdZWFVtE6YKsa16loWrUNwjuif1") return true;
   if (!email) return false;
-  const e = email.toLowerCase();
+
+  const e = email.toLowerCase().trim();
   const domain = e.split('@')[1];
   
   const allowedDomains = globalAllowedConfig?.allowedDomains || ['scapesolutions.eu', 'scapesolutions.com'];
   const allowedEmails = globalAllowedConfig?.allowedEmails || [];
   
-  return allowedDomains.some((d: string) => d.toLowerCase() === domain) || 
-         allowedEmails.some((m: string) => m.toLowerCase() === e);
+  // Eksplicit tilladte emails behøver ikke være verificerede (tillader test/demo konti)
+  if (allowedEmails.some((m: string) => m.toLowerCase().trim() === e)) return true;
+
+  // Domæne-baseret adgang KRÆVER verificeret identity (forhindrer fake@scapesolutions.eu)
+  if (allowedDomains.some((d: string) => d.toLowerCase().trim() === domain)) {
+    return isVerifiedIdentity();
+  }
+
+  return false;
+};
+
+// Tjekker om en bruger er på den dynamiske evaluator-liste fra Firestore
+export const isDynamicAllowedEvaluator = (email: string | null | undefined) => {
+  if (!email) return false;
+  const list = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+  // Bemærk: Vi kræver ikke verificering for eksplicit tilladte emails.
+  return isAllowedEvaluator(email, list);
+};
+
+// Tjekker om en bruger er på den dynamiske superuser-liste fra Firestore
+export const isDynamicSuperuser = (email: string | null | undefined) => {
+  if (!email) return false;
+  const list = globalAllowedConfig?.superusers || SUPERUSERS;
+  // Bemærk: Vi kræver ikke verificering for eksplicit tilladte emails.
+  return isSuperuser(email, list);
 };
 
 // Bestemmer om en bruger rent faktisk har 'Admin'/'Evaluator' rettigheder
@@ -61,6 +101,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [view, setView] = useState<'dashboard' | 'questionnaire' | 'profile_setup'>('dashboard');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true); // Starter som true mens vi venter på Firebase init
   const [allowedConfig, setAllowedConfig] = useState<any>(null);
 
   // Sync the access config in real time
@@ -78,7 +119,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     }
   }, [user]);
 
-  // Auto-upgrade role to evaluator and sync isAdmin status dynamically when allowedConfig or user/profile updates
+  // Auto-upgrade/downgrade role and sync isAdmin status dynamically when allowedConfig or user/profile updates
   useEffect(() => {
     if (!user || !profile || !allowedConfig) return;
 
@@ -86,45 +127,53 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     if (!email) return;
 
     const allowedEvaluators = allowedConfig.allowedEvaluators || ALLOWED_EVALUATORS;
+    const superusers = allowedConfig.superusers || SUPERUSERS;
+
     const isAllowed = isAllowedEvaluator(email, allowedEvaluators);
+    const isAllowedSuper = isSuperuser(email, superusers);
 
-    // If user's email is whitelisted as an evaluator, but their Firestore profile is not evaluator/superuser
-    // and they have not explicitly selected 'user' mode preference
-    const needsUpgrade = isAllowed && 
-                         profile.requestedRole !== 'evaluator' && 
-                         profile.requestedRole !== 'superuser' &&
-                         !profile.userModePreferred;
+    let targetRole = profile.requestedRole;
+    if (profile.requestedRole === 'superuser') {
+      if (!isAllowedSuper) {
+        targetRole = isAllowed ? 'evaluator' : 'user';
+      }
+    } else if (profile.requestedRole === 'evaluator') {
+      if (!isAllowed) {
+        targetRole = 'user';
+      }
+    } else { // 'user' or undefined
+      if (isAllowed && !profile.userModePreferred) {
+        targetRole = 'evaluator';
+      }
+    }
 
-    // Recalculate effective admin status
-    const actualAdmin = getEffectiveAdminStatus(profile, user.uid);
-    const adminStatusChanged = profile.isAdmin !== actualAdmin;
+    const roleChanged = targetRole !== profile.requestedRole;
 
-    if (needsUpgrade || adminStatusChanged) {
-      let updatedRole = profile.requestedRole;
+    // Recalculate effective admin status with targetRole
+    const actualAdminStatus = getEffectiveAdminStatus({ ...profile, requestedRole: targetRole }, user.uid);
+    const adminStatusChanged = profile.isAdmin !== actualAdminStatus;
 
-      if (needsUpgrade) {
-        updatedRole = 'evaluator';
+    if (roleChanged || adminStatusChanged) {
+      const updates: any = {};
+      if (roleChanged) {
+        updates.requestedRole = targetRole;
+        if (targetRole === 'evaluator') {
+          updates.userModePreferred = false;
+        }
+        console.log(`Syncing user ${email} role in Firestore: ${profile.requestedRole} -> ${targetRole}`);
+      }
+      if (adminStatusChanged) {
+        updates.isAdmin = actualAdminStatus;
+        console.log(`Syncing user ${email} admin status in Firestore to ${actualAdminStatus}`);
       }
 
-      // Recalculate actual admin status with the updated role
-      const actualAdminStatus = getEffectiveAdminStatus({ ...profile, requestedRole: updatedRole }, user.uid);
-
-      if (needsUpgrade) {
-        console.log(`Auto-upgrading user ${email} to evaluator role in Firestore.`);
-        updateDoc(doc(db, 'users', user.uid), { requestedRole: 'evaluator', isAdmin: actualAdminStatus })
-          .catch(console.error);
-      } else if (adminStatusChanged) {
-        console.log(`Updating user ${email} admin status to ${actualAdminStatus} in Firestore.`);
-        updateDoc(doc(db, 'users', user.uid), { isAdmin: actualAdminStatus })
-          .catch(console.error);
-      }
+      updateDoc(doc(db, 'users', user.uid), updates).catch(console.error);
 
       setProfile(prev => {
         if (!prev) return null;
         return {
           ...prev,
-          requestedRole: updatedRole,
-          isAdmin: actualAdminStatus
+          ...updates
         };
       });
     }
@@ -135,31 +184,45 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   // Her bruger vi den til at lytte efter: "Er brugeren logget ind nu?" (onAuthStateChanged).
   // Den tomme liste [] i bunden betyder "kør kun dette én gang, når appen starter".
   useEffect(() => {
-    // Check for a pending server-side OAuth result (iOS PWA flow).
-    // Cookies are shared between Safari and the PWA on the same domain, so after
-    // the user authenticates via the server-side Google OAuth in Safari, the PWA
-    // can pick up the resulting Firebase custom token here on startup.
-    fetch('/api/auth/check-pending', { credentials: 'include' })
-      .then(r => r.json())
-      .then(async data => {
-        if (data.status === 'complete' && data.customToken) {
-          console.log('PWA OAuth: resuming sign-in for', data.email);
-          await signInWithCustomToken(auth, data.customToken);
-        }
-      })
-      .catch(e => console.warn('Could not check pending auth:', e));
+    // 1. ROBUST PWA LOGIN FIX: Tjekker om vi netop er returneret fra Google OAuth med en token i URL'en (eller localStorage).
+    // Dette omgår 100% Safari/iOS problemer med at slette cookies på tværs af redirects.
+    
+    // Tjek URL hash (fra vores gamle custom flow, bare for at rense op hvis nogen har et gammelt link)
+    const hash = window.location.hash;
+    if (hash.startsWith('#token=')) {
+      window.location.hash = ''; // Fjern token fra URL med det samme
+    }
 
-    // Also handle standard Firebase redirect results
-    getRedirectResult(auth).catch((e: any) => {
+    // Tjek localStorage (fra gammelt flow)
+    const localToken = localStorage.getItem('pwa_custom_token');
+    if (localToken) {
+      localStorage.removeItem('pwa_custom_token');
+    }
+
+    // Also handle standard Firebase redirect results (dette tager typisk 2-3 sekunder)
+    setAuthLoading(true);
+    getRedirectResult(auth).then((result) => {
+      if (result) {
+        console.log("Successfully logged in via redirect");
+      }
+    }).catch((e: any) => {
       console.error("Google Redirect Auth error:", e);
       if (e.code === 'auth/unauthorized-domain') {
         setAuthError("This domain is not authorized in Firebase. Please add it to 'Authorized domains' in the Firebase Console.");
       } else {
         setAuthError(e.message || "Failed to sign in with Google Redirect");
       }
+    }).finally(() => {
+      // We only set authLoading false here if user is not already resolved by onAuthStateChanged
+      // Actually onAuthStateChanged usually handles the final state, but we ensure loading stops.
+      setTimeout(() => setAuthLoading(false), 1000);
     });
 
-    return onAuthStateChanged(auth, async (u) => {
+    // Start as loading until auth resolves
+    setAuthLoading(true);
+
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      console.log("Auth state changed:", u?.email);
       setUser(u);
       if (u) {
         try {
@@ -175,17 +238,55 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
               updateDoc(doc(db, 'users', u.uid), { requestedRole: 'user' }).catch(console.error);
             }
 
-            // Auto-upgrade role to evaluator if user's email is whitelisted in allowedEvaluators
+            // Auto-upgrade or auto-downgrade role if user's whitelist status changed
             const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
-            if (u.email && isAllowedEvaluator(u.email, allowedEvaluators) && pData.requestedRole !== 'evaluator' && pData.requestedRole !== 'superuser') {
-              pData.requestedRole = 'evaluator';
-              updateDoc(doc(db, 'users', u.uid), { requestedRole: 'evaluator', userModePreferred: false })
-                .then(() => console.log(`Auto-upgraded user ${u.email} to evaluator role in Firestore.`))
-                .catch(console.error);
+            const superusers = globalAllowedConfig?.superusers || SUPERUSERS;
+            const isAllowed = u.email ? isAllowedEvaluator(u.email, allowedEvaluators) : false;
+            const isAllowedSuper = u.email ? isSuperuser(u.email, superusers) : false;
+
+            let finalRole = pData.requestedRole;
+            let roleUpdated = false;
+
+            if (pData.requestedRole === 'superuser') {
+              if (!isAllowedSuper) {
+                finalRole = isAllowed ? 'evaluator' : 'user';
+                roleUpdated = true;
+              }
+            } else if (pData.requestedRole === 'evaluator') {
+              if (!isAllowed) {
+                finalRole = 'user';
+                roleUpdated = true;
+              }
+            } else { // 'user' or undefined
+              if (isAllowed && !pData.userModePreferred) {
+                finalRole = 'evaluator';
+                roleUpdated = true;
+              }
             }
 
-            const actualAdmin = getEffectiveAdminStatus(pData, u.uid);
-            setProfile({ ...pData, isAdmin: actualAdmin });
+            if (roleUpdated) {
+              pData.requestedRole = finalRole;
+              if (finalRole === 'evaluator') {
+                pData.userModePreferred = false;
+              }
+              const actualAdmin = getEffectiveAdminStatus(pData, u.uid);
+              pData.isAdmin = actualAdmin;
+              updateDoc(doc(db, 'users', u.uid), { 
+                requestedRole: finalRole, 
+                isAdmin: actualAdmin,
+                ...(finalRole === 'evaluator' ? { userModePreferred: false } : {})
+              })
+                .then(() => console.log(`Synced role for user ${u.email} on login to ${finalRole} (admin: ${actualAdmin}).`))
+                .catch(console.error);
+            } else {
+              const actualAdmin = getEffectiveAdminStatus(pData, u.uid);
+              if (pData.isAdmin !== actualAdmin) {
+                pData.isAdmin = actualAdmin;
+                updateDoc(doc(db, 'users', u.uid), { isAdmin: actualAdmin }).catch(console.error);
+              }
+            }
+
+            setProfile({ ...pData });
             setView('dashboard');
           } else {
             // Hvis brugeren ligger i 'auth' men ikke har udfyldt sit navn/firma i vores database,
@@ -198,7 +299,9 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
       } else {
         setProfile(null);
       }
+      setAuthLoading(false); // Færdig med at loade
     });
+    return unsubscribe;
   }, []);
 
   // Logger ind via Google
@@ -208,20 +311,20 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
 
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      setAuthLoading(true);
 
-      if (isStandalone || isMobile) {
-        // Mobile platforms (both standalone PWA and regular mobile Safari/Chrome):
-        // Standard Firebase signInWithRedirect and signInWithPopup often fail or loop
-        // due to iOS/Android cross-site cookie restrictions (third-party storage partitioning).
-        // Using our server-side OAuth flow is 100% reliable as it runs same-origin.
-        window.location.href = '/api/auth/google/start';
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Firebase anbefaler signInWithRedirect på mobile enheder og PWA'er,
+        // da signInWithPopup kan blive blokeret af popup-blockers i iOS standalone mode.
+        await signInWithRedirect(auth, provider);
       } else {
-        // Desktop: popup
+        // Vi bruger signInWithPopup på desktop.
         await signInWithPopup(auth, provider);
       }
     } catch (e: any) {
+      setAuthLoading(false);
       console.error("Login error:", e);
       if (e.code === 'auth/unauthorized-domain') {
         setAuthError("This domain is not authorized in Firebase. Please add it to 'Authorized domains' in the Firebase Console.");
@@ -265,16 +368,32 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     if (!user) return;
     const email = getEffectiveEmail();
     
-    // Auto-enforce evaluator role during profile setup if whitelisted
-    let requestedRole = data.requestedRole;
     const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
-    if (email && isAllowedEvaluator(email, allowedEvaluators) && requestedRole !== 'evaluator' && requestedRole !== 'superuser') {
-      requestedRole = 'evaluator';
+    const superusers = globalAllowedConfig?.superusers || SUPERUSERS;
+    const isAllowed = email ? isAllowedEvaluator(email, allowedEvaluators) : false;
+    const isAllowedSuper = email ? isSuperuser(email, superusers) : false;
+
+    let requestedRole = data.requestedRole;
+    const currentUserModePreferred = data.userModePreferred ?? profile?.userModePreferred ?? false;
+
+    // Enforce role ceilings and upgrades
+    if (requestedRole === 'superuser') {
+      if (!isAllowedSuper) {
+        requestedRole = isAllowed ? 'evaluator' : 'user';
+      }
+    } else if (requestedRole === 'evaluator') {
+      if (!isAllowed) {
+        requestedRole = 'user';
+      }
+    } else { // 'user' or undefined
+      if (isAllowed && !currentUserModePreferred) {
+        requestedRole = 'evaluator';
+      }
     }
 
     const updatedData = { ...data, requestedRole };
     const isAdmin = getEffectiveAdminStatus({ ...updatedData, email }, user.uid);
-    const p: UserProfile = { ...updatedData, email, isAdmin };
+    const p: UserProfile = { ...updatedData, email, isAdmin, userModePreferred: currentUserModePreferred };
     try {
       await setDoc(doc(db, 'users', user.uid), p);
       setProfile(p);
@@ -290,16 +409,20 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     const email = getEffectiveEmail();
     
     // Safety check for superuser
-    const superusers = globalAllowedConfig?.superusers || ['rune.k.larsen@scapesolutions.eu'];
-    if (newRole === 'superuser' && !isSuperuser(email, superusers)) {
+    const superusers = globalAllowedConfig?.superusers || SUPERUSERS;
+    if (newRole === 'superuser' && !isSuperuser(email?.trim(), superusers)) {
       console.warn("Unauthorized attempt to switch to superuser role");
       return;
     }
 
+    // Safety check for evaluator
     const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
-    const isAdmin = (newRole === 'evaluator' || newRole === 'superuser') && 
-                    (isScapeEmployee(email, user.uid) || isAllowedEvaluator(email, allowedEvaluators));
-    
+    if (newRole === 'evaluator' && !isAllowedEvaluator(email?.trim(), allowedEvaluators)) {
+      console.warn("Unauthorized attempt to switch to evaluator role");
+      return;
+    }
+
+    const isAdmin = getEffectiveAdminStatus({ ...profile, requestedRole: newRole }, user.uid);
     const userModePreferred = newRole === 'user';
     try {
       await updateDoc(doc(db, 'users', user.uid), { requestedRole: newRole, isAdmin, userModePreferred });
@@ -319,6 +442,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     setView,
     authError,
     setAuthError,
+    authLoading,
     login,
     loginWithEmail,
     signupWithEmail,

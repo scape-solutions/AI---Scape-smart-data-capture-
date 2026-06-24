@@ -10,6 +10,7 @@ interface ProfileSetupViewProps {
   saveProfile: (data: any) => void;
   isScapeEmployee: (email: string | null | undefined, uid?: string | null) => boolean;
   isAllowedEvaluator: (email: string | null | undefined) => boolean;
+  isDynamicSuperuser: (email: string | null | undefined) => boolean;
   userEmail: string | null | undefined;
 }
 
@@ -19,6 +20,7 @@ export function ProfileSetupView({
   saveProfile,
   isScapeEmployee,
   isAllowedEvaluator,
+  isDynamicSuperuser,
   userEmail
 }: ProfileSetupViewProps) {
   return (
@@ -64,8 +66,7 @@ export function ProfileSetupView({
             <option value="other">Other</option>
           </select>
 
-          {/* Vises KUN, hvis mail-adressen indikerer en admin eller ansat */}
-          {(isScapeEmployee(userEmail) || isAllowedEvaluator(userEmail)) && (
+          {(isAllowedEvaluator(userEmail) || isDynamicSuperuser(userEmail)) && (
             <div className="space-y-4 pt-4 border-t border-slate-100">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Scape Employee Mode</p>
               <div className="flex gap-2">
@@ -82,9 +83,6 @@ export function ProfileSetupView({
                   User
                 </button>
               </div>
-              {!isAllowedEvaluator(userEmail) && profile?.requestedRole === 'evaluator' && (
-                <p className="text-[10px] text-amber-600 font-medium">Note: You are not in the approved evaluator list. Admin features will be restricted.</p>
-              )}
             </div>
           )}
 

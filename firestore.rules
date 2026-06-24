@@ -8,8 +8,8 @@ service cloud.firestore {
     function isScape() {
       return isSignedIn() && (
         (request.auth.token.email != null && (
-          request.auth.token.email.lower().endsWith('@scapesolutions.eu') ||
-          request.auth.token.email.lower().endsWith('@scapesolutions.com')
+          request.auth.token.email.lower().matches('.*@scapesolutions\\\\.eu$') ||
+          request.auth.token.email.lower().matches('.*@scapesolutions\\\\.com$')
         )) ||
         request.auth.uid == "PvdZWFVtE6YKsa16loWrUNwjuif1"
       );

@@ -334,8 +334,7 @@ export function AIAssistantTab({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                // Enter sender beskeden, mens Shift+Enter laver et linjeskift
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                // Return gør nu bare ingenting (laver et linjeskift), da man skal bruge send-knappen.
               }}
               onFocus={() => {
                 // Scroll til bunden efter et kort stykke tid for at gøre plads til tastaturet

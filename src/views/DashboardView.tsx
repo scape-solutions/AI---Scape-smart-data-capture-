@@ -221,13 +221,15 @@ export function DashboardView({
                   )}
                 </button>
 
-                <button 
-                  onClick={createNewProject} 
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer"
-                >
-                  <PlusCircle className="w-3.5 h-3.5 shrink-0" />
-                  <span>New<span className="hidden sm:inline"> Project</span></span>
-                </button>
+                {profile?.requestedRole !== 'evaluator' && profile?.requestedRole !== 'superuser' && (
+                  <button 
+                    onClick={createNewProject} 
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>New<span className="hidden sm:inline"> Project</span></span>
+                  </button>
+                )}
               </div>
             </div>
             <p className="text-[11px] text-slate-400 font-bold block sm:hidden">
