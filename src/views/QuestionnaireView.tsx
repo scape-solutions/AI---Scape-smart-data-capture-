@@ -574,32 +574,34 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           <PlusCircle className="w-4 h-4" /> Add Part
         </button>
 
-        {/* Extended Analysis / Custom Sections */}
-        <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-6 mb-2">Extended Analysis</h2>
-        
-        <button 
-          onClick={() => { setIsReviewing(false); setActiveCustomSection('business-case'); }}
-          className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${activeCustomSection === 'business-case' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
-        >
-          <Briefcase className="w-4 h-4" />
-          <span>Business Case</span>
-        </button>
-
-        <button 
-          onClick={() => { setIsReviewing(false); setActiveCustomSection('additional-opportunities'); }}
-          className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${activeCustomSection === 'additional-opportunities' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
-        >
-          <Factory className="w-4 h-4" />
-          <span>Additional Opportunities</span>
-        </button>
-
         {/* Final Verdict */}
-        <div className="mt-4 pt-4 border-t border-slate-100">
+        <div className="mt-4">
           <button 
             onClick={() => { setIsReviewing(true); setActiveCustomSection(null); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
             className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${isReviewing && !activeCustomSection ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
           >
             <Sparkles className="w-4 h-4" /> Review / Submit
+          </button>
+        </div>
+
+        {/* Extended Analysis / Custom Sections */}
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Extended Analysis</h2>
+          
+          <button 
+            onClick={() => { setIsReviewing(false); setActiveCustomSection('business-case'); }}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${activeCustomSection === 'business-case' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <Briefcase className="w-4 h-4" />
+            <span>Business Case</span>
+          </button>
+
+          <button 
+            onClick={() => { setIsReviewing(false); setActiveCustomSection('additional-opportunities'); }}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${activeCustomSection === 'additional-opportunities' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <Factory className="w-4 h-4" />
+            <span>Additional Opportunities</span>
           </button>
         </div>
       </aside>
@@ -2018,6 +2020,29 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 </div>
               ))}
 
+              {/* Final Verdict Card */}
+              <div className="mt-8 mb-4">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2 px-3">Review & Actions</h3>
+              </div>
+
+              <button 
+                onClick={() => { setIsReviewing(true); setActiveCustomSection(null); setIsMobileMenuOpen(false); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
+                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${isReviewing && !activeCustomSection ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${isReviewing && !activeCustomSection ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold">Review / Submit</h4>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">Submit & view AI Advisor feasibility</p>
+                  </div>
+                </div>
+                {currentProject.status === 'submitted' && (
+                  <ShieldCheck className="w-4 h-4 text-blue-500 shrink-0" />
+                )}
+              </button>
+
               {/* Extended Analysis Sections for Mobile */}
               <div className="mt-8 mb-4">
                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2 px-3">Extended Analysis</h3>
@@ -2053,25 +2078,6 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     <p className="text-[10px] text-slate-400 font-medium mt-0.5">Other potential cell automations</p>
                   </div>
                 </div>
-              </button>
-
-              {/* Final Verdict Card */}
-              <button 
-                onClick={() => { setIsReviewing(true); setActiveCustomSection(null); setIsMobileMenuOpen(false); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
-                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${isReviewing && !activeCustomSection ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl ${isReviewing && !activeCustomSection ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold">Review / Submit</h4>
-                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">Submit & view AI Advisor feasibility</p>
-                  </div>
-                </div>
-                {currentProject.status === 'submitted' && (
-                  <ShieldCheck className="w-4 h-4 text-blue-500 shrink-0" />
-                )}
               </button>
             </div>
 

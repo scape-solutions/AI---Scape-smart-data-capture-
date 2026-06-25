@@ -31,7 +31,7 @@ You receive a JSON object with the following structure:
 - `1.02` — Number of different parts in project
 - `1.03` — Bin type: `"eu-pallet"` | `"metal-solid"` | `"metal-lattice"` | `"plastic-box"` | `"table-magnet"` | `"other"`
 - `1.04_w`, `1.04_l`, `1.04_h` — Bin internal dimensions in mm (three separate fields — together = field 1.04)
-- `1.05` — Robot brand: `"ur"` | `"fanuc"` | `"abb"` | `"kuka"` | `"other"`
+- `1.05` — Robot brand: `"ur"` | `"fanuc"` | `"abb"` | `"kuka"` | `"other"`; `1.05_other` — Specified robot brand/model (text, conditional)
 - `1.06` — General cell notes (free text — may reference images, video, demo memos, layout constraints, or sister projects)
 
 **Part fields** (`parts[].responses`), one set per part:

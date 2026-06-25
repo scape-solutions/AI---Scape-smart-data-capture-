@@ -110,6 +110,7 @@ export const PART_STEPS: Step[] = [
       { id: '2.10_temp', label: 'Expected Temperature (°C)', type: 'number', placeholder: 'e.g. 80', condition: (res) => res['2.10'] === true },
       { id: '2.13', label: 'Determine which side is up?', type: 'boolean' },
       { id: '2.14', label: 'Any special gripper requirements?', type: 'boolean', description: 'Check YES if a specific gripper is required to hold or place the part.' },
+      { id: '2.14_desc', label: 'Specify gripper requirements', type: 'textarea', placeholder: 'e.g. Suction cup size 40mm or specific magnetic gripper...', condition: (res) => res['2.14'] === true },
       { id: '2.12', label: 'Short description of place requirements', type: 'textarea', placeholder: 'e.g. Must be placed in a welding fixture with 0.5mm tolerance.' },
       { id: '2.15', label: 'Additional Part Notes / Info', type: 'textarea', placeholder: 'e.g. Summarized extra info about part variants, surface conditions, or special handling...' }
     ]
