@@ -172,6 +172,7 @@ export function QuestionnaireView({
   const [draftViewMode, setDraftViewMode] = useState<'markdown' | 'raw'>('markdown');
   const [isVerdictExpanded, setIsVerdictExpanded] = useState(true);
   const [verdictViewMode, setVerdictViewMode] = useState<'edit' | 'markdown' | 'raw'>('edit');
+  const [mobileSplitView, setMobileSplitView] = useState<'chat' | 'form'>('chat');
   /** ID of the field whose observation popover is currently open, or null */
   const [openObservationId, setOpenObservationId] = useState<string | null>(null);
 
@@ -447,9 +448,15 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
         
         {/* Split Screen AI Assistant (Left) */}
         {isSplitScreenMode && (
-          <aside className="hidden md:flex w-[400px] xl:w-[450px] shrink-0 border-r border-slate-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 bg-white flex-col h-full relative">
-             <div className="absolute top-4 right-4 z-50">
-                <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">AI Mode</span>
+          <aside className={`${mobileSplitView === 'chat' ? 'flex' : 'hidden'} md:flex w-full md:w-[400px] xl:w-[450px] shrink-0 border-r border-slate-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 bg-white flex-col h-full relative`}>
+             <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+                <button 
+                  onClick={() => setMobileSplitView('form')}
+                  className="md:hidden bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1.5 rounded-full hover:bg-indigo-200"
+                >
+                  Go to Form ➔
+                </button>
+                <span className="hidden md:inline bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">AI Mode</span>
              </div>
              <AIAssistantTab 
                 currentProject={currentProject}
@@ -466,7 +473,21 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
         )}
 
         {/* Existing Layout container wrapped for safe flexing */}
-        <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden relative min-w-0">
+        <div className={`flex-1 flex flex-col md:flex-row h-full overflow-hidden relative min-w-0 ${isSplitScreenMode && mobileSplitView === 'chat' ? 'hidden md:flex' : ''}`}>
+          
+          {/* Split Screen Mobile Toggle on Form Side */}
+          {isSplitScreenMode && (
+            <div className="md:hidden bg-white border-b border-slate-200 p-3 flex justify-between items-center shrink-0">
+              <span className="text-sm font-bold text-slate-800">Form View</span>
+              <button 
+                onClick={() => setMobileSplitView('chat')}
+                className="bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-full hover:bg-indigo-700 flex items-center gap-2"
+              >
+                <Bot className="w-3.5 h-3.5" />
+                Back to AI Chat
+              </button>
+            </div>
+          )}
 
           {/* Sidebar on the Left (Desktop-only) */}
           <aside className={`hidden md:flex ${isSplitScreenMode ? 'md:w-64' : 'md:w-64 lg:w-80'} bg-white md:border-r border-slate-200 p-6 flex-col gap-4 overflow-y-auto shrink-0 z-10`}>

@@ -314,13 +314,14 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
       setAuthLoading(true);
 
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.');
       
-      if (isMobile) {
+      if (isMobile && !isLocal) {
         // Firebase anbefaler signInWithRedirect på mobile enheder og PWA'er,
         // da signInWithPopup kan blive blokeret af popup-blockers i iOS standalone mode.
         await signInWithRedirect(auth, provider);
       } else {
-        // Vi bruger signInWithPopup på desktop.
+        // Vi bruger signInWithPopup på desktop og ved lokal test (for at undgå redirect-port fejl).
         await signInWithPopup(auth, provider);
       }
     } catch (e: any) {
