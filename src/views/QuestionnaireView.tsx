@@ -81,7 +81,7 @@ interface QuestionnaireViewProps {
   isAllowedEvaluator: (email: string | null | undefined) => boolean;
   isScapeEmployee: (email: string | null | undefined, uid?: string | null) => boolean;
   saveProfile: (data: any) => Promise<void>;
-  sendMessageToAssistant: (msg: string) => Promise<void>;
+  sendMessageToAssistant: (msg: string, images?: string[]) => Promise<void>;
   reviewTab: 'advice' | 'evaluation';
   setReviewTab: (tab: 'advice' | 'evaluation') => void;
   updateProjectField: (p: ProjectState, field: string, value: any, logMessage: string) => Promise<void>;
@@ -236,6 +236,7 @@ export function QuestionnaireView({
   // Read-only state (locked or submitted/approved/rejected, unless the user is an admin)
   const isReadOnly = (currentProject.isLocked || currentProject.status === 'submitted' || currentProject.status === 'approved' || currentProject.status === 'rejected') && !profile?.isAdmin;
 
+  const isSplitScreenMode = currentProject?.isSplitScreen === true;
 
   // Helper to calculate question fill progress for a step
   const getStepProgress = (step: any, responses: Record<string, any>, part?: any) => {
@@ -442,8 +443,33 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
   return (
     <>
-      {/* Sidebar on the Left (Desktop-only) */}
-      <aside className="hidden md:flex md:w-64 bg-white md:border-r border-slate-200 p-6 flex-col gap-4 overflow-y-auto shrink-0">
+      <div className={`flex-1 flex ${isSplitScreenMode ? 'flex-col md:flex-row' : 'flex-col md:flex-row'} h-full overflow-hidden relative`} style={viewportStyle}>
+        
+        {/* Split Screen AI Assistant (Left) */}
+        {isSplitScreenMode && (
+          <aside className="hidden md:flex w-[400px] xl:w-[450px] shrink-0 border-r border-slate-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 bg-white flex-col h-full relative">
+             <div className="absolute top-4 right-4 z-50">
+                <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">AI Mode</span>
+             </div>
+             <AIAssistantTab 
+                currentProject={currentProject}
+                setCurrentProject={setCurrentProject}
+                sendMessageToAssistant={sendMessageToAssistant}
+                isGeneratingReport={isAssistantThinking}
+                updateProjectField={updateProjectField}
+                saveProject={saveProject}
+                activePartIndex={activePartIndex}
+                isReadOnly={isReadOnly}
+                hasUnappliedProposals={hasUnappliedProposals}
+             />
+          </aside>
+        )}
+
+        {/* Existing Layout container wrapped for safe flexing */}
+        <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden relative min-w-0">
+
+          {/* Sidebar on the Left (Desktop-only) */}
+          <aside className={`hidden md:flex ${isSplitScreenMode ? 'md:w-64' : 'md:w-64 lg:w-80'} bg-white md:border-r border-slate-200 p-6 flex-col gap-4 overflow-y-auto shrink-0 z-10`}>
         <button 
           onClick={handleBackToDashboard}
           disabled={isSaving}
@@ -1928,6 +1954,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           )}
         </div>
       </div>
+      </div>
+      </div>
 
       {/* Mobile Navigation Drawer / Bottom Sheet */}
       {isMobileMenuOpen && (
@@ -2195,7 +2223,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
       />
 
       {/* Floating AI Assistant Toggle Button */}
-      <button
+      {!isSplitScreenMode && (
+        <button
         onClick={() => setIsAIAssistantOpen(!isAIAssistantOpen)}
         className={`fixed bottom-6 z-40 p-4 rounded-full shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 items-center justify-center cursor-pointer ${
           isAIAssistantOpen 
@@ -2224,9 +2253,10 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           </>
         )}
       </button>
+      )}
 
       {/* AI Assistant Drawer Panel */}
-      {isAIAssistantOpen && (
+      {(!isSplitScreenMode && isAIAssistantOpen) && (
         <>
           {/* Backdrop for mobile */}
           <div 

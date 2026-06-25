@@ -4,7 +4,7 @@
  * Den modtager en masse data ("projects") og funktioner fra App.tsx som props.
  */
 import { useState } from 'react';
-import { PlusCircle, LayoutDashboard, SlidersHorizontal, Sparkles, Trash2, Loader2, Upload, Download, CheckCircle, Settings } from 'lucide-react';
+import { PlusCircle, LayoutDashboard, SlidersHorizontal, Sparkles, Trash2, Loader2, Upload, Download, CheckCircle, Settings, Bot, PencilLine, X } from 'lucide-react';
 import { ProjectCard } from '../components/ProjectCard';
 import { PromptsEditorModal } from '../components/PromptsEditorModal';
 import { ProjectState, UserProfile } from '../types';
@@ -23,7 +23,7 @@ interface DashboardViewProps {
   setFilterUser: (val: string) => void;
   showInactive: boolean;
   setShowInactive: (val: boolean) => void;
-  createNewProject: () => void;
+  createNewProject: (withAI?: boolean) => void;
   openProject: (p: ProjectState) => void;
   fetchLog: (id: string) => void;
   deleteProject: (p: ProjectState) => void;
@@ -81,7 +81,8 @@ export function DashboardView({
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
   const [isExportingBulk, setIsExportingBulk] = useState(false);
-  const [showPromptsEditor, setShowPromptsEditor] = useState(false);
+  const [showPromptsModal, setShowPromptsModal] = useState(false);
+  const [showCreationModal, setShowCreationModal] = useState(false);
 
   const handleExportFiltered = async () => {
     if (filteredProjects.length === 0) return;
@@ -223,7 +224,7 @@ export function DashboardView({
 
                 {profile?.requestedRole !== 'evaluator' && profile?.requestedRole !== 'superuser' && (
                   <button 
-                    onClick={createNewProject} 
+                    onClick={() => setShowCreationModal(true)} 
                     className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer"
                   >
                     <PlusCircle className="w-3.5 h-3.5 shrink-0" />
@@ -306,7 +307,7 @@ export function DashboardView({
                   </button>
 
                   <button 
-                    onClick={() => setShowPromptsEditor(true)}
+                    onClick={() => setShowPromptsModal(true)}
                     className="bg-amber-600 hover:bg-amber-700 text-white px-3 md:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer"
                   >
                     <Settings className="w-3.5 h-3.5 shrink-0" />
@@ -433,11 +434,68 @@ export function DashboardView({
         </div>
       </div>
       
-      <PromptsEditorModal 
-        show={showPromptsEditor} 
-        onClose={() => setShowPromptsEditor(false)} 
-        setGlobalSuccess={setGlobalSuccess}
-      />
+      {/* Modals */}
+      {showPromptsModal && (
+        <PromptsEditorModal 
+          show={showPromptsModal} 
+          onClose={() => setShowPromptsModal(false)} 
+          setGlobalSuccess={setGlobalSuccess}
+        />
+      )}
+
+      {/* Creation Modal */}
+      {showCreationModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-slideUp border border-slate-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-xl font-black text-slate-900">Create New Project</h2>
+              <button onClick={() => setShowCreationModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 flex flex-col md:flex-row gap-4">
+              {/* Start with AI Option */}
+              <button 
+                onClick={() => { setShowCreationModal(false); createNewProject(true); }}
+                className="flex-1 text-left p-6 rounded-2xl border-2 border-blue-100 bg-blue-50/50 hover:bg-blue-50 hover:border-blue-300 transition-all group flex flex-col gap-3 relative overflow-hidden cursor-pointer active:scale-[0.98]"
+              >
+                <div className="absolute -right-4 -top-4 text-blue-500/10 group-hover:text-blue-500/20 transition-colors">
+                  <Bot className="w-32 h-32" />
+                </div>
+                <div className="p-3 bg-blue-600 text-white rounded-xl w-fit shadow-md shadow-blue-600/20 z-10">
+                  <Bot className="w-6 h-6" />
+                </div>
+                <div className="z-10 mt-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-lg font-black text-slate-900">Start with AI</h3>
+                    <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Fastest</span>
+                  </div>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    Chat with our AI assistant or upload your requirements to automatically build your project structure.
+                  </p>
+                </div>
+              </button>
+
+              {/* Start Manually Option */}
+              <button 
+                onClick={() => { setShowCreationModal(false); createNewProject(false); }}
+                className="flex-1 text-left p-6 rounded-2xl border-2 border-slate-100 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all group flex flex-col gap-3 relative overflow-hidden cursor-pointer active:scale-[0.98]"
+              >
+                 <div className="p-3 bg-slate-100 text-slate-600 rounded-xl w-fit group-hover:bg-slate-200 transition-colors z-10">
+                  <PencilLine className="w-6 h-6" />
+                </div>
+                <div className="z-10 mt-2">
+                  <h3 className="text-lg font-black text-slate-900 mb-1">Start Manually</h3>
+                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                    Start with a blank canvas and fill out the questionnaire step-by-step yourself.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

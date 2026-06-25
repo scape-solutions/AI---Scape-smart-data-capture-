@@ -25,6 +25,15 @@ Systematically scan the CURRENT PROJECT STATE against the QUESTIONNAIRE SCHEMA t
 
 After the END marker, **always** append a JSON block if you can extract ANY confirmed field values from the conversation — even just one field. Only omit the JSON block if you have extracted absolutely no usable field values yet.
 
+**Assigning Uploaded Images:** If the user uploaded images (which you will see as attachments to their message) and you can deduce which part they belong to, you MUST output a special `suggestedAction` in the JSON:
+```json
+{
+  "suggestedAction": "assign_image",
+  "targetPart": 0
+}
+```
+Where `targetPart` is the 0-based index of the part the image depicts. You can output this alongside standard field updates.
+
 Example of a full valid response:
 
 ---FACTS---
@@ -40,6 +49,8 @@ Example of a full valid response:
 ---END---
 ```json
 {
+  "suggestedAction": "assign_image",
+  "targetPart": 0,
   "generalResponses": {
     "1.05": "kuka"
   },

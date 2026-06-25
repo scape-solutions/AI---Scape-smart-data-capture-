@@ -286,7 +286,19 @@ async function sendChatAPI(
       if (i === history.length - 1 && msg.role === 'user') {
          text = `${activeClientPrompts.autoFillPrompt}\n\nQUESTIONNAIRE SCHEMA:\n${JSON.stringify(schema, null, 2)}\n\nCURRENT PROJECT STATE:\n${JSON.stringify(cleanProject, null, 2)}\n\nACTIVE PART INDEX (0-based): ${activePartIndex}\n\nUSER MESSAGE:\n${text}`;
       }
-      return { role: msg.role, parts: [{ text }] };
+      
+      const parts: any[] = [{ text }];
+      if (includeImages && msg.images && Array.isArray(msg.images)) {
+        msg.images.forEach((imgBase64: string) => {
+          if (imgBase64.startsWith('data:')) {
+            const mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
+            const data = imgBase64.substring(imgBase64.indexOf(',') + 1);
+            parts.push({ inlineData: { data, mimeType } });
+          }
+        });
+      }
+      
+      return { role: msg.role, parts };
     });
 
     // Append images to the last user message's parts if includeImages is true and we have images
@@ -503,7 +515,7 @@ export default function App() {
 
   // Opretter et helt nyt "tomt" projekt i hukommelsen. 
   // Bemærk: Det gemmes ikke i databasen endnu.
-  const createNewProject = () => {
+  const createNewProject = (withAI = false) => {
     setCurrentProject({
       id: null,
       projectName: "New Bin-Picking Evaluation",
@@ -516,6 +528,7 @@ export default function App() {
       ownerName: profile?.name || user?.displayName || undefined,
       ownerCompany: profile?.company || undefined,
       ownerPhone: profile?.phone || undefined,
+      isSplitScreen: withAI,
     });
     setView('questionnaire');
     setCurrentStep(0);
@@ -677,10 +690,10 @@ export default function App() {
    * AI AUTO-FILL ASSISTANT (CHAT)
    * ==========================================
    */
-  const sendMessageToAssistant = async (userMessage: string) => {
+  const sendMessageToAssistant = async (userMessage: string, images?: string[]) => {
     if (!currentProject) return;
     const history = currentProject.chatHistory ? [...currentProject.chatHistory] : [];
-    const newHistory = [...history, { role: 'user' as const, text: userMessage }];
+    const newHistory = [...history, { role: 'user' as const, text: userMessage, images: images || [] }];
     setCurrentProject({ ...currentProject, chatHistory: newHistory });
     setIsAssistantThinking(true);
     try {

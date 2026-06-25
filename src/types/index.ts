@@ -40,7 +40,7 @@ export interface ProjectState {
   report: string | null;
   evaluatorDraft?: string | null;
   finalVerdict?: string | null;
-  chatHistory?: { role: 'user' | 'model'; text: string }[];
+  chatHistory?: { role: 'user' | 'model'; text: string; images?: string[] }[];
   /** Structured field-level observations extracted from the Data Capture Advice.
    *  Keys are questionnaire field IDs (e.g. "1.03", "2.04").
    *  Populated automatically after advice is generated. */
@@ -57,6 +57,7 @@ export interface ProjectState {
   isDeleted?: boolean;
   isDemo?: boolean;
   isImportPending?: boolean;
+  isSplitScreen?: boolean; // True if the project was created via AI Onboarding
   takenBy?: string;
   takenByName?: string;
   isVerdictVisible?: boolean;
