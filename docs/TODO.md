@@ -35,5 +35,17 @@ This document tracks actionable tasks and fixes derived from recent testing feed
   - **Include User Roles:** Update the `logChange` payload to include the user's role (`profile?.role`). Then update the UI (e.g., `HistoryModal.tsx`) to display the role alongside the name (e.g., "User: Demo 1 (Evaluator)").
   - **Log Actual Changes (Diffing):** Implement logic in `saveProject` to compare the new data against the existing project state and log *what* was actually changed (e.g., "Updated bin dimensions", "Added new part", "Uploaded image").
 
-- [ ] **Image Lightbox / Enlarge:**
+- [x] **Image Lightbox / Enlarge:**
   - Implement a feature where clicking on any uploaded image (both general cell images and part images) opens it in a larger popup/lightbox overlay, allowing users and evaluators to inspect image details easily.
+
+## Future / Architecture Ideas
+
+- [ ] **Dual-AI System (Context-Aware App Support)**
+  - **Concept:** Create a two-agent architecture to handle both Bin-Picking evaluation and App Support without polluting the main prompt.
+  - **Implementation Strategy:**
+    1. Keep the main AI ("The Evaluator") focused entirely on bin-picking.
+    2. Add a system prompt rule to The Evaluator: *"If the user asks a technical question about the app interface (e.g. 'how do I print', 'where is the submit button'), output the JSON action: `{"suggestedAction": "ask_support", "query": "..."}`"*.
+    3. When the React frontend intercepts this JSON action, it suppresses the message and instead forwards the `query` to a *second* Gemini endpoint ("The Support AI").
+    4. The Support AI is equipped with a large, detailed user manual containing all app documentation, troubleshooting steps, and UI explanations.
+    5. The response from the Support AI is displayed in the chat interface.
+  - **Benefits:** Prevents role-confusion (hallucination) in the main evaluator AI, keeps the core evaluator fast and cheap, and allows unlimited documentation scaling for app support.

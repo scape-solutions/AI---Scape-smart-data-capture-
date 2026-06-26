@@ -491,18 +491,28 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
           {/* Sidebar on the Left (Desktop-only) */}
           <aside className={`hidden md:flex ${isSplitScreenMode ? 'md:w-64' : 'md:w-64 lg:w-80'} bg-white md:border-r border-slate-200 p-6 flex-col gap-4 overflow-y-auto shrink-0 z-10`}>
-        <button 
-          onClick={handleBackToDashboard}
-          disabled={isSaving}
-          className="flex items-center gap-2 text-sm text-slate-500 mb-6 hover:text-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSaving ? (
-            <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-          ) : (
-            <LayoutDashboard className="w-4 h-4" />
-          )}
-          <span>Dashboard</span>
-        </button>
+        <div className="flex flex-col gap-3 mb-6">
+          <button 
+            onClick={handleBackToDashboard}
+            disabled={isSaving}
+            className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+            ) : (
+              <LayoutDashboard className="w-4 h-4" />
+            )}
+            <span>Dashboard</span>
+          </button>
+          
+          <button
+            onClick={() => setCurrentProject({...currentProject, isSplitScreen: !isSplitScreenMode})}
+            className={`flex items-center gap-2 text-sm font-medium transition-colors ${isSplitScreenMode ? 'text-indigo-600 hover:text-indigo-800' : 'text-slate-500 hover:text-indigo-600'}`}
+          >
+            <Bot className="w-4 h-4" />
+            <span>Switch to {isSplitScreenMode ? 'Manual Mode' : 'AI Mode'}</span>
+          </button>
+        </div>
 
         <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Structure</h2>
         
@@ -677,18 +687,31 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
           {/* Sticky Mobile Header Bar (Only visible on screens < md) */}
           <div className="md:hidden sticky top-0 z-30 -mx-4 mb-6 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-xs select-none">
-            <button 
-              onClick={handleBackToDashboard}
-              disabled={isSaving}
-              className="p-1.5 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl text-slate-500 transition-all active:scale-95 disabled:opacity-50"
-              title="Dashboard"
-            >
-              {isSaving ? (
-                <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
-              ) : (
-                <LayoutDashboard className="w-5 h-5" />
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleBackToDashboard}
+                disabled={isSaving}
+                className="p-1.5 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl text-slate-500 transition-all active:scale-95 disabled:opacity-50"
+                title="Dashboard"
+              >
+                {isSaving ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                ) : (
+                  <LayoutDashboard className="w-5 h-5" />
+                )}
+              </button>
+              
+              <button 
+                onClick={() => {
+                  setCurrentProject({...currentProject, isSplitScreen: !isSplitScreenMode});
+                  setMobileSplitView('chat'); // Reset mobile view to chat when switching to AI mode
+                }}
+                className={`p-1.5 rounded-xl border transition-all active:scale-95 ${isSplitScreenMode ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'hover:bg-slate-50 border-transparent hover:border-slate-100 text-slate-500'}`}
+                title={`Switch to ${isSplitScreenMode ? 'Manual Mode' : 'AI Mode'}`}
+              >
+                <Bot className="w-5 h-5" />
+              </button>
+            </div>
 
             <div 
               onClick={() => setIsMobileMenuOpen(true)}
@@ -1858,7 +1881,10 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                     alt={isGeneralImages ? `Environmental photo ${imgIdx + 1}` : `Part upload ${imgIdx + 1}`}
                                   />
                                   {/* Overlay Controls */}
-                                  <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
+                                  <div 
+                                    onClick={() => setFullscreenImage(img)}
+                                    className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2 cursor-pointer"
+                                  >
                                     <button
                                       onClick={(e) => {
                                         e.preventDefault();
