@@ -20,7 +20,9 @@ import {
   Trash2,
   Bot,
   Briefcase,
-  Factory
+  Factory,
+  Clock,
+  FileText
 } from 'lucide-react';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 import { ProjectState, UserProfile } from '../types';
@@ -29,6 +31,7 @@ import { Header } from '../components/Header';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import ReactMarkdown from 'react-markdown';
 import { AIAssistantTab, isProposalAlreadyApplied } from '../components/AIAssistantTab';
+import { generateProjectPdf } from '../utils/pdfGenerator';
 
 const cleanMarkdownWrapper = (text: string): string => {
   let cleaned = text.trim();
@@ -86,6 +89,7 @@ interface QuestionnaireViewProps {
   setReviewTab: (tab: 'advice' | 'evaluation') => void;
   updateProjectField: (p: ProjectState, field: string, value: any, logMessage: string) => Promise<void>;
   handleAppError: (e: any, op?: any, path?: string) => void;
+  fetchProjectImages: (p: ProjectState) => Promise<ProjectState>;
 }
 
 export function QuestionnaireView({
@@ -124,13 +128,21 @@ export function QuestionnaireView({
   reviewTab,
   setReviewTab,
   updateProjectField,
-  handleAppError
+  handleAppError,
+  fetchProjectImages
 }: QuestionnaireViewProps) {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeCustomSection, setActiveCustomSection] = useState<'business-case' | 'additional-opportunities' | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+  const [showRequestUnlockModal, setShowRequestUnlockModal] = useState(false);
+  const [requestReason, setRequestReason] = useState('');
+  const [localIsSplitScreen, setLocalIsSplitScreen] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setLocalIsSplitScreen(null);
+  }, [currentProject?.id]);
 
   // ─── Visual Viewport height tracking for mobile virtual keyboard ──────────────
   const [viewportStyle, setViewportStyle] = useState<React.CSSProperties>({});
@@ -219,6 +231,22 @@ export function QuestionnaireView({
     partName: string;
   }>({ show: false, partIndex: -1, partName: '' });
 
+  const [deleteImageConfirm, setDeleteImageConfirm] = useState<{
+    show: boolean;
+    type: 'single' | 'all';
+    imageType: 'general' | 'part' | 'placement' | 'cad';
+    partIndex?: number;
+    imgIdx?: number;
+  }>({
+    show: false,
+    type: 'single',
+    imageType: 'general'
+  });
+
+  const [isDraggingCad, setIsDraggingCad] = useState(false);
+  const [isDraggingImages, setIsDraggingImages] = useState(false);
+  const [isDraggingPlacement, setIsDraggingPlacement] = useState(false);
+
   // Helper to determine if a part's steps are expanded in the sidebar
   const isPartExpanded = (partIdx: number) => {
     if (expandedParts[partIdx] !== undefined) {
@@ -237,7 +265,9 @@ export function QuestionnaireView({
   // Read-only state (locked or submitted/approved/rejected, unless the user is an admin)
   const isReadOnly = (currentProject.isLocked || currentProject.status === 'submitted' || currentProject.status === 'approved' || currentProject.status === 'rejected') && !profile?.isAdmin;
 
-  const isSplitScreenMode = currentProject?.isSplitScreen === true;
+  const isSplitScreenMode = localIsSplitScreen !== null 
+    ? localIsSplitScreen 
+    : (currentProject?.isSplitScreen === true && !profile?.isAdmin);
 
   // Helper to calculate question fill progress for a step
   const getStepProgress = (step: any, responses: Record<string, any>, part?: any) => {
@@ -254,7 +284,11 @@ export function QuestionnaireView({
       let isFilled = false;
 
       if (q.type === 'media') {
-        isFilled = !!(part && part.images && part.images.length > 0);
+        if (q.id === 'generalImages') {
+          isFilled = !!(currentProject.generalImages && currentProject.generalImages.length > 0);
+        } else {
+          isFilled = !!(part && part.images && part.images.length > 0);
+        }
       } else if (q.type === 'boolean') {
         isFilled = typeof val === 'boolean';
       } else if (q.type === 'number') {
@@ -358,87 +392,210 @@ export function QuestionnaireView({
     setCurrentStep(1);
     setIsReviewing(false);
     saveProject(currentProject.status || 'draft', updatedProject);
-
     setDeletePartConfirm({ show: false, partIndex: -1, partName: '' });
+  };
+
+  const handleDeleteImageConfirm = () => {
+    const { type, imageType, partIndex, imgIdx } = deleteImageConfirm;
+    const targetPartIdx = partIndex !== undefined ? partIndex : activePartIndex;
+
+    if (type === 'all') {
+      if (imageType === 'general') {
+        const updated = { ...currentProject, generalImages: [] };
+        setCurrentProject(updated);
+        saveProject(currentProject.status || 'draft', updated);
+      } else if (imageType === 'part') {
+        const parts = [...currentProject.parts];
+        if (parts[targetPartIdx]) {
+          parts[targetPartIdx].images = [];
+          const updated = { ...currentProject, parts };
+          setCurrentProject(updated);
+          saveProject(currentProject.status || 'draft', updated);
+        }
+      } else if (imageType === 'placement') {
+        const parts = [...currentProject.parts];
+        if (parts[targetPartIdx]) {
+          parts[targetPartIdx].placementImages = [];
+          const updated = { ...currentProject, parts };
+          setCurrentProject(updated);
+          saveProject(currentProject.status || 'draft', updated);
+        }
+      }
+    } else {
+      // type === 'single'
+      if (imageType === 'general') {
+        if (imgIdx !== undefined && imgIdx > -1) {
+          const generalImages = [...(currentProject.generalImages || [])];
+          generalImages.splice(imgIdx, 1);
+          const updated = { ...currentProject, generalImages };
+          setCurrentProject(updated);
+          saveProject(currentProject.status || 'draft', updated);
+        }
+      } else if (imageType === 'part') {
+        if (imgIdx !== undefined && imgIdx > -1) {
+          const parts = [...currentProject.parts];
+          if (parts[targetPartIdx]) {
+            parts[targetPartIdx].images.splice(imgIdx, 1);
+            const updated = { ...currentProject, parts };
+            setCurrentProject(updated);
+            saveProject(currentProject.status || 'draft', updated);
+          }
+        }
+      } else if (imageType === 'placement') {
+        if (imgIdx !== undefined && imgIdx > -1) {
+          const parts = [...currentProject.parts];
+          if (parts[targetPartIdx]) {
+            parts[targetPartIdx].placementImages.splice(imgIdx, 1);
+            const updated = { ...currentProject, parts };
+            setCurrentProject(updated);
+            saveProject(currentProject.status || 'draft', updated);
+          }
+        }
+      } else if (imageType === 'cad') {
+        const parts = [...currentProject.parts];
+        if (parts[targetPartIdx]) {
+          parts[targetPartIdx].cadFile = null;
+          const updated = { ...currentProject, parts };
+          setCurrentProject(updated);
+          saveProject(currentProject.status || 'draft', updated);
+        }
+      }
+    }
+
+    setDeleteImageConfirm({ show: false, type: 'single', imageType: 'general' });
+  };
+
+  const processUploadedImages = async (files: File[]) => {
+    const compressedImages: string[] = [];
+    setGlobalSuccess(`Optimizing ${files.length} image(s)...`);
+
+    const options: any = {
+      maxSizeMB: 0.1, // Max 100 KB per image
+      maxWidthOrHeight: 800,
+      useWebWorker: false,
+      exifOrientation: true
+    };
+
+    for (let file of files) {
+      try {
+        if (file.name.toLowerCase().endsWith('.heic')) {
+          alert(`Apple HEIC images are not supported directly. Please convert to JPG/PNG first.`);
+          continue;
+        }
+        // Compress the image
+        const compressedFile = await imageCompression(file, options);
+        const dataUrl = await imageCompression.getDataUrlFromFile(compressedFile);
+        compressedImages.push(dataUrl);
+      } catch (err) {
+        console.error("Image optimization failed:", err);
+        alert(`Error compressing "${file.name}": ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    if (currentStep === 0) {
+      const updatedGeneralImages = [
+        ...(currentProject.generalImages || []),
+        ...compressedImages
+      ];
+      const updated = { ...currentProject, generalImages: updatedGeneralImages };
+      setCurrentProject(updated);
+      saveProject(currentProject.status || 'draft', updated);
+    } else {
+      const updatedParts = [...currentProject.parts];
+      updatedParts[activePartIndex].images = [
+        ...updatedParts[activePartIndex].images,
+        ...compressedImages
+      ];
+      const updated = { ...currentProject, parts: updatedParts };
+      setCurrentProject(updated);
+      saveProject(currentProject.status || 'draft', updated);
+    }
+    setTimeout(() => setGlobalSuccess(null), 1500);
   };
 
   const handleUploadImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files) as File[];
-      const compressedImages: string[] = [];
-      setGlobalSuccess(`Optimizing ${files.length} image(s)...`);
-
-      const options: any = {
-        maxSizeMB: 0.1, // Max 100 KB per image
-        maxWidthOrHeight: 800,
-        useWebWorker: false,
-        exifOrientation: true
-      };
-
-      for (let file of files) {
-        try {
-          if (file.name.toLowerCase().endsWith('.heic')) {
-            alert(`Apple HEIC images are not supported directly. Please convert to JPG/PNG first.`);
-            continue;
-          }
-          // Compress the image
-          const compressedFile = await imageCompression(file, options);
-          const dataUrl = await imageCompression.getDataUrlFromFile(compressedFile);
-          compressedImages.push(dataUrl);
-        } catch (err) {
-          console.error("Image optimization failed:", err);
-          alert(`Error compressing "${file.name}": ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-
-      if (currentStep === 0) {
-        const updatedGeneralImages = [
-          ...(currentProject.generalImages || []),
-          ...compressedImages
-        ];
-        setCurrentProject({ ...currentProject, generalImages: updatedGeneralImages });
-      } else {
-        const updatedParts = [...currentProject.parts];
-        updatedParts[activePartIndex].images = [
-          ...updatedParts[activePartIndex].images,
-          ...compressedImages
-        ];
-        setCurrentProject({ ...currentProject, parts: updatedParts });
-      }
-      setTimeout(() => setGlobalSuccess(null), 1500);
+      await processUploadedImages(Array.from(e.target.files));
     }
+  };
+
+  const processPlacementImages = async (files: File[]) => {
+    const compressedImages: string[] = [];
+    setGlobalSuccess(`Optimizing ${files.length} placement image(s)...`);
+
+    const options: any = {
+      maxSizeMB: 0.1, // Max 100 KB per image
+      maxWidthOrHeight: 800,
+      useWebWorker: false,
+      exifOrientation: true
+    };
+
+    for (let file of files) {
+      try {
+        if (file.name.toLowerCase().endsWith('.heic')) {
+          alert(`Apple HEIC images are not supported directly. Please convert to JPG/PNG first.`);
+          continue;
+        }
+        const compressedFile = await imageCompression(file, options);
+        const dataUrl = await imageCompression.getDataUrlFromFile(compressedFile);
+        compressedImages.push(dataUrl);
+      } catch (err) {
+        console.error("Image optimization failed:", err);
+        alert(`Error compressing "${file.name}": ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    const updatedParts = [...currentProject!.parts];
+    updatedParts[activePartIndex].placementImages = [
+      ...(updatedParts[activePartIndex].placementImages || []),
+      ...compressedImages
+    ];
+    const updated = { ...currentProject!, parts: updatedParts };
+    setCurrentProject(updated);
+    saveProject(currentProject.status || 'draft', updated);
+    setTimeout(() => setGlobalSuccess(null), 1500);
+  };
+
+  const handleUploadPlacementImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await processPlacementImages(Array.from(e.target.files));
+    }
+  };
+
+  const processCadFile = async (file: File) => {
+    // Strict size check: max 200 KB
+    if (file.size > 200 * 1024) {
+      alert(`CAD file size is ${(file.size / 1024).toFixed(1)} KB, which exceeds the strict 200 KB database limit. 
+
+To prevent errors, please simplify your CAD model, export it as a low-poly binary STL, or take screenshots of the CAD model from multiple angles and upload them in the next tab ("Visual Evidence") instead!`);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const updatedParts = [...currentProject.parts];
+      updatedParts[activePartIndex].cadFile = {
+        name: file.name,
+        size: file.size,
+        type: file.type || 'application/octet-stream',
+        dataUrl: dataUrl
+      };
+      const updated = { ...currentProject, parts: updatedParts };
+      setCurrentProject(updated);
+      saveProject(currentProject.status || 'draft', updated);
+      setGlobalSuccess("CAD file uploaded successfully!");
+      setTimeout(() => setGlobalSuccess(null), 1500);
+    };
+    reader.onerror = () => {
+      alert("Failed to read CAD file.");
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleUploadCadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      
-      // Strict size check: max 200 KB
-      if (file.size > 200 * 1024) {
-        alert(`CAD file size is ${(file.size / 1024).toFixed(1)} KB, which exceeds the strict 200 KB database limit. 
-
-To prevent errors, please simplify your CAD model, export it as a low-poly binary STL, or take screenshots of the CAD model from multiple angles and upload them in the next tab ("Visual Evidence") instead!`);
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        const updatedParts = [...currentProject.parts];
-        updatedParts[activePartIndex].cadFile = {
-          name: file.name,
-          size: file.size,
-          type: file.type || 'application/octet-stream',
-          dataUrl: dataUrl
-        };
-        setCurrentProject({ ...currentProject, parts: updatedParts });
-        setGlobalSuccess("CAD file uploaded successfully!");
-        setTimeout(() => setGlobalSuccess(null), 1500);
-      };
-      reader.onerror = () => {
-        alert("Failed to read CAD file.");
-      };
-      reader.readAsDataURL(file);
+      await processCadFile(e.target.files[0]);
     }
   };
 
@@ -506,7 +663,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           </button>
           
           <button
-            onClick={() => setCurrentProject({...currentProject, isSplitScreen: !isSplitScreenMode})}
+            onClick={() => setLocalIsSplitScreen(!isSplitScreenMode)}
             className={`flex items-center gap-2 text-sm font-medium transition-colors ${isSplitScreenMode ? 'text-indigo-600 hover:text-indigo-800' : 'text-slate-500 hover:text-indigo-600'}`}
           >
             <Bot className="w-4 h-4" />
@@ -634,7 +791,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
         {/* Final Verdict */}
         <div className="mt-4">
           <button 
-            onClick={() => { setIsReviewing(true); setActiveCustomSection(null); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
+            onClick={() => { setIsReviewing(true); setActiveCustomSection(null); }}
             className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${isReviewing && !activeCustomSection ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
           >
             <Sparkles className="w-4 h-4" /> Review / Submit
@@ -703,7 +860,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               
               <button 
                 onClick={() => {
-                  setCurrentProject({...currentProject, isSplitScreen: !isSplitScreenMode});
+                  setLocalIsSplitScreen(!isSplitScreenMode);
                   setMobileSplitView('chat'); // Reset mobile view to chat when switching to AI mode
                 }}
                 className={`p-1.5 rounded-xl border transition-all active:scale-95 ${isSplitScreenMode ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'hover:bg-slate-50 border-transparent hover:border-slate-100 text-slate-500'}`}
@@ -778,8 +935,22 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   </div>
                 </div>
               )}
-              <div className="flex justify-end items-center flex-wrap gap-4 border-b border-slate-200 pb-4">
-                {((currentProject.generalImages && currentProject.generalImages.length > 0) || currentProject.parts.some(p => p.cadFile || (p.images && p.images.length > 0))) && (
+              <div className="flex justify-end items-center flex-wrap gap-3 border-b border-slate-200 pb-4">
+                <button 
+                  onClick={async () => {
+                    try {
+                      const full = await fetchProjectImages(currentProject);
+                      generateProjectPdf(full, profile);
+                    } catch (err) {
+                      console.error("PDF Export failed:", err);
+                    }
+                  }}
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all select-none shadow-md shadow-amber-600/10 cursor-pointer flex items-center gap-1.5 active:scale-95 hover:scale-[1.01]"
+                >
+                  <FileText className="w-4 h-4" /> Export PDF Report
+                </button>
+
+                {((currentProject.generalImages && currentProject.generalImages.length > 0) || currentProject.parts.some(p => p.cadFile || (p.images && p.images.length > 0) || (p.placementImages && p.placementImages.length > 0))) && (
                   <button
                     onClick={(e) => {
                       e.preventDefault();
@@ -826,6 +997,19 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                             downloadIndex++;
                           });
                         }
+                        if (part.placementImages) {
+                          part.placementImages.forEach((img: string, imgIdx: number) => {
+                            setTimeout(() => {
+                              const link = document.createElement('a');
+                              link.href = img;
+                              link.download = `part-${pIdx + 1}-placement-${imgIdx + 1}.png`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }, downloadIndex * 250);
+                            downloadIndex++;
+                          });
+                        }
                       });
                     }}
                     className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all active:scale-95 shadow-sm shadow-blue-100 flex items-center gap-1.5 cursor-pointer"
@@ -842,7 +1026,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   
                   <div className="flex justify-between items-center mb-6 relative z-10">
                     <h3 className="text-xl font-bold flex items-center gap-2">
-                      <Zap className="text-blue-400" /> Data Capture Advice
+                      <Zap className="text-blue-400" /> Project Information Advice
                     </h3>
                     <button 
                       onClick={() => setIsAdviceExpanded(!isAdviceExpanded)}
@@ -859,22 +1043,39 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
                           <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Analyzing Data...</span>
                         </div>
+                      ) : currentProject.report ? (
+                        <>
+                          <div className="max-h-[55vh] overflow-y-auto pr-4 text-slate-300 leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-white custom-scrollbar">
+                            <ReactMarkdown>
+                              {cleanMarkdownWrapper(currentProject.report)}
+                            </ReactMarkdown>
+                          </div>
+                          {!isReadOnly && (
+                            <button 
+                              onClick={generateExternalAdvice}
+                              disabled={isGeneratingAdvice}
+                              className="px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border border-slate-700 text-slate-300 hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                            >
+                              <RotateCcw className="w-4 h-4" /> Re-generate Advice
+                            </button>
+                          )}
+                        </>
                       ) : (
-                        <div className="max-h-[55vh] overflow-y-auto pr-4 text-slate-300 leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-white custom-scrollbar">
-                          <ReactMarkdown>
-                            {cleanMarkdownWrapper(currentProject.report || 'No advice generated yet.')}
-                          </ReactMarkdown>
+                        <div className="bg-slate-800/40 border border-slate-700/60 rounded-3xl p-8 text-center flex flex-col items-center justify-center gap-4 max-w-md mx-auto my-4">
+                          <Bot className="w-12 h-12 text-indigo-400 animate-pulse" />
+                          <h4 className="font-bold text-white text-base">Generate Project Feasibility Advice</h4>
+                          <p className="text-xs text-slate-400 leading-relaxed">
+                            Analyze your cell configuration, part physical parameters, and potential bin-picking challenges using AI.
+                          </p>
+                          {!isReadOnly && (
+                            <button
+                              onClick={generateExternalAdvice}
+                              className="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-indigo-950/20 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
+                            >
+                              <Sparkles className="w-4 h-4" /> Get Advice Data
+                            </button>
+                          )}
                         </div>
-                      )}
-
-                      {!isReadOnly && (
-                        <button 
-                          onClick={generateExternalAdvice}
-                          disabled={isGeneratingAdvice}
-                          className="px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border border-slate-700 text-slate-300 hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50"
-                        >
-                          <RotateCcw className="w-4 h-4" /> Get Advice on Data
-                        </button>
                       )}
                     </div>
                   )}
@@ -1097,8 +1298,13 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           <span className="text-[10px] text-slate-400 font-bold bg-slate-50 border px-2.5 py-1.5 rounded-lg select-none">
                             {part.images ? part.images.length : 0} Images
                           </span>
+                          {part.placementImages && part.placementImages.length > 0 && (
+                            <span className="text-[10px] text-slate-400 font-bold bg-slate-50 border px-2.5 py-1.5 rounded-lg select-none">
+                              {part.placementImages.length} Placement
+                            </span>
+                          )}
                         </div>
-                        {((part.images && part.images.length > 0) || part.cadFile) && (
+                        {((part.images && part.images.length > 0) || (part.placementImages && part.placementImages.length > 0) || part.cadFile) && (
                           <button
                             onClick={(e) => {
                               e.preventDefault();
@@ -1125,6 +1331,19 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                   dlIndex++;
                                 });
                               }
+                              if (part.placementImages) {
+                                part.placementImages.forEach((img: string, imgIdx: number) => {
+                                  setTimeout(() => {
+                                    const link = document.createElement('a');
+                                    link.href = img;
+                                    link.download = `part-${index + 1}-placement-${imgIdx + 1}.png`;
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  }, dlIndex * 250);
+                                  dlIndex++;
+                                });
+                              }
                             }}
                             className="px-3 py-1.5 hover:bg-slate-50 border border-slate-200 hover:border-slate-400 rounded-lg text-slate-700 hover:text-slate-900 transition-all active:scale-95 flex items-center gap-1 text-[10px] font-bold shadow-3xs cursor-pointer select-none"
                             title="Download all files for this part"
@@ -1141,6 +1360,84 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
               {/* Lock / Submit buttons */}
               <div className="flex flex-col gap-4">
+                {profile?.isAdmin && currentProject.editRequestPending && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-3xs flex flex-col gap-2.5 animate-fadeIn">
+                    <h4 className="font-bold text-amber-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-amber-500 animate-pulse" /> Unlock Request Pending
+                    </h4>
+                    {currentProject.editRequestReason ? (
+                      <p className="text-xs text-slate-700 bg-white/60 p-2.5 rounded-lg border border-amber-100 italic select-all">
+                        "{currentProject.editRequestReason}"
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">No reason provided.</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={async () => {
+                          setIsSaving(true);
+                          try {
+                            const updated = { 
+                              ...currentProject, 
+                              status: 'draft' as const, 
+                              isLocked: false, 
+                              editRequestPending: false, 
+                              editRequestReason: '' 
+                            };
+                            setCurrentProject(updated);
+                            if (currentProject.id) {
+                              await updateDoc(doc(db, 'projects', currentProject.id), { 
+                                status: 'draft',
+                                isLocked: false,
+                                editRequestPending: false,
+                                editRequestReason: ''
+                              });
+                              await logChange(currentProject.id, "Unlock request APPROVED. Status reverted to Draft.");
+                              fetchProjects(true);
+                              setGlobalSuccess("Request approved. Project unlocked & reverted to draft.");
+                              setTimeout(() => setGlobalSuccess(null), 5000);
+                            }
+                          } finally {
+                            setIsSaving(false);
+                          }
+                        }}
+                        disabled={isSaving}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                      >
+                        Approve & Unlock
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          setIsSaving(true);
+                          try {
+                            const updated = { 
+                              ...currentProject, 
+                              editRequestPending: false, 
+                              editRequestReason: '' 
+                            };
+                            setCurrentProject(updated);
+                            if (currentProject.id) {
+                              await updateDoc(doc(db, 'projects', currentProject.id), { 
+                                editRequestPending: false,
+                                editRequestReason: ''
+                              });
+                              await logChange(currentProject.id, "Unlock request REJECTED by evaluator.");
+                              fetchProjects(true);
+                              setGlobalSuccess("Unlock request rejected.");
+                              setTimeout(() => setGlobalSuccess(null), 5000);
+                            }
+                          } finally {
+                            setIsSaving(false);
+                          }
+                        }}
+                        disabled={isSaving}
+                        className="px-3.5 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                      >
+                        Reject Request
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {profile?.isAdmin ? (
                   currentProject.status === 'submitted' ? (
                     currentProject.isLocked ? (
@@ -1197,35 +1494,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     </span>
                   )
                 ) : (
-                  currentProject.status === 'submitted' ? (
-                    currentProject.isLocked ? (
-                      <button 
-                        disabled
-                        className="w-full py-5 rounded-2xl font-bold text-slate-400 bg-slate-100 shadow-none cursor-not-allowed select-none"
-                      >
-                        Locked / Under Evaluation
-                      </button>
-                    ) : (
-                      <button 
-                        onClick={async () => {
-                          setIsSaving(true);
-                          try {
-                            const res = await saveProject('draft', currentProject);
-                            if (res) {
-                              setGlobalSuccess("Project submission cancelled. You can now edit it again.");
-                              setTimeout(() => setGlobalSuccess(null), 5000);
-                            }
-                          } finally {
-                            setIsSaving(false);
-                          }
-                        }}
-                        disabled={isSaving}
-                        className="w-full py-5 rounded-2xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-100 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2"
-                      >
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submitted (Click to Unsubmit)"}
-                      </button>
-                    )
-                  ) : (
+                  // User (Customer) Actions
+                  currentProject.status === 'draft' ? (
                     <button 
                       onClick={async () => {
                         setIsSaving(true);
@@ -1241,30 +1511,60 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         }
                       }}
                       disabled={isSaving}
-                      className="w-full py-5 rounded-2xl font-bold text-white bg-blue-600 shadow-lg shadow-blue-200 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2"
+                      className="w-full py-5 rounded-2xl font-bold text-white bg-blue-600 shadow-lg shadow-blue-200 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2 cursor-pointer"
                     >
                       {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit to Scape Solutions"}
                     </button>
+                  ) : (
+                    // Project is not draft (it's submitted, approved, or rejected)
+                    currentProject.isLocked || currentProject.status === 'approved' || currentProject.status === 'rejected' ? (
+                      // Project is LOCKED or has a verdict, so user cannot unsubmit directly. They must request unlock.
+                      currentProject.editRequestPending ? (
+                        <div className="w-full py-5 px-6 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-center font-bold text-sm shadow-sm select-none flex flex-col gap-1.5 animate-pulse">
+                          <span className="flex items-center justify-center gap-2">
+                            <Clock className="w-4 h-4 text-amber-500 animate-spin" />
+                            Edit request pending approval by Scape Solutions
+                          </span>
+                          {currentProject.editRequestReason && (
+                            <p className="text-xs text-slate-500 font-medium italic mt-1 bg-white/60 p-2 rounded-lg border border-amber-100 font-sans select-all">
+                              "{currentProject.editRequestReason}"
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => {
+                            setRequestReason('');
+                            setShowRequestUnlockModal(true);
+                          }}
+                          disabled={isSaving}
+                          className="w-full py-5 rounded-2xl font-bold text-white bg-amber-500 hover:bg-amber-600 shadow-lg shadow-amber-200 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <RotateCcw className="w-4 h-4" /> Request Edit Permission
+                        </button>
+                      )
+                    ) : (
+                      // Project is submitted but NOT locked. User can unsubmit directly!
+                      <button 
+                        onClick={async () => {
+                          setIsSaving(true);
+                          try {
+                            const res = await saveProject('draft', currentProject);
+                            if (res) {
+                              setGlobalSuccess("Project submission cancelled. You can now edit it again.");
+                              setTimeout(() => setGlobalSuccess(null), 5000);
+                            }
+                          } finally {
+                            setIsSaving(false);
+                          }
+                        }}
+                        disabled={isSaving}
+                        className="w-full py-5 rounded-2xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-100 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submitted (Click to Unsubmit)"}
+                      </button>
+                    )
                   )
-                )}
-
-                {!currentProject.isFullySpecified && (
-                  <button 
-                    disabled={isReadOnly}
-                    onClick={async () => {
-                      if (isReadOnly) return;
-                      const nextVal = !currentProject.isFullySpecified;
-                      setCurrentProject({ ...currentProject, isFullySpecified: nextVal });
-                      if (currentProject.id) {
-                        await updateDoc(doc(db, 'projects', currentProject.id), { isFullySpecified: nextVal });
-                        await logChange(currentProject.id, "Project marked as fully specified by user");
-                        fetchProjects(profile?.isAdmin || false);
-                      }
-                    }}
-                    className={`w-full py-4 border-2 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${isReadOnly ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed shadow-none' : 'border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
-                  >
-                    <CheckCircle2 className="w-5 h-5" /> Mark as Fully Specified
-                  </button>
                 )}
               </div>
             </div>
@@ -1512,9 +1812,6 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       await saveProject(currentProject.status || 'draft', currentProject);
                       setIsReviewing(true);
                       setActiveCustomSection(null);
-                      if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) {
-                        generateExternalAdvice();
-                      }
                     } finally {
                       setIsSaving(false);
                     }
@@ -1590,7 +1887,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                             {q.important ? 'Important' : 'Optional'}
                           </span>
                         )}
-                        {/* Observation indicator from Data Capture Advice */}
+                        {/* Observation indicator from Project Information Advice */}
                         {currentProject.fieldObservations?.[q.id] && (() => {
                           const obs = currentProject.fieldObservations![q.id];
                           const isCritical = obs.severity === 'critical';
@@ -1616,7 +1913,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                 }`}>
                                   <p className="font-bold mb-1">{isCritical ? '🔴 Critical Observation' : '⚠️ Observation'}</p>
                                   <p>{obs.text}</p>
-                                  <p className="text-[10px] mt-2 opacity-60">From: Data Capture Advice</p>
+                                  <p className="text-[10px] mt-2 opacity-60">From: Project Information Advice</p>
                                 </div>
                               )}
                             </div>
@@ -1700,16 +1997,21 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                   onClick={(e) => {
                                     e.preventDefault();
                                     if (currentStep === 0) {
+                                      const newResponses = { ...currentProject.generalResponses };
+                                      if (isActive) delete newResponses[q.id];
+                                      else newResponses[q.id] = boolVal;
+                                      
                                       setCurrentProject({
                                         ...currentProject,
-                                        generalResponses: {
-                                          ...currentProject.generalResponses,
-                                          [q.id]: boolVal
-                                        }
+                                        generalResponses: newResponses
                                       });
                                     } else {
                                       const parts = [...currentProject.parts];
-                                      parts[activePartIndex].responses[q.id] = boolVal;
+                                      const newResponses = { ...parts[activePartIndex].responses };
+                                      if (isActive) delete newResponses[q.id];
+                                      else newResponses[q.id] = boolVal;
+                                      
+                                      parts[activePartIndex].responses = newResponses;
                                       setCurrentProject({ ...currentProject, parts });
                                     }
                                   }}
@@ -1728,9 +2030,39 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                               
                               {!currentProject.parts[activePartIndex].cadFile ? (
                                 <div className="space-y-3 w-full">
-                                  <label className={`w-full h-32 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center bg-white hover:bg-slate-50 transition-all ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                                    <UploadCloud className="w-8 h-8 text-slate-400 animate-pulse" />
-                                    <span className="text-xs font-bold text-slate-500 mt-2">Select CAD file (Max 200 KB)</span>
+                                  <label 
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      if (!isReadOnly) setIsDraggingCad(true);
+                                    }}
+                                    onDragLeave={() => setIsDraggingCad(false)}
+                                    onDrop={async (e) => {
+                                      e.preventDefault();
+                                      setIsDraggingCad(false);
+                                      if (isReadOnly) return;
+                                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                        const file = e.dataTransfer.files[0];
+                                        const extension = file.name.split('.').pop()?.toLowerCase();
+                                        const allowedExtensions = ['stl', 'step', 'stp', 'igs', 'iges', 'dwg', 'dxf'];
+                                        if (extension && allowedExtensions.includes(extension)) {
+                                          await processCadFile(file);
+                                        } else {
+                                          alert("Invalid file format. Please upload a CAD file (.stl, .step, .stp, .igs, .iges, .dwg, .dxf).");
+                                        }
+                                      }
+                                    }}
+                                    className={`w-full h-32 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all ${
+                                      isReadOnly 
+                                        ? 'opacity-50 cursor-not-allowed border-slate-300 bg-white' 
+                                        : isDraggingCad 
+                                          ? 'border-blue-500 bg-blue-50/50 cursor-pointer scale-[1.01]' 
+                                          : 'border-slate-300 bg-white hover:bg-slate-50 cursor-pointer'
+                                    }`}
+                                  >
+                                    <UploadCloud className={`w-8 h-8 ${isDraggingCad ? 'text-blue-500 scale-110' : 'text-slate-400'} transition-all animate-pulse`} />
+                                    <span className="text-xs font-bold text-slate-500 mt-2">
+                                      {isDraggingCad ? "Drop CAD file here!" : "Select or drag CAD file (Max 200 KB)"}
+                                    </span>
                                     <span className="text-[10px] text-slate-400 mt-1 font-semibold">Supports STL, STEP, STP, IGES, IGS</span>
                                     <input 
                                       type="file" 
@@ -1781,9 +2113,12 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                       <button 
                                         onClick={(e) => {
                                           e.preventDefault();
-                                          const parts = [...currentProject.parts];
-                                          parts[activePartIndex].cadFile = null;
-                                          setCurrentProject({ ...currentProject, parts });
+                                          setDeleteImageConfirm({
+                                            show: true,
+                                            type: 'single',
+                                            imageType: 'cad',
+                                            partIndex: activePartIndex
+                                          });
                                         }}
                                         className="text-red-500 hover:text-red-700 text-xs font-bold hover:underline cursor-pointer select-none"
                                       >
@@ -1824,6 +2159,138 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         />
                       )}
 
+                      {/* Custom Placement Images Uploader for 2.12 */}
+                      {q.type === 'textarea' && q.id === '2.12' && (() => {
+                        const placementImageList = currentProject.parts[activePartIndex]?.placementImages || [];
+                        return (
+                          <div className="mt-4 p-5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-4">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                                  <Camera className="w-4 h-4 text-slate-500" />
+                                  Placement Requirement Photos (Optional)
+                                </h4>
+                                <p className="text-xs text-slate-400 font-semibold mt-0.5">
+                                  Upload images/photos of the destination fixture, nesting area, or machine.
+                                </p>
+                              </div>
+                              {placementImageList.length > 0 && !isReadOnly && (
+                                <button 
+                                  onClick={e => {
+                                    e.preventDefault();
+                                    setDeleteImageConfirm({
+                                      show: true,
+                                      type: 'all',
+                                      imageType: 'placement',
+                                      partIndex: activePartIndex
+                                    });
+                                  }}
+                                  className="text-[10px] uppercase font-black tracking-widest text-red-500 hover:underline cursor-pointer"
+                                >
+                                  Clear Photos
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="flex gap-4">
+                              {!isReadOnly && (
+                                <label 
+                                  onDragOver={(e) => {
+                                    e.preventDefault();
+                                    setIsDraggingPlacement(true);
+                                  }}
+                                  onDragLeave={() => setIsDraggingPlacement(false)}
+                                  onDrop={async (e) => {
+                                    e.preventDefault();
+                                    setIsDraggingPlacement(false);
+                                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                      const files = Array.from(e.dataTransfer.files);
+                                      const imageFiles = files.filter(f => f.type.startsWith('image/'));
+                                      if (imageFiles.length > 0) {
+                                        await processPlacementImages(imageFiles);
+                                      } else {
+                                        alert("Invalid file format. Please drop image files only.");
+                                      }
+                                    }
+                                  }}
+                                  className={`w-24 h-20 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer select-none shrink-0 ${
+                                    isDraggingPlacement 
+                                      ? 'border-blue-500 bg-blue-50/50 scale-[1.03]' 
+                                      : 'border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <Camera className={`w-5 h-5 ${isDraggingPlacement ? 'text-blue-500 scale-110' : 'text-slate-400'} transition-all animate-pulse`} />
+                                  <span className="text-[10px] font-bold text-slate-500 mt-1">
+                                    {isDraggingPlacement ? "Drop here!" : "Upload"}
+                                  </span>
+                                  <input 
+                                    type="file" 
+                                    multiple 
+                                    accept="image/*" 
+                                    disabled={isReadOnly} 
+                                    className="hidden" 
+                                    onChange={handleUploadPlacementImages} 
+                                  />
+                                </label>
+                              )}
+
+                              <div className="flex-1 grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
+                                {placementImageList.map((img, imgIdx) => (
+                                  <div key={imgIdx} className="group relative h-20 w-full rounded-xl overflow-hidden border border-slate-200 shadow-xs bg-white">
+                                    <img 
+                                      src={img} 
+                                      onClick={() => setFullscreenImage(img)}
+                                      className="w-full h-full object-cover cursor-pointer transition-transform duration-200 group-hover:scale-105"
+                                      alt={`Placement photo ${imgIdx + 1}`}
+                                    />
+                                    <div 
+                                      onClick={() => setFullscreenImage(img)}
+                                      className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                                    >
+                                      <button
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          const link = document.createElement('a');
+                                          link.href = img;
+                                          link.download = `part-${activePartIndex + 1}-placement-${imgIdx + 1}.png`;
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                        }}
+                                        className="p-1 bg-white/90 hover:bg-white text-slate-800 rounded-md transition-all active:scale-95 shadow-xs cursor-pointer"
+                                        title="Download image"
+                                      >
+                                        <Download className="w-3.5 h-3.5" />
+                                      </button>
+                                      {!isReadOnly && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setDeleteImageConfirm({
+                                              show: true,
+                                              type: 'single',
+                                              imageType: 'placement',
+                                              partIndex: activePartIndex,
+                                              imgIdx
+                                            });
+                                          }}
+                                          className="p-1 bg-red-600/90 hover:bg-red-600 text-white rounded-md transition-all active:scale-95 shadow-xs cursor-pointer"
+                                          title="Delete image"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {/* Media Image Photo Uploader */}
                       {q.type === 'media' && (() => {
                         const isGeneralImages = q.id === 'generalImages';
@@ -1833,11 +2300,41 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
                         return (
                           <div className="space-y-4">
-                            <label className={`w-full h-32 border-2 border-dashed border-slate-300 rounded-3xl flex flex-col items-center justify-center bg-white hover:bg-slate-50 transition-all ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                              <Camera className="w-8 h-8 text-slate-300" />
-                              <span className="text-xs font-bold text-slate-400 mt-2">
-                                {isGeneralImages ? "Upload Environmental Photos" : "Upload Part Photos"}
+                            <label 
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                if (!isReadOnly) setIsDraggingImages(true);
+                              }}
+                              onDragLeave={() => setIsDraggingImages(false)}
+                              onDrop={async (e) => {
+                                e.preventDefault();
+                                setIsDraggingImages(false);
+                                if (isReadOnly) return;
+                                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                  const files = Array.from(e.dataTransfer.files);
+                                  const imageFiles = files.filter(f => f.type.startsWith('image/'));
+                                  if (imageFiles.length > 0) {
+                                    await processUploadedImages(imageFiles);
+                                  } else {
+                                    alert("Invalid file format. Please drop image files only.");
+                                  }
+                                }
+                              }}
+                              className={`w-full h-32 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all ${
+                                isReadOnly 
+                                  ? 'opacity-50 cursor-not-allowed border-slate-300 bg-white' 
+                                  : isDraggingImages 
+                                    ? 'border-blue-500 bg-blue-50/50 cursor-pointer scale-[1.01]' 
+                                    : 'border-slate-300 bg-white hover:bg-slate-50 cursor-pointer'
+                              }`}
+                            >
+                              <Camera className={`w-8 h-8 ${isDraggingImages ? 'text-blue-500 scale-110' : 'text-slate-400'} transition-all animate-pulse`} />
+                              <span className="text-xs font-bold text-slate-500 mt-2">
+                                {isDraggingImages 
+                                  ? "Drop photos here!" 
+                                  : (isGeneralImages ? "Select or drag Environmental Photos" : "Select or drag Part Photos")}
                               </span>
+                              <span className="text-[10px] text-slate-400 mt-1 font-semibold">Supports JPG, PNG</span>
                               <input 
                                 type="file" 
                                 multiple 
@@ -1856,13 +2353,12 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                 <button 
                                   onClick={e => {
                                     e.preventDefault();
-                                    if (isGeneralImages) {
-                                      setCurrentProject({ ...currentProject, generalImages: [] });
-                                    } else {
-                                      const parts = [...currentProject.parts];
-                                      parts[activePartIndex].images = [];
-                                      setCurrentProject({ ...currentProject, parts });
-                                    }
+                                    setDeleteImageConfirm({
+                                      show: true,
+                                      type: 'all',
+                                      imageType: isGeneralImages ? 'general' : 'part',
+                                      partIndex: isGeneralImages ? -1 : activePartIndex
+                                    });
                                   }}
                                   className="text-[10px] uppercase font-black tracking-widest text-red-500 hover:underline cursor-pointer"
                                 >
@@ -1908,15 +2404,13 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                         onClick={(e) => {
                                           e.preventDefault();
                                           e.stopPropagation();
-                                          if (isGeneralImages) {
-                                            const generalImages = [...(currentProject.generalImages || [])];
-                                            generalImages.splice(imgIdx, 1);
-                                            setCurrentProject({ ...currentProject, generalImages });
-                                          } else {
-                                            const parts = [...currentProject.parts];
-                                            parts[activePartIndex].images.splice(imgIdx, 1);
-                                            setCurrentProject({ ...currentProject, parts });
-                                          }
+                                          setDeleteImageConfirm({
+                                            show: true,
+                                            type: 'single',
+                                            imageType: isGeneralImages ? 'general' : 'part',
+                                            partIndex: isGeneralImages ? -1 : activePartIndex,
+                                            imgIdx
+                                          });
                                         }}
                                         className="p-1 bg-red-600/90 hover:bg-red-600 text-white rounded-md transition-all active:scale-95 shadow-xs cursor-pointer"
                                         title="Delete image"
@@ -2101,7 +2595,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               </div>
 
               <button 
-                onClick={() => { setIsReviewing(true); setActiveCustomSection(null); setIsMobileMenuOpen(false); if (!currentProject.report && !isGeneratingAdvice && !profile?.isAdmin) generateExternalAdvice(); }}
+                onClick={() => { setIsReviewing(true); setActiveCustomSection(null); setIsMobileMenuOpen(false); }}
                 className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${isReviewing && !activeCustomSection ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
               >
                 <div className="flex items-center gap-3">
@@ -2179,7 +2673,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           <button 
             onClick={() => setFullscreenImage(null)}
             className="absolute top-6 right-6 text-slate-400 hover:text-white bg-slate-900/40 hover:bg-slate-900/80 p-3 rounded-full transition-all duration-200 border border-slate-800"
-            title="Luk (Esc)"
+            title="Close (Esc)"
           >
             <X className="w-6 h-6" />
           </button>
@@ -2189,7 +2683,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           >
             <img 
               src={fullscreenImage} 
-              alt="Fuld størrelse visning" 
+              alt="Full size view" 
               className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-slate-800/50 select-none"
             />
             <div className="mt-4 flex gap-4 select-none">
@@ -2208,6 +2702,12 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     if (partIdx > -1) {
                       const imgIdx = currentProject.parts[partIdx].images.indexOf(fullscreenImage);
                       filename = `part-${partIdx + 1}-image-${imgIdx + 1}.png`;
+                    } else {
+                      const placementPartIdx = currentProject.parts.findIndex(p => p.placementImages?.includes(fullscreenImage));
+                      if (placementPartIdx > -1) {
+                        const imgIdx = currentProject.parts[placementPartIdx].placementImages.indexOf(fullscreenImage);
+                        filename = `part-${placementPartIdx + 1}-placement-${imgIdx + 1}.png`;
+                      }
                     }
                   }
                   
@@ -2226,20 +2726,37 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   onClick={() => {
                     const isGeneral = currentProject.generalImages?.includes(fullscreenImage);
                     if (isGeneral) {
-                      const generalImages = [...(currentProject.generalImages || [])];
-                      const idx = generalImages.indexOf(fullscreenImage);
-                      if (idx > -1) {
-                        generalImages.splice(idx, 1);
-                        setCurrentProject({ ...currentProject, generalImages });
-                      }
+                      const idx = currentProject.generalImages.indexOf(fullscreenImage);
+                      setDeleteImageConfirm({
+                        show: true,
+                        type: 'single',
+                        imageType: 'general',
+                        partIndex: -1,
+                        imgIdx: idx
+                      });
                     } else {
                       const parts = [...currentProject.parts];
                       const partIdx = parts.findIndex(p => p.images?.includes(fullscreenImage));
                       if (partIdx > -1) {
                         const imgIdx = parts[partIdx].images.indexOf(fullscreenImage);
-                        if (imgIdx > -1) {
-                          parts[partIdx].images.splice(imgIdx, 1);
-                          setCurrentProject({ ...currentProject, parts });
+                        setDeleteImageConfirm({
+                          show: true,
+                          type: 'single',
+                          imageType: 'part',
+                          partIndex: partIdx,
+                          imgIdx: imgIdx
+                        });
+                      } else {
+                        const placementPartIdx = parts.findIndex(p => p.placementImages?.includes(fullscreenImage));
+                        if (placementPartIdx > -1) {
+                          const imgIdx = parts[placementPartIdx].placementImages.indexOf(fullscreenImage);
+                          setDeleteImageConfirm({
+                            show: true,
+                            type: 'single',
+                            imageType: 'placement',
+                            partIndex: placementPartIdx,
+                            imgIdx: imgIdx
+                          });
                         }
                       }
                     }
@@ -2267,6 +2784,35 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
         type="danger"
         onConfirm={handleConfirmDeletePart}
         onCancel={() => setDeletePartConfirm({ show: false, partIndex: -1, partName: '' })}
+      />
+
+      <ConfirmationModal 
+        show={deleteImageConfirm.show}
+        title={
+          deleteImageConfirm.imageType === 'cad'
+            ? "Remove CAD File"
+            : deleteImageConfirm.type === 'all' 
+              ? "Clear All Images" 
+              : "Delete Image"
+        }
+        message={
+          deleteImageConfirm.imageType === 'cad'
+            ? "Are you sure you want to remove the CAD file? This action cannot be undone."
+            : deleteImageConfirm.type === 'all' 
+              ? "Are you sure you want to clear all images in this section? This action cannot be undone."
+              : "Are you sure you want to delete this image? This action cannot be undone."
+        }
+        confirmText={
+          deleteImageConfirm.imageType === 'cad'
+            ? "Remove CAD"
+            : deleteImageConfirm.type === 'all' 
+              ? "Clear All" 
+              : "Delete"
+        }
+        type="danger"
+        requireTextConfirm="delete"
+        onConfirm={handleDeleteImageConfirm}
+        onCancel={() => setDeleteImageConfirm({ show: false, type: 'single', imageType: 'general' })}
       />
 
       {/* Floating AI Assistant Toggle Button */}
@@ -2336,6 +2882,94 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             </div>
           </aside>
         </>
+      )}
+
+      {/* Request Unlock Modal */}
+      {showRequestUnlockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 flex flex-col gap-6 animate-scaleUp">
+            <div>
+              <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-amber-500" />
+                Request Edit Permission
+              </h3>
+              <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                This project is currently locked by Scape Solutions. Please provide a brief reason for requesting to unlock and update it.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Reason for update
+              </label>
+              <textarea
+                value={requestReason}
+                onChange={(e) => setRequestReason(e.target.value)}
+                placeholder="E.g., We need to update the part dimensions, upload a new CAD file, or change robot brand..."
+                className="w-full min-h-[100px] p-3 text-sm border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl transition-all font-medium placeholder-slate-400 resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowRequestUnlockModal(false)}
+                className="px-4 py-2.5 hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all active:scale-95 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!requestReason.trim()) {
+                    alert("Please enter a reason.");
+                    return;
+                  }
+                  setIsSaving(true);
+                  try {
+                    const updated = { 
+                      ...currentProject, 
+                      editRequestPending: true, 
+                      editRequestReason: requestReason.trim() 
+                    };
+                    setCurrentProject(updated);
+                    if (currentProject.id) {
+                      console.log("Attempting updateDoc...");
+                      try {
+                        await updateDoc(doc(db, 'projects', currentProject.id), {
+                          editRequestPending: true,
+                          editRequestReason: requestReason.trim()
+                        });
+                        console.log("updateDoc succeeded!");
+                      } catch (docErr: any) {
+                        throw new Error(`updateDoc failed: ${docErr.message || String(docErr)}`);
+                      }
+
+                      console.log("Attempting logChange...");
+                      try {
+                        await logChange(currentProject.id, `User requested edit access. Reason: "${requestReason.trim()}"`);
+                        console.log("logChange succeeded!");
+                      } catch (logErr: any) {
+                        throw new Error(`logChange failed: ${logErr.message || String(logErr)}`);
+                      }
+
+                      setShowRequestUnlockModal(false);
+                      setGlobalSuccess("Unlock request submitted successfully!");
+                      setTimeout(() => setGlobalSuccess(null), 5000);
+                    }
+                  } catch (err: any) {
+                    console.error("Failed to submit unlock request:", err);
+                    alert("Kunne ikke indsende anmodning: " + (err?.message || String(err)));
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                disabled={isSaving || !requestReason.trim()}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all active:scale-95 shadow-sm shadow-amber-100 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                Send Request
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

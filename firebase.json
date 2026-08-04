@@ -1,8 +1,16 @@
 {
-  "firestore": {
-    "rules": "firestore.rules"
-  },
+  "firestore": [
+    {
+      "database": "(default)",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "ai-studio-scapebinpickinge-034f7a46-4395-4b38-89aa-1055263d83ac",
+      "rules": "firestore.rules"
+    }
+  ],
   "hosting": {
+    "site": "scape-bin-picker-projects",
     "public": "public",
     "ignore": [
       "firebase.json",

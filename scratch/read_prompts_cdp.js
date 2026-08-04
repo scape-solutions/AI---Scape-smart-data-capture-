@@ -182,8 +182,8 @@ async function main() {
         const sleep = ms => new Promise(r => setTimeout(r, ms));
         const results = {};
         
-        // Tab 1: Data Capture Advice
-        const tab1 = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim().includes('Data Capture Advice'));
+        const tab1 = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim().includes('Project Information Advice'));
+        // Tab 1: Project Information Advice
         if (tab1) {
           tab1.click();
           await sleep(500);

@@ -28,6 +28,7 @@ export interface PartData {
   images: string[];
   imageCount?: number; // Cached image count stored in main doc (images are stored separately)
   cadFile?: { name: string; size: number; type: string; dataUrl: string } | null;
+  placementImages?: string[];
 }
 
 export interface ProjectState {
@@ -41,7 +42,7 @@ export interface ProjectState {
   evaluatorDraft?: string | null;
   finalVerdict?: string | null;
   chatHistory?: { role: 'user' | 'model'; text: string; images?: string[] }[];
-  /** Structured field-level observations extracted from the Data Capture Advice.
+  /** Structured field-level observations extracted from the Project Information Advice.
    *  Keys are questionnaire field IDs (e.g. "1.03", "2.04").
    *  Populated automatically after advice is generated. */
   fieldObservations?: Record<string, { severity: 'warning' | 'critical'; text: string }> | null;
@@ -52,12 +53,13 @@ export interface ProjectState {
   // Spørgsmålstegnet (?) betyder, at dette felt er "optional" (valgfrit).
   // Objektet behøver ikke at have dette felt, når det oprettes.
   isLocked?: boolean;
-  isFullySpecified?: boolean;
   isInactive?: boolean;
   isDeleted?: boolean;
   isDemo?: boolean;
   isImportPending?: boolean;
   isSplitScreen?: boolean; // True if the project was created via AI Onboarding
+  editRequestPending?: boolean;
+  editRequestReason?: string;
   takenBy?: string;
   takenByName?: string;
   isVerdictVisible?: boolean;
@@ -82,5 +84,7 @@ export interface UserProfile {
   isAdmin?: boolean;
   requestedRole?: 'evaluator' | 'user' | 'superuser';
   userModePreferred?: boolean;
+  tosAcceptedAt?: any;
+  lastActiveAt?: string;
 }
 

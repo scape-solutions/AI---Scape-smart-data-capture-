@@ -187,39 +187,57 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     // 1. ROBUST PWA LOGIN FIX: Tjekker om vi netop er returneret fra Google OAuth med en token i URL'en (eller localStorage).
     // Dette omgår 100% Safari/iOS problemer med at slette cookies på tværs af redirects.
     
-    // Tjek URL hash (fra vores gamle custom flow, bare for at rense op hvis nogen har et gammelt link)
-    const hash = window.location.hash;
-    if (hash.startsWith('#token=')) {
-      window.location.hash = ''; // Fjern token fra URL med det samme
-    }
+    const resolvePwaToken = async () => {
+      let token: string | null = null;
+      
+      const hash = window.location.hash;
+      if (hash.startsWith('#token=')) {
+        token = decodeURIComponent(hash.substring('#token='.length));
+        window.location.hash = ''; // Fjern token fra URL med det samme
+      }
 
-    // Tjek localStorage (fra gammelt flow)
-    const localToken = localStorage.getItem('pwa_custom_token');
-    if (localToken) {
-      localStorage.removeItem('pwa_custom_token');
-    }
+      const localToken = localStorage.getItem('pwa_custom_token');
+      if (localToken) {
+        token = localToken;
+        localStorage.removeItem('pwa_custom_token');
+      }
 
-    // Also handle standard Firebase redirect results (dette tager typisk 2-3 sekunder)
+      if (token) {
+        console.log("Found PWA auth token, signing in...");
+        setAuthLoading(true);
+        try {
+          await signInWithCustomToken(auth, token);
+          console.log("Successfully logged in via PWA custom token!");
+          return true;
+        } catch (e: any) {
+          console.error("Custom token login failed:", e);
+          setAuthError(e.message || "Failed to sign in with custom PWA token");
+        }
+      }
+      return false;
+    };
+
     setAuthLoading(true);
-    getRedirectResult(auth).then((result) => {
-      if (result) {
-        console.log("Successfully logged in via redirect");
-      }
-    }).catch((e: any) => {
-      console.error("Google Redirect Auth error:", e);
-      if (e.code === 'auth/unauthorized-domain') {
-        setAuthError("This domain is not authorized in Firebase. Please add it to 'Authorized domains' in the Firebase Console.");
-      } else {
-        setAuthError(e.message || "Failed to sign in with Google Redirect");
-      }
-    }).finally(() => {
-      // We only set authLoading false here if user is not already resolved by onAuthStateChanged
-      // Actually onAuthStateChanged usually handles the final state, but we ensure loading stops.
-      setTimeout(() => setAuthLoading(false), 1000);
+
+    resolvePwaToken().then((hasCustomToken) => {
+      if (hasCustomToken) return;
+
+      // Also handle standard Firebase redirect results (dette tager typisk 2-3 sekunder)
+      getRedirectResult(auth).then((result) => {
+        if (result) {
+          console.log("Successfully logged in via redirect");
+        }
+      }).catch((e: any) => {
+        console.error("Google Redirect Auth error:", e);
+        if (e.code === 'auth/unauthorized-domain') {
+          setAuthError("This domain is not authorized in Firebase. Please add it to 'Authorized domains' in the Firebase Console.");
+        } else {
+          setAuthError(e.message || "Failed to sign in with Google Redirect");
+        }
+      }).finally(() => {
+        setTimeout(() => setAuthLoading(false), 1000);
+      });
     });
-
-    // Start as loading until auth resolves
-    setAuthLoading(true);
 
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       console.log("Auth state changed:", u?.email);
@@ -232,6 +250,12 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
           const profileDoc = await getDoc(doc(db, 'users', u.uid));
           if (profileDoc.exists()) {
             let pData = profileDoc.data() as UserProfile;
+            
+            // Record last active time dynamically
+            const lastActiveAt = new Date().toISOString();
+            updateDoc(doc(db, 'users', u.uid), { lastActiveAt }).catch(console.error);
+            pData.lastActiveAt = lastActiveAt;
+
             // Migrate 'external' to 'user' role automatically
             if ((pData.requestedRole as any) === 'external') {
               pData.requestedRole = 'user';
@@ -289,12 +313,34 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
             setProfile({ ...pData });
             setView('dashboard');
           } else {
-            // Hvis brugeren ligger i 'auth' men ikke har udfyldt sit navn/firma i vores database,
-            // sender vi dem til 'profile_setup' skærmen.
+            // Create a skeleton profile for the new user so onboarding handles registration
+            const email = u.email || 'Unknown';
+            const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+            const isAllowed = email ? isAllowedEvaluator(email, allowedEvaluators) : false;
+            const initialRole = isAllowed ? 'evaluator' : 'user';
+            const newProfile: UserProfile = {
+              email,
+              name: u.displayName || '',
+              company: '',
+              companyType: 'other',
+              phone: '',
+              requestedRole: initialRole,
+              isAdmin: getEffectiveAdminStatus({
+                email,
+                name: u.displayName || '',
+                company: '',
+                companyType: 'other',
+                phone: '',
+                requestedRole: initialRole,
+                isAdmin: false
+              }, u.uid)
+            };
+            await setDoc(doc(db, 'users', u.uid), newProfile);
+            setProfile(newProfile);
             setView('profile_setup');
           }
         } catch (e) {
-          handleAppError(e, OperationType.GET, `users/${u.uid}`);
+          handleAppError(e, OperationType.READ, `users/${u.uid}`);
         }
       } else {
         setProfile(null);
@@ -315,7 +361,15 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
 
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.');
+      const isStandalone = (window.navigator as any).standalone === true || window.matchMedia('(display-mode: standalone)').matches;
       
+      if (isStandalone && isMobile && !isLocal) {
+        // I iOS standalone PWA tilstand virker hverken popups eller redirect retur.
+        // Derfor navigerer vi til vores server-side OAuth proxy, som bygger broen.
+        window.location.href = '/api/auth/google/start';
+        return;
+      }
+
       if (isMobile && !isLocal) {
         // Firebase anbefaler signInWithRedirect på mobile enheder og PWA'er,
         // da signInWithPopup kan blive blokeret af popup-blockers i iOS standalone mode.

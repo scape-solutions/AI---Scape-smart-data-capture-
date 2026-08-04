@@ -22,7 +22,6 @@ interface ProjectCardProps {
   toggleLock: (p: ProjectState) => void;
   takeProject: (p: ProjectState) => void;
   updateStatus: (p: ProjectState, status: ProjectState['status']) => void;
-  toggleSpecified: (p: ProjectState) => void;
   toggleInactive: (p: ProjectState) => void;
   acceptProject: (id: string) => void;
   fetchProjectImages: (p: ProjectState) => Promise<ProjectState>;
@@ -39,7 +38,6 @@ export function ProjectCard({
   toggleLock,
   takeProject,
   updateStatus,
-  toggleSpecified,
   toggleInactive,
   acceptProject,
   fetchProjectImages
@@ -211,7 +209,11 @@ export function ProjectCard({
               )}
               {/* Hvis projektet er låst (isLocked er true), så vis dette badge */}
               {p.isLocked && <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shrink-0"><ShieldCheck className="w-3 h-3" /> Locked</span>}
-              {p.isFullySpecified && <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shrink-0"><CheckCircle2 className="w-3 h-3" /> Specified</span>}
+              {p.editRequestPending && (
+                <span className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shrink-0 animate-pulse">
+                  <Clock className="w-3 h-3 text-amber-600" /> Unlock Requested
+                </span>
+              )}
               {p.isInactive && !p.isDeleted && <span className="bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shrink-0">Inactive</span>}
               {p.isDeleted && <span className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shrink-0 flex items-center gap-1"><Trash2 className="w-3 h-3" /> Deleted</span>}
             </div>
@@ -306,12 +308,6 @@ export function ProjectCard({
                   Reject
                 </button>
               )}
-              <button 
-                onClick={(e) => { e.stopPropagation(); toggleSpecified(p); }}
-                className={`text-[9px] font-black uppercase px-2 py-1 rounded border transition-colors ${p.isFullySpecified ? 'bg-emerald-600 text-white border-emerald-600' : 'text-slate-400 border-slate-200 hover:border-emerald-600'}`}
-              >
-                {p.isFullySpecified ? 'Unspecify' : 'Approve Spec'}
-              </button>
               <button 
                 onClick={(e) => { e.stopPropagation(); toggleInactive(p); }}
                 className={`text-[9px] font-black uppercase px-2 py-1 rounded border transition-colors ${p.isInactive ? 'bg-slate-900 text-white border-slate-900' : 'text-slate-400 border-slate-200 hover:border-slate-900'}`}
@@ -449,10 +445,19 @@ export function ProjectCard({
                 </div>
                 <button 
                   onClick={(e) => { e.stopPropagation(); openProject(p); }}
-                  className="text-blue-600 font-bold flex items-center gap-1 hover:underline sm:ml-auto transition-all"
+                  className={`${p.editRequestPending && profile?.isAdmin ? 'text-amber-600' : 'text-blue-600'} font-bold flex items-center gap-1 hover:underline sm:ml-auto transition-all`}
                 >
-                  {p.isLocked && !profile?.isAdmin ? <ShieldCheck className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                  {p.isLocked && !profile?.isAdmin ? 'View Data' : 'View Details'}
+                  {p.editRequestPending && profile?.isAdmin ? (
+                    <>
+                      <RotateCcw className="w-3 h-3 animate-spin" />
+                      <span>Review Request</span>
+                    </>
+                  ) : (
+                    <>
+                      {p.isLocked && !profile?.isAdmin ? <ShieldCheck className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                      <span>{p.isLocked && !profile?.isAdmin ? 'View Data' : 'View Details'}</span>
+                    </>
+                  )}
                 </button>
               </>
             )}

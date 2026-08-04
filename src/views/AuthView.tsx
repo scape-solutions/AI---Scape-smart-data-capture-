@@ -38,6 +38,7 @@ export function AuthView({
   authLoading
 }: AuthViewProps) {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const emailValid = !authEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authEmail.trim());
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -81,14 +82,23 @@ export function AuthView({
                 />
               )}
               
-              <input 
-                type="email" 
-                placeholder="Email" 
-                className="w-full p-4 bg-slate-50 rounded-xl text-sm border-none focus:ring-2 focus:ring-blue-600"
-                value={authEmail}
-                // e.target.value er standard JavaScript for at hente det, brugeren har tastet ind
-                onChange={e => setAuthEmail(e.target.value)}
-              />
+              <div className="space-y-1 text-left">
+                <input 
+                  type="email" 
+                  placeholder="Email" 
+                  className={`w-full p-4 bg-slate-50 rounded-xl text-sm focus:outline-hidden focus:ring-2 transition-all ${
+                    !emailValid 
+                      ? 'ring-2 ring-red-500 bg-red-50/30' 
+                      : 'focus:ring-blue-600'
+                  }`}
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                />
+                {!emailValid && (
+                  <p className="text-[10px] text-red-500 font-bold px-1">Indtast en gyldig e-mailadresse / Enter a valid email</p>
+                )}
+              </div>
+
               <input 
                 type="password" 
                 placeholder="Password" 
@@ -100,9 +110,9 @@ export function AuthView({
               {authError && <p className="text-[10px] text-red-500 font-bold">{authError}</p>}
 
               <button 
-                // Vælger den rigtige funktion baseret på tilstanden
                 onClick={authStep === 'signin' ? loginWithEmail : signupWithEmail} 
-                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:scale-[1.02] transition-all"
+                disabled={!authEmail.trim() || !authPassword.trim() || !emailValid || (authStep === 'signup' && !authDisplayName.trim())}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 cursor-pointer"
               >
                 {authStep === 'signin' ? 'Sign In' : 'Create Account'}
               </button>
@@ -162,7 +172,7 @@ export function AuthView({
                 </span>
                 PE
               </span>
-              <span className="text-xs font-bold text-slate-400">Bin-Picking Evaluator</span>
+              <span className="text-xs font-bold text-slate-400">Bin-Picker Projects</span>
             </div>
 
             {/* Content Sections */}
@@ -191,31 +201,31 @@ export function AuthView({
 
               {/* Purpose */}
               <div>
-                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Formål / Purpose</h4>
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Purpose</h4>
                 <p className="text-xs text-slate-700 leading-relaxed">
-                  Dette værktøj hjælper med at indsamle og evaluere tekniske specifikationer for bin-picking opgaver. 
-                  Ved at dele data om emner, kasser og ydeevne kan vi hurtigt give rådgivning og vurdere gennemførligheden af en automatiseret løsning.
+                  This tool helps collect and evaluate technical specifications for bin-picking tasks. 
+                  By sharing data about parts, bins, and performance, we can quickly provide advice and assess the feasibility of an automated solution.
                 </p>
               </div>
 
               {/* Condensed How-To */}
               <div>
-                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Sådan bruges appen / Quick Guide</h4>
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Quick Guide</h4>
                 <ul className="text-xs text-slate-700 space-y-1.5 leading-relaxed list-decimal pl-4">
-                  <li>Log ind med din Google-konto.</li>
-                  <li>Opret et nyt projekt og angiv kassestørrelse, samt foretrukket robot.</li>
-                  <li>Tilføj emner (parts) med vægt, dimensioner og tag billeder med din mobil.</li>
-                  <li>Brug AI Assistenten i panelet til hurtigt at udfylde formularen via tale.</li>
-                  <li>Indsend dit projekt, hvorefter Scape foretager den endelige evaluering.</li>
+                  <li>Log in with your Google account.</li>
+                  <li>Create a new project and specify bin size, as well as preferred robot brand.</li>
+                  <li>Add parts with weight and dimensions, and take photos with your mobile.</li>
+                  <li>Use the AI Assistant in the panel to quickly fill in the form using speech.</li>
+                  <li>Submit your project, after which Scape performs the final evaluation.</li>
                 </ul>
               </div>
 
               {/* Data Security */}
               <div className="border-t border-slate-100 pt-4">
-                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Datasikkerhed / Data Security</h4>
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Data Security</h4>
                 <p className="text-xs text-slate-500 leading-relaxed italic">
-                  Alle indtastede oplysninger, CAD-filer og uploadede billeder opbevares fortroligt og krypteret. 
-                  Data er beskyttet mod uautoriseret adgang og tilgås udelukkende af autoriseret personale fra Scape Solutions til brug for evalueringen.
+                  All entered information, CAD files, and uploaded images are kept confidential and encrypted. 
+                  Data is protected against unauthorized access and is accessed solely by authorized personnel from Scape Solutions for evaluation purposes.
                 </p>
               </div>
             </div>
@@ -227,7 +237,7 @@ export function AuthView({
                 onClick={() => setIsAboutModalOpen(false)}
                 className="w-full py-3 bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-all text-xs cursor-pointer"
               >
-                Luk / Close
+                Close
               </button>
             </div>
           </div>

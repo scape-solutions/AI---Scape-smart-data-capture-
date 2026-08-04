@@ -9,7 +9,7 @@ This manual is designed to help new users get started with the **SCAPE Bin-Picki
 The **SCAPE Bin-Picking Evaluator** is a smart data capture tool designed to collect bin-picking application parameters, evaluate feasibility, and recommend vision systems and grippers.
 
 ### Step 1: Authentication & Profile Setup
-1. Open the application in your browser (e.g., [http://localhost:3000/](http://localhost:3000/)).
+1. Open the application in your browser: [https://scape-bin-picker-projects.web.app/](https://scape-bin-picker-projects.web.app/) (or [http://localhost:8080/](http://localhost:8080/) for local testing).
 2. Log in using your **Google account** or sign up with an **Email & Password**.
    * **iOS PWA Support:** If you have installed the app as a Progressive Web App (PWA) on iOS, Google Sign-In is supported natively inside standalone PWA mode using a custom cookie-based session bridge.
 3. Complete your **Profile Setup** by entering your name, company/organization, phone number, and primary role:
@@ -42,9 +42,9 @@ The interface adjusts dynamically based on the active role of the logged-in user
 * **Who can use it**: All users (Customers and SCAPE employees).
 * **Interface**: Displays a clean customer dashboard. Users see only their own projects. They can edit drafts, upload media, request automated **AI Advice**, and view finalized reviews.
 
-### B. Evaluator Mode (Scape Admin View)
+### B. Evaluator Mode (Scape Evaluator View)
 * **Who can use it**: SCAPE Employees and authorized partners.
-* **Interface**: Shows the **Administrative Dashboard** with access to all customer submissions. Evaluators can:
+* **Interface**: Shows the **Evaluator Dashboard** with access to all customer submissions. Evaluators can:
   * Assign submissions to themselves (**Take Case**).
   * Lock/unlock projects.
   * Generate an **AI Evaluator Draft** analysis.
@@ -53,7 +53,7 @@ The interface adjusts dynamically based on the active role of the logged-in user
 
 ### C. Super User Mode
 * **Who can use it**: Restricted exclusively to `rune.k.larsen@scapesolutions.eu` (configured dynamically in Firestore `config/access`).
-* **Interface**: Adds the **Super User Tools** dashboard toolbar. Grants access to bulk JSON data exports/imports, bulk staging acceptance, and administrator demo data seeds.
+* **Interface**: Adds the **Super User Tools** dashboard toolbar. Grants access to bulk JSON data exports/imports, bulk staging acceptance, and superuser demo data seeds.
 * **AI System Prompts Editor**: Superusers can edit system prompt templates dynamically in the app (clicking **Edit AI Prompts**). It hosts three tabs:
   1. *Data Capture Advice* (for client feedback)
   2. *Technical Evaluation* (for evaluator drafts)
@@ -72,11 +72,12 @@ graph TD
     Draft["Draft State (Owner edits)"]
     Submitted["Submitted (Locked for Owner)"]
     Staged["Import Pending (Super User Only)"]
-    Reviewing["Under Evaluation (Admin assigned)"]
+    Reviewing["Under Evaluation (Evaluator assigned)"]
     Approved["Approved (Verdict Published)"]
     Rejected["Rejected (Not Feasible)"]
     Inactive["Inactive (Archived)"]
     Trash["Trash State (Soft Deleted)"]
+    UnlockRequested["Unlock Requested (Owner requested edit)"]
     
     %% Transitions
     Staged -- "Accept" --> Draft
@@ -86,9 +87,14 @@ graph TD
     Reviewing -- "Approve" --> Approved
     Reviewing -- "Reject" --> Rejected
     
-    %% Action Toggles
-    Approved -- "Approve Spec" --> ApprovedFully["Approved & Specified"]
-    ApprovedFully -- "Unspecify" --> Approved
+    %% Unlock Requests
+    Submitted -- "Request Unlock" --> UnlockRequested
+    Reviewing -- "Request Unlock" --> UnlockRequested
+    Approved -- "Request Unlock" --> UnlockRequested
+    Rejected -- "Request Unlock" --> UnlockRequested
+    
+    UnlockRequested -- "Approve & Revert" --> Draft
+    UnlockRequested -- "Reject & Keep Lock" --> Submitted
     
     %% Archiving & Trash
     Approved -- "Deactivate" --> Inactive
@@ -103,15 +109,13 @@ graph TD
 
 Each project card displays its status badge on the dashboard. Use this table to understand the lifecycle states:
 
-| State Badge | Editable By | Visible To | Description |
-| :--- | :--- | :--- | :--- |
-| **Draft** | Owner | Owner & Admins | The project is in preparation. Only the owner can edit it. Admins/Evaluators can view drafts but cannot edit answers, perform AI reviews, or write verdicts. |
-| **Submitted** | Evaluator / Super User | Owner & Admins | Submitted to SCAPE for feasibility checks. The data is locked for the customer, and the case becomes open for evaluator action. |
-| **Approved** | Evaluator / Super User | Owner & Admins | SCAPE has evaluated the project and approved it as technically feasible. The "Project Review from Scape Solutions" is automatically visible to the user. |
-| **Rejected** | Evaluator / Super User | Owner & Admins | The project has been marked as not feasible or cancelled. The "Project Review from Scape Solutions" is automatically visible to the user. |
-| **Specified** | Evaluator / Super User | Owner & Admins | An administrative sub-state indicating that the physical specifications have been verified and locked. |
-| **Inactive** | Evaluator / Super User | Owner & Admins | Archived projects. Hidden from the dashboard unless the "Show Inactive" filter is toggled. |
-| **Trash (Deleted)** | Evaluator / Super User | Owner & Admins | Staged in the trash bin. Can be restored by an admin or permanently deleted. |
+| **Draft** | User (Owner) | User & Evaluator | The project is in preparation and fully unlocked. Only the owner can edit it. Evaluators can view drafts but cannot edit answers, perform AI reviews, or write verdicts. |
+| **Submitted** | Evaluator / Super User | User & Evaluator | Submitted to SCAPE for feasibility checks. The data is locked for the customer, and the case becomes open for evaluator action. |
+| **Approved** | Evaluator / Super User | User & Evaluator | SCAPE has evaluated the project and approved it as technically feasible. The "Project Review from Scape Solutions" is automatically visible to the user. |
+| **Rejected** | Evaluator / Super User | User & Evaluator | The project has been marked as not feasible or cancelled. The "Project Review from Scape Solutions" is automatically visible to the user. |
+| **Unlock Requested** | Evaluator / Super User | User & Evaluator | The customer has requested edit permission for a locked project, providing a brief justification. Evaluators can review the request to approve (unlocks and reverts status to Draft) or reject it (keeps it locked). |
+| **Inactive** | Evaluator / Super User | User & Evaluator | Archived projects. Hidden from the dashboard unless the "Show Inactive" filter is toggled. |
+| **Trash (Deleted)** | Evaluator / Super User | User & Evaluator | Staged in the trash bin. Can be restored by an evaluator or permanently deleted. |
 | **Import Pending** | Super User | Super User Only | Staged imported records. They are invisible to all other users until accepted by a Super User. |
 
 ---
@@ -141,11 +145,10 @@ When the user requests **Data Capture Advice**, the system runs an automated eva
 * **View Details / View Data**: Opens the project questionnaire and review tabs.
 * **History**: Opens a popup listing the audit log changes (e.g., status changes, lock edits) with timestamps.
 * **Delete / Restore**: Moves active projects to the trash, restores trashed projects, or triggers final database deletion.
-* **Lock / Unlock** (Admin only): Manually locks or unlocks a project card.
-* **Take Case** (Admin only): Assigns the case to the active Evaluator.
-* **Approve** (Admin only): Approves the project feasibility.
-* **Approve Spec / Unspecify** (Admin only): Toggles the verified "Specified" state badge.
-* **Activate / Deactivate** (Admin only): Toggles active vs inactive status.
+* **Lock / Unlock** (Evaluator only): Manually locks or unlocks a project card.
+* **Take Case** (Evaluator only): Assigns the case to the active Evaluator.
+* **Approve** (Evaluator only): Approves the project feasibility.
+* **Activate / Deactivate** (Evaluator only): Toggles active vs inactive status.
 * **Export Dropdown**:
   * **Export as JSON**: Exports full project data (including image base64s) as a JSON file.
   * **Export as PDF**: Generates and downloads a branded PDF feasibility report.
@@ -155,9 +158,9 @@ When the user requests **Data Capture Advice**, the system runs an automated eva
 * **Submit Case**: Transmits the questionnaire details to SCAPE and locks editing.
 * **Download All Media Files**: Sequential bulk download of all project CAD and image files.
 * **Get Advice on Data** (User review tab): Triggers Gemini AI to analyze the draft and provide constructive advice on missing fields or media uploads.
-* **Generate Evaluator Draft** (Admin review tab): Prompts Gemini AI to draft a detailed technical feasibility review and recommends vision systems.
-* **Submit Technical Verdict** (Admin review tab): Publishes the written technical report and feasibility decision to the database.
-* **Toggle Verdict Visibility** (Admin review tab): Controls whether the customer can view the project review and recommendations on their review page.
+* **Generate Evaluator Draft** (Evaluator review tab): Prompts Gemini AI to draft a detailed technical feasibility review and recommends vision systems.
+* **Submit Technical Verdict** (Evaluator review tab): Publishes the written technical report and feasibility decision to the database.
+* **Toggle Verdict Visibility** (Evaluator review tab): Controls whether the customer can view the project review and recommendations on their review page.
 * **Apply Proposed Changes** (AI Assistant Panel): 
   * Displays a comparison layout showing your current data vs. the AI's proposal.
   * **Filtering:** The panel automatically hides unchanged fields, listing *only* values that are different.
@@ -174,17 +177,12 @@ The exported PDF report is structured into clean, role-aware sections:
 * **Section C:** Contains uploaded part and cell photos as an appendix.
 * **Section D (Review & Verdict):** Shows the most authoritative technical review text available:
   * For *Users (Customers)*, it displays the published **Project Review from Scape Solutions** verdict.
-  * For *Admins (Evaluators)*, if no verdict is published yet, it displays the dynamic **Evaluator AI Draft** text.
+  * For *Evaluators*, if no verdict is published yet, it displays the dynamic **Evaluator AI Draft** text.
   * Fallbacks to general advice if no verdict or draft is generated.
-
-### "Approve Spec" vs "Unspecify" in Detail
-During evaluation of bin-picking configurations, verification of the project's specifications (such as CAD files, cycle times, bin dimensions, and surface properties) is essential before ordering hardware.
-* **Approve Spec**: Used by an Evaluator to lock the verification process of physical parameters. Clicking it sets the project state `isFullySpecified` to `true`, displaying the green **Specified** badge on the project card.
-* **Unspecify**: Used to revert this state. If requirements change or a mistake is discovered, clicking **Unspecify** returns `isFullySpecified` to `false`, removing the **Specified** badge so details can be edited/re-evaluated.
 
 ---
 
-## 8. Administrering af Adgang og Roller (For Administratorer)
+## 8. Administrering af Adgang og Roller (For Super User)
 
 For at tilføje eller fjerne brugere, ændre tilladte domæner eller tildele rettigheder (Evaluator/Super User) under drift, skal du redigere konfigurationsdokumentet i **Cloud Firestore**:
 
@@ -195,7 +193,7 @@ For at tilføje eller fjerne brugere, ændre tilladte domæner eller tildele ret
 4. Du kan nu tilføje eller fjerne elementer i de fire array-felter:
    * **`allowedDomains`**: Liste over domæner, der må oprette sig og logge ind i appen (f.eks. `scapesolutions.eu`, `scapesolutions.com`).
    * **`allowedEmails`**: Specifikke eksterne e-mailadresser, der må logge ind.
-   * **`allowedEvaluators`**: E-mails på medarbejdere, der skal have adgang til **Evaluator Mode** (administrationspanelet, tildele cases, skrive technical reviews, osv.).
+   * **`allowedEvaluators`**: E-mails på medarbejdere, der skal have adgang to **Evaluator Mode** (evaluatorpanelet, tildele cases, skrive technical reviews, osv.).
    * **`superusers`**: E-mails på medarbejdere med adgang til **Super User Mode** (bulk data import/export, demo-data generation, og AI system prompts editor).
 
 ### Vigtigt om ændringer:

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, User as UserIcon, X, Settings } from 'lucide-react';
+import { LogOut, User as UserIcon, X, Settings, Mail } from 'lucide-react';
 import { isDynamicSuperuser } from '../hooks/useAuth';
 import { UserProfile } from '../types';
 
@@ -16,6 +16,7 @@ interface HeaderProps {
   isAllowedEvaluator: (email: string | null | undefined) => boolean;
   isScapeEmployee: (email: string | null | undefined, uid?: string | null) => boolean;
   saveProfile: (data: any) => Promise<void>;
+  onOpenToS: () => void;
   projectName?: string;
   projectId?: string;
   locationLabel?: string;
@@ -38,6 +39,7 @@ export function Header({
   isAllowedEvaluator,
   isScapeEmployee,
   saveProfile,
+  onOpenToS,
   projectName,
   projectId,
   locationLabel,
@@ -114,7 +116,7 @@ export function Header({
       <div 
         className="flex items-center gap-2 cursor-pointer shrink-0 select-none hover:opacity-90 active:scale-[0.98] transition-all" 
         onClick={() => setIsAboutModalOpen(true)}
-        title="Om Scape Bin-Picking Evaluator"
+        title="Om Scape Bin-Picker Projects"
       >
         <span className="font-extrabold text-2xl tracking-[0.04em] text-slate-900 flex items-center select-none">
           SC
@@ -324,6 +326,18 @@ export function Header({
               </div>
 
               <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Email (Locked / Read-only)</label>
+                <div className="relative">
+                  <input 
+                    type="email" 
+                    disabled
+                    className="w-full p-4 bg-slate-100 border border-slate-100 rounded-2xl font-semibold text-slate-400 cursor-not-allowed text-sm" 
+                    value={profile?.email || user?.email || ''}
+                  />
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Firma / Company</label>
                 <input 
                   type="text" 
@@ -423,7 +437,7 @@ export function Header({
                 </span>
                 PE
               </span>
-              <span className="text-xs font-bold text-slate-400">Bin-Picking Evaluator</span>
+              <span className="text-xs font-bold text-slate-400">Bin-Picker Projects</span>
             </div>
 
             {/* Content Sections */}
@@ -448,33 +462,46 @@ export function Header({
               </div>
 
               {/* Purpose */}
-              <div>
-                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Formål / Purpose</h4>
+              <div className="space-y-2">
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">About Scape Bin-Picking Projects</h4>
                 <p className="text-xs text-slate-700 leading-relaxed">
-                  Dette værktøj hjælper med at indsamle og evaluere tekniske specifikationer for bin-picking opgaver. 
-                  Ved at dele data om emner, kasser og ydeevne kan vi hurtigt give rådgivning og vurdere gennemførligheden af en automatiseret løsning.
+                  Welcome to Scape Bin-Picking Projects. This platform is designed to dramatically accelerate your automation journey and reduce quotation lead times. By easily collecting key component and cell parameters, it allows Scape engineers to deliver fast, verified feasibility assessments.
                 </p>
+                <div className="text-xs text-slate-700 space-y-2 pt-2 border-t border-slate-100">
+                  <p className="font-bold text-slate-800">Time-saving features:</p>
+                  <ul className="list-disc pl-4 space-y-1">
+                    <li><strong>AI Chat Assistant:</strong> Talk or type to specify cell info (e.g. say <em>"We are using a Kuka robot with a 500x300mm bin"</em> to auto-fill fields).</li>
+                    <li><strong>Split-Screen AI Onboarding:</strong> Drag in an existing project specification sheet or PDF, and watch the AI extract and pre-fill fields side-by-side.</li>
+                    <li><strong>Instant Project Advice:</strong> Run an automated checklist to scan your project for errors and omissions before submission.</li>
+                  </ul>
+                </div>
               </div>
 
               {/* Condensed How-To */}
               <div>
-                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Sådan bruges appen / Quick Guide</h4>
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Quick Guide</h4>
                 <ul className="text-xs text-slate-700 space-y-1.5 leading-relaxed list-decimal pl-4">
-                  <li>Angiv kassestørrelse og foretrukket robot under <strong>Project & Cell Info</strong>.</li>
-                  <li>Tilføj dine emner, vægt, dimensioner og billeder (brug gerne mobilen til at uploade fotos).</li>
-                  <li>Brug <strong>AI Chat Assistant</strong> i sidepanelet til at udfylde formularen via tale eller skrift.</li>
-                  <li>Kør <strong>Data Capture Advice</strong> under <em>Review & Submit</em> for at tjekke for eventuelle mangler før indsendelse.</li>
-                  <li>Tryk på <strong>Submit</strong>, hvorefter Scape-personalet udfører den endelige tekniske slutevaluering.</li>
+                  <li>Define your robot and bin size under <strong>Project & Cell Info</strong>.</li>
+                  <li>Add your parts with weights and dimensions.</li>
+                  <li><strong className="text-red-600">[CRITICAL]</strong> Upload CAD files (.stl, .stp, .step) and clear images of your part inside the bin. Without these files, Scape engineers cannot conduct a final technical verification.</li>
+                  <li>Review completeness using the automated <strong>Project Information Advice</strong> tool.</li>
+                  <li>Click <strong>Submit</strong> to request your feasibility report.</li>
                 </ul>
               </div>
 
-              {/* Data Security */}
-              <div className="border-t border-slate-100 pt-4">
-                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Datasikkerhed / Data Security</h4>
-                <p className="text-xs text-slate-500 leading-relaxed italic">
-                  Alle indtastede oplysninger, CAD-filer og uploadede billeder opbevares fortroligt og krypteret i vores private cloud-databaser. 
-                  Data er beskyttet mod uautoriseret adgang og tilgås udelukkende af autoriseret personale fra Scape Solutions.
-                </p>
+              {/* Terms of Service Link */}
+              <div className="border-t border-slate-100 pt-4 flex justify-between items-center">
+                <span className="text-xs text-slate-400 font-semibold">Review terms & privacy:</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onOpenToS();
+                  }}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer inline-flex items-center gap-1"
+                >
+                  Terms of Service (ToS)
+                </button>
               </div>
             </div>
 
@@ -485,7 +512,7 @@ export function Header({
                 onClick={() => setIsAboutModalOpen(false)}
                 className="flex-1 py-3 bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-all text-xs cursor-pointer"
               >
-                Luk / Close
+                Close
               </button>
               <button 
                 type="button"
@@ -495,7 +522,7 @@ export function Header({
                 }}
                 className="flex-1 py-3 rounded-2xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 hover:scale-[1.01] transition-all text-xs cursor-pointer"
               >
-                Gå til Dashboard
+                Go to Dashboard
               </button>
             </div>
           </div>

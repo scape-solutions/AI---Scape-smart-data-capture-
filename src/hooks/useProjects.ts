@@ -19,6 +19,132 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { ProjectState, OperationType, PartData } from '../types';
+import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
+
+const FIELD_LABEL_MAP: Record<string, string> = {};
+[...GENERAL_STEPS, ...PART_STEPS].forEach(step => {
+  step.questions.forEach(q => {
+    FIELD_LABEL_MAP[q.id] = q.label;
+  });
+});
+
+const getFieldNumber = (key: string): string => {
+  if (key.match(/^\d+\.\d+_\w+$/)) {
+    return key.split('_')[0];
+  }
+  if (key.match(/^\d+\.\d+$/)) {
+    return key;
+  }
+  if (key === 'projectName') return '1.01';
+  if (key === 'cadFile') return '2.06';
+  if (key === 'placementImages') return '2.12';
+  if (key === 'images') return 'images';
+  if (key === 'generalImages') return 'generalImages';
+  return key;
+};
+
+const getProjectDiffAction = (oldProj: ProjectState, newProj: ProjectState, newStatus: string): string[] => {
+  const changes: string[] = [];
+
+  // 1. Status change
+  if (newStatus !== oldProj.status) {
+    changes.push(`Status updated to ${newStatus}`);
+  }
+
+  // 2. Parts count change
+  const oldPartsLen = oldProj.parts?.length || 0;
+  const newPartsLen = newProj.parts?.length || 0;
+  if (newPartsLen > oldPartsLen) {
+    changes.push(`Added Part ${newPartsLen}`);
+  } else if (newPartsLen < oldPartsLen) {
+    changes.push(`Deleted a Part`);
+  }
+
+  // 3. General Responses Diffing
+  const generalFieldChanges = new Set<string>();
+  
+  // Project name change
+  const oldName = oldProj.projectName || oldProj.generalResponses?.['1.01'];
+  const newName = newProj.projectName || newProj.generalResponses?.['1.01'];
+  if (newName && oldName && newName !== oldName) {
+    generalFieldChanges.add('1.01');
+  }
+
+  const allGenKeys = new Set([
+    ...Object.keys(oldProj.generalResponses || {}),
+    ...Object.keys(newProj.generalResponses || {})
+  ]);
+  allGenKeys.forEach(key => {
+    const oldVal = oldProj.generalResponses?.[key];
+    const newVal = newProj.generalResponses?.[key];
+    if (String(oldVal || '').trim() !== String(newVal || '').trim()) {
+      generalFieldChanges.add(getFieldNumber(key));
+    }
+  });
+
+  if (generalFieldChanges.size > 0) {
+    const sortedFields = Array.from(generalFieldChanges).sort();
+    changes.push(`Project: Updated field(s): ${sortedFields.join(', ')}`);
+  }
+
+  // 4. Part Responses and Files Diffing
+  const minParts = Math.min(oldPartsLen, newPartsLen);
+  for (let i = 0; i < minParts; i++) {
+    const oldPart = oldProj.parts[i];
+    const newPart = newProj.parts[i];
+    if (!oldPart || !newPart) continue;
+
+    const partFieldChanges = new Set<string>();
+    
+    // Compare responses
+    const allPartKeys = new Set([
+      ...Object.keys(oldPart.responses || {}),
+      ...Object.keys(newPart.responses || {})
+    ]);
+    allPartKeys.forEach(key => {
+      const oldVal = oldPart.responses?.[key];
+      const newVal = newPart.responses?.[key];
+      if (String(oldVal || '').trim() !== String(newVal || '').trim()) {
+        partFieldChanges.add(getFieldNumber(key));
+      }
+    });
+
+    // Compare CAD
+    const oldCadName = oldPart.cadFile?.name;
+    const newCadName = newPart.cadFile?.name;
+    if (newCadName !== oldCadName) {
+      partFieldChanges.add('2.06');
+    }
+
+    // Compare images count
+    const oldImagesCount = oldPart.images?.length || oldPart.imageCount || 0;
+    const newImagesCount = newPart.images?.length || newPart.imageCount || 0;
+    if (newImagesCount !== oldImagesCount) {
+      partFieldChanges.add('images');
+    }
+
+    // Compare placement images
+    const oldPlacementCount = oldPart.placementImages?.length || 0;
+    const newPlacementCount = newPart.placementImages?.length || 0;
+    if (newPlacementCount !== oldPlacementCount) {
+      partFieldChanges.add('2.12');
+    }
+
+    if (partFieldChanges.size > 0) {
+      const sortedFields = Array.from(partFieldChanges).sort();
+      changes.push(`Part ${i + 1}: Updated field(s): ${sortedFields.join(', ')}`);
+    }
+  }
+
+  // 5. General/Environmental Images
+  const oldGenImgCount = oldProj.generalImages?.length || 0;
+  const newGenImgCount = newProj.generalImages?.length || 0;
+  if (newGenImgCount !== oldGenImgCount) {
+    changes.push(`Project: Updated field(s): generalImages`);
+  }
+
+  return changes;
+};
 
 export function normalizeProject(p: any): ProjectState {
   const generalResponses = p?.generalResponses || {};
@@ -31,6 +157,7 @@ export function normalizeProject(p: any): ProjectState {
   const normalizedParts = parts.map((part: any) => ({
     responses: part?.responses || {},
     images: Array.isArray(part?.images) ? part.images : [],
+    placementImages: Array.isArray(part?.placementImages) ? part.placementImages : [],
     cadFile: part?.cadFile || null
   }));
 
@@ -47,7 +174,6 @@ export function normalizeProject(p: any): ProjectState {
     status: p?.status || 'draft',
     userId: p?.userId || '',
     isLocked: !!p?.isLocked,
-    isFullySpecified: !!p?.isFullySpecified,
     isVerdictVisible: !!p?.isVerdictVisible,
     ownerName: p?.ownerName || 'Unknown',
     ownerCompany: p?.ownerCompany || 'Unknown',
@@ -58,7 +184,9 @@ export function normalizeProject(p: any): ProjectState {
     isInactive: !!p?.isInactive,
     isDeleted: !!p?.isDeleted,
     isDemo: !!p?.isDemo,
-    isImportPending: !!p?.isImportPending
+    isImportPending: !!p?.isImportPending,
+    editRequestPending: !!p?.editRequestPending,
+    editRequestReason: p?.editRequestReason || ''
   };
 }
 
@@ -928,13 +1056,15 @@ export function useProjects(
 
         const hasStatusChange = !lastSynced || updated.status !== lastSynced.status;
         const hasLockChange = !lastSynced || updated.isLocked !== lastSynced.isLocked;
-        const hasSpecChange = !lastSynced || updated.isFullySpecified !== lastSynced.isFullySpecified;
         const hasReportChange = !lastSynced || updated.report !== lastSynced.report;
         const hasDraftChange = !lastSynced || updated.evaluatorDraft !== lastSynced.evaluatorDraft;
         const hasVerdictVisChange = !lastSynced || updated.isVerdictVisible !== lastSynced.isVerdictVisible;
         const hasFinalVerdictChange = !lastSynced || updated.finalVerdict !== lastSynced.finalVerdict;
         const hasTakenByChange = !lastSynced || updated.takenBy !== lastSynced.takenBy;
         const hasTakenByNameChange = !lastSynced || updated.takenByName !== lastSynced.takenByName;
+        const hasSpecRequestChange = !lastSynced || 
+          updated.editRequestPending !== lastSynced.editRequestPending || 
+          updated.editRequestReason !== lastSynced.editRequestReason;
 
         const lastGenStr = lastSynced ? JSON.stringify(lastSynced.generalResponses || {}) : '';
         const updatedGenStr = JSON.stringify(updated.generalResponses || {});
@@ -949,10 +1079,10 @@ export function useProjects(
         const hasChatHistoryChange = !lastSynced || lastChatHistoryStr !== updatedChatHistoryStr;
 
         if (
-          hasStatusChange || hasLockChange || hasSpecChange || hasReportChange || 
+          hasStatusChange || hasLockChange || hasReportChange || 
           hasDraftChange || hasVerdictVisChange || hasFinalVerdictChange || 
           hasTakenByChange || hasTakenByNameChange || hasGenResponsesChange || 
-          hasPartsResponsesChange || hasChatHistoryChange
+          hasPartsResponsesChange || hasChatHistoryChange || hasSpecRequestChange
         ) {
           lastSyncedProjectRef.current = updated;
 
@@ -966,6 +1096,7 @@ export function useProjects(
                 ...up,
                 // Retain local base64 images and cadFile if they exist locally but not in the root db doc
                 images: (prevPart?.images && prevPart.images.length > 0) ? prevPart.images : (up.images || []),
+                placementImages: (prevPart?.placementImages && prevPart.placementImages.length > 0) ? prevPart.placementImages : (up.placementImages || []),
                 cadFile: prevPart?.cadFile || up.cadFile || null
               };
             });
@@ -977,11 +1108,12 @@ export function useProjects(
               chatHistory: updated.chatHistory || [],
               status: updated.status,
               isLocked: updated.isLocked,
-              isFullySpecified: updated.isFullySpecified,
               report: updated.report,
               evaluatorDraft: updated.evaluatorDraft,
               isVerdictVisible: updated.isVerdictVisible,
               finalVerdict: updated.finalVerdict,
+              editRequestPending: updated.editRequestPending,
+              editRequestReason: updated.editRequestReason,
               takenBy: updated.takenBy,
               takenByName: updated.takenByName
             };
@@ -993,15 +1125,38 @@ export function useProjects(
     }
   }, [projects, currentProject]);
 
+  const lastSavedProjectRef = useRef<ProjectState | null>(null);
+
+  useEffect(() => {
+    if (currentProject && currentProject.id) {
+      if (lastSavedProjectRef.current?.id !== currentProject.id) {
+        lastSavedProjectRef.current = JSON.parse(JSON.stringify(currentProject));
+      }
+    } else if (!currentProject) {
+      lastSavedProjectRef.current = null;
+    }
+  }, [currentProject?.id]);
+
   // Gemmer en handling i projektets historik (f.eks. "Projekt låst" eller "Projekt oprettet")
   const logChange = async (projectId: string, action: string) => {
     try {
-      // Vi lægger en under-kollektion ('changelog') ind under selve projektet
+      let roleString = 'User';
+      if (profile?.isAdmin) {
+        roleString = 'Evaluator';
+      } else if (profile?.role === 'enduser') {
+        roleString = 'End-user';
+      } else if (profile?.role === 'integrator') {
+        roleString = 'Integrator';
+      } else if (profile?.role) {
+        roleString = profile.role.charAt(0).toUpperCase() + profile.role.slice(1);
+      }
+
       await addDoc(collection(db, 'projects', projectId, 'changelog'), {
         action,
         userId: user!.uid,
         userName: profile?.name || user?.displayName || 'Unknown',
-        timestamp: serverTimestamp() // Beder Firebase's server om at sætte præcis tid på
+        userRole: roleString,
+        timestamp: serverTimestamp()
       });
     } catch (e) {
       handleAppError(e);
@@ -1023,6 +1178,18 @@ export function useProjects(
             addDoc(collection(db, 'projects', projectId, 'images'), {
               partIndex,
               base64,
+              createdAt: serverTimestamp()
+            })
+          );
+        });
+      }
+      if (part.placementImages && part.placementImages.length > 0) {
+        part.placementImages.forEach(base64 => {
+          writePromises.push(
+            addDoc(collection(db, 'projects', projectId, 'images'), {
+              partIndex,
+              base64,
+              isPlacement: true,
               createdAt: serverTimestamp()
             })
           );
@@ -1055,17 +1222,28 @@ export function useProjects(
       
       const parts = normalized.parts.map((part, index) => {
         const partImages = imagesData
-          .filter((img: any) => img.partIndex === index)
+          .filter((img: any) => img.partIndex === index && !img.isPlacement)
           .sort((a: any, b: any) => {
             const t1 = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
             const t2 = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
             return t1 - t2;
           })
           .map((img: any) => img.base64);
+
+        const placementImages = imagesData
+          .filter((img: any) => img.partIndex === index && img.isPlacement)
+          .sort((a: any, b: any) => {
+            const t1 = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+            const t2 = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+            return t1 - t2;
+          })
+          .map((img: any) => img.base64);
+
         return {
           ...part,
           images: partImages,
-          imageCount: partImages.length
+          imageCount: partImages.length,
+          placementImages
         };
       });
 
@@ -1109,7 +1287,8 @@ export function useProjects(
     const partsWithoutImages = project.parts.map(p => ({
       ...p,
       imageCount: p.images ? p.images.length : (p.imageCount || 0),
-      images: [] // Hoveddokumentet skal ikke have base64 data
+      images: [], // Hoveddokumentet skal ikke have base64 data
+      placementImages: [] // Hoveddokumentet skal ikke have base64 data
     }));
 
     // Vi bygger det data-objekt, vi vil sende til databasen.
@@ -1157,14 +1336,30 @@ export function useProjects(
           ownerPhone: data.ownerPhone
         };
         setCurrentProject(updated);
+        lastSavedProjectRef.current = JSON.parse(JSON.stringify(updated));
         await logChange(docRef.id, "Created Project");
         fetchProjects(profile?.isAdmin);
         return updated;
       } else {
         // Hvis ID findes, overskriver vi det EKSISTERENDE dokument (updateDoc)
+        const oldProject = lastSavedProjectRef.current?.id === project.id 
+          ? lastSavedProjectRef.current 
+          : projects.find(p => p.id === project.id);
+
+        if (oldProject) {
+          const changes = getProjectDiffAction(oldProject, project, status);
+          for (const change of changes) {
+            await logChange(project.id, change);
+          }
+        } else {
+          const projectStatus = project.status || 'draft';
+          if (status !== projectStatus) {
+            await logChange(project.id, `Status updated to ${status}`);
+          }
+        }
+
         await updateDoc(doc(db, 'projects', project.id), cleanData);
         await saveProjectImages(project.id, project);
-        await logChange(project.id, `Status updated to ${status}`);
         
         // Update local React state to make sure it contains the applied data
         const updated = { 
@@ -1179,6 +1374,7 @@ export function useProjects(
           ownerPhone: data.ownerPhone
         };
         setCurrentProject(updated);
+        lastSavedProjectRef.current = JSON.parse(JSON.stringify(updated));
         
         fetchProjects(profile?.isAdmin);
         
@@ -1257,7 +1453,6 @@ export function useProjects(
         let isVerdictVisible = false;
         let report = null;
         let finalVerdict = null;
-        let isFullySpecified = false;
 
         if (i >= 4 && i < 9) {
           status = 'submitted';
@@ -1271,7 +1466,6 @@ export function useProjects(
           status = 'submitted';
           isLocked = true;
           isVerdictVisible = true;
-          isFullySpecified = true;
           report = generatedReport;
           finalVerdict = generatedVerdict;
         }
@@ -1283,7 +1477,6 @@ export function useProjects(
           isDemo: true, // Marked for selective cleanups!
           isLocked: isLocked,
           isVerdictVisible: isVerdictVisible,
-          isFullySpecified: isFullySpecified,
           report: report,
           finalVerdict: finalVerdict,
           ownerName: p.ownerName,
@@ -1472,14 +1665,15 @@ export function useProjects(
           ownerEmail: p.ownerEmail || 'Unknown Email',
           ownerPhone: p.ownerPhone || 'Unknown Phone',
           isLocked: !!p.isLocked,
-          isFullySpecified: !!p.isFullySpecified,
           isInactive: !!p.isInactive,
           isDeleted: !!p.isDeleted,
           isDemo: !!p.isDemo,
           isImportPending: true,
           takenBy: p.takenBy || null,
           takenByName: p.takenByName || null,
-          isVerdictVisible: !!p.isVerdictVisible
+          isVerdictVisible: !!p.isVerdictVisible,
+          editRequestPending: !!p.editRequestPending,
+          editRequestReason: p.editRequestReason || ''
         };
 
         const docRef = await addDoc(collection(db, 'projects'), {

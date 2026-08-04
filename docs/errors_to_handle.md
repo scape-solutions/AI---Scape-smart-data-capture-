@@ -65,7 +65,6 @@ export function normalizeProject(p: any): ProjectState {
     status: p?.status || 'draft',
     userId: p?.userId || '',
     isLocked: !!p?.isLocked,
-    isFullySpecified: !!p?.isFullySpecified,
     isVerdictVisible: !!p?.isVerdictVisible,
     ownerName: p?.ownerName || 'Unknown',
     ownerCompany: p?.ownerCompany || 'Unknown',

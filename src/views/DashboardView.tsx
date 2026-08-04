@@ -4,9 +4,10 @@
  * Den modtager en masse data ("projects") og funktioner fra App.tsx som props.
  */
 import { useState } from 'react';
-import { PlusCircle, LayoutDashboard, SlidersHorizontal, Sparkles, Trash2, Loader2, Upload, Download, CheckCircle, Settings, Bot, PencilLine, X } from 'lucide-react';
+import { PlusCircle, LayoutDashboard, SlidersHorizontal, Sparkles, Trash2, Loader2, Upload, Download, CheckCircle, Settings, Bot, PencilLine, X, Users } from 'lucide-react';
 import { ProjectCard } from '../components/ProjectCard';
 import { PromptsEditorModal } from '../components/PromptsEditorModal';
+import { ActiveUsersModal } from '../components/ActiveUsersModal';
 import { ProjectState, UserProfile } from '../types';
 
 interface DashboardViewProps {
@@ -31,7 +32,6 @@ interface DashboardViewProps {
   toggleLock: (p: ProjectState) => void;
   takeProject: (p: ProjectState) => void;
   updateStatus: (p: ProjectState, status: ProjectState['status']) => void;
-  toggleSpecified: (p: ProjectState) => void;
   toggleInactive: (p: ProjectState) => void;
   isGeneratingDemo: boolean;
   isCleaningDemo: boolean;
@@ -66,7 +66,6 @@ export function DashboardView({
   toggleLock,
   takeProject,
   updateStatus,
-  toggleSpecified,
   toggleInactive,
   isGeneratingDemo,
   isCleaningDemo,
@@ -83,6 +82,7 @@ export function DashboardView({
   const [isExportingBulk, setIsExportingBulk] = useState(false);
   const [showPromptsModal, setShowPromptsModal] = useState(false);
   const [showCreationModal, setShowCreationModal] = useState(false);
+  const [showUsersModal, setShowUsersModal] = useState(false);
 
   const handleExportFiltered = async () => {
     if (filteredProjects.length === 0) return;
@@ -307,6 +307,14 @@ export function DashboardView({
                   </button>
 
                   <button 
+                    onClick={() => setShowUsersModal(true)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white px-3 md:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer"
+                  >
+                    <Users className="w-3.5 h-3.5 shrink-0" />
+                    <span>Active Users</span>
+                  </button>
+
+                  <button 
                     onClick={() => setShowPromptsModal(true)}
                     className="bg-amber-600 hover:bg-amber-700 text-white px-3 md:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer"
                   >
@@ -424,7 +432,6 @@ export function DashboardView({
                 toggleLock={toggleLock}
                 takeProject={takeProject}
                 updateStatus={updateStatus}
-                toggleSpecified={toggleSpecified}
                 toggleInactive={toggleInactive}
                 acceptProject={acceptProject}
                 fetchProjectImages={fetchProjectImages}
@@ -440,6 +447,13 @@ export function DashboardView({
           show={showPromptsModal} 
           onClose={() => setShowPromptsModal(false)} 
           setGlobalSuccess={setGlobalSuccess}
+        />
+      )}
+
+      {showUsersModal && (
+        <ActiveUsersModal 
+          show={showUsersModal} 
+          onClose={() => setShowUsersModal(false)} 
         />
       )}
 

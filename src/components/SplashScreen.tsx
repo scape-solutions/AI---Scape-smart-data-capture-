@@ -65,7 +65,7 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
 
         {/* Title */}
         <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-b from-white via-slate-100 to-slate-400">
-          Bin-Picking
+          Scape Bin-Picker Projects
           <span className="block mt-2 text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-red-500 to-indigo-400">
             Project Information
           </span>

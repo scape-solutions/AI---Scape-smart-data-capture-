@@ -1,6 +1,6 @@
 # SCAPE Bin-Picking Evaluator - App Teaser & Testing Guide
 
-**Live Web App & PWA Link:** <https://scape-data-capture.web.app/>
+**Live Web App & PWA Link:** <https://scape-bin-picker-projects.web.app/>
 
 Welcome to the **SCAPE Bin-Picking Evaluator**, a premium, smart tool designed to streamline technical feasibility checks and hardware selection (vision systems & grippers) for bin-picking projects.
 
@@ -32,12 +32,13 @@ This first version serves two primary purposes:
 * **Smart Filtering & UX:** Displays only the modified fields in a clean accept-card with automatic text-wrapping (no clipped inputs).
 
 ### 2. Auto-Feasibility & Warning Badges
-* When you request **Bin-Picking Information Advice**, the system scans your draft data and highlights empty or concerning fields with colored warning markers (`🔴` eller `⚠️`) directly next to form labels.
+* When you request **Project Information Advice**, the system scans your draft data and highlights empty or concerning fields with colored warning markers (`🔴` eller `⚠️`) directly next to form labels.
 * Tooltips explain what is missing or suboptimal (e.g. cycle time ambitions or light interference risks).
 
 ### 3. Iterative Feedback Workflow
 * **Submit & Review:** Users submit their completed projects to Scape. Evaluators review them on their Dashboard and generate an AI Evaluator Draft.
-* **Release & Unsubmit:** If a project lacks critical info (like bin dimensions or part weights), the Evaluator can "Release" it. The User can then "Unsubmit" the project, make edits, and resubmit, creating a seamless feedback loop.
+* **Direct Unsubmit (Before Evaluation):** The user can cancel their submission and unsubmit the project immediately to make changes, as long as an evaluator has not locked the case yet.
+* **Request Unlock / Edit Permission (During/After Evaluation):** If the project has been locked or already evaluated (Approved/Rejected), the user can click **"Request Edit Permission"**, specify a brief reason, and send it to Scape. Evaluators can review the request from their details screen to approve (reverts project to Draft and unlocks it) or reject it.
 
 ### 4. Seamless PWA & Mobile layout
 * Fully optimized as a **Progressive Web App (PWA)** on mobile devices.

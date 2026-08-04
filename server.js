@@ -128,7 +128,7 @@ import crypto from 'crypto';
 
 const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || '782472107063-6shdo17lf2lsvvuifsmg15hhffuu0k4h.apps.googleusercontent.com';
 const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
-const APP_URL = process.env.APP_URL || 'https://scape-data-capture.web.app';
+const APP_URL = process.env.APP_URL || 'https://scape-bin-picker-projects.web.app';
 const OAUTH_CALLBACK_URL = `${APP_URL}/api/auth/google/callback`;
 
 // We use Firestore instead of an in-memory Map to store the OAuth session state.
@@ -359,21 +359,12 @@ if (GEMINI_API_KEY) {
   console.warn("WARNING: GEMINI_API_KEY environment variable is not defined! AI proxy endpoints will fail.");
 }
 
-// Dynamic prompts in-memory cache with filesystem fallbacks
-const docsPath = fs.existsSync(path.join(__dirname, 'src', 'docs'))
-  ? path.join(__dirname, 'src', 'docs')
-  : path.join(__dirname, 'docs');
-
-const localExternalAdvice = fs.readFileSync(path.join(docsPath, 'externalAdvicePrompt.md'), 'utf-8');
-const localEvaluatorDraft = fs.readFileSync(path.join(docsPath, 'evaluatorDraftPrompt.md'), 'utf-8');
-const localAutoFill = fs.readFileSync(path.join(docsPath, 'autoFillPrompt.md'), 'utf-8');
-const localObservationsExtraction = fs.readFileSync(path.join(docsPath, 'observationsExtractionPrompt.md'), 'utf-8');
-
+// Dynamic prompts in-memory cache loaded strictly from Firestore (no local filesystem fallbacks at runtime)
 let activePrompts = {
-  externalAdvicePrompt: localExternalAdvice,
-  evaluatorDraftPrompt: localEvaluatorDraft,
-  autoFillPrompt: localAutoFill,
-  observationsExtractionPrompt: localObservationsExtraction,
+  externalAdvicePrompt: '',
+  evaluatorDraftPrompt: '',
+  autoFillPrompt: '',
+  observationsExtractionPrompt: '',
   includeImagesForAdvice: true,
   includeImagesForDraft: true,
   includeImagesForChat: false
@@ -383,16 +374,16 @@ let activePrompts = {
 db.collection('config').doc('prompts').onSnapshot((docSnap) => {
   if (docSnap && docSnap.exists) {
     const data = docSnap.data();
-    activePrompts.externalAdvicePrompt = data.externalAdvicePrompt || localExternalAdvice;
-    activePrompts.evaluatorDraftPrompt = data.evaluatorDraftPrompt || localEvaluatorDraft;
-    activePrompts.autoFillPrompt = data.autoFillPrompt || localAutoFill;
-    activePrompts.observationsExtractionPrompt = data.observationsExtractionPrompt || localObservationsExtraction;
+    activePrompts.externalAdvicePrompt = data.externalAdvicePrompt || '';
+    activePrompts.evaluatorDraftPrompt = data.evaluatorDraftPrompt || '';
+    activePrompts.autoFillPrompt = data.autoFillPrompt || '';
+    activePrompts.observationsExtractionPrompt = data.observationsExtractionPrompt || '';
     activePrompts.includeImagesForAdvice = data.includeImagesForAdvice !== false;
     activePrompts.includeImagesForDraft = data.includeImagesForDraft !== false;
     activePrompts.includeImagesForChat = !!data.includeImagesForChat;
     console.log("Updated AI prompts successfully loaded from Firestore.");
   } else {
-    console.warn("config/prompts document does not exist in Firestore! Using local filesystem fallback prompts.");
+    console.warn("WARNING: config/prompts document does not exist in Firestore! AI prompts will be empty.");
   }
 }, (error) => {
   console.error("Error listening to Firestore config/prompts changes:", error);
@@ -584,7 +575,7 @@ app.post('/api/ai/chat', verifyFirebaseToken, async (req, res) => {
             }
           });
         }
-        part.images = [`[${part.images.length} images]`];
+        part.images = part.images.map((_, idx) => `[Image ${idx}]`);
       }
       if (part.cadFile && part.cadFile.dataUrl) {
         part.cadFile.dataUrl = "[CAD removed]";
@@ -597,7 +588,23 @@ app.post('/api/ai/chat', verifyFirebaseToken, async (req, res) => {
       if (i === history.length - 1 && msg.role === 'user') {
          text = `${activePrompts.autoFillPrompt.trim()}\n\nQUESTIONNAIRE SCHEMA:\n${JSON.stringify(schema, null, 2)}\n\nCURRENT PROJECT STATE:\n${JSON.stringify(cleanProject, null, 2)}\n\nACTIVE PART INDEX (0-based): ${activePartIndex}\n\nUSER MESSAGE:\n${text}`;
       }
-      return { role: msg.role, parts: [{ text }] };
+      
+      const parts = [{ text }];
+      
+      // Pass images/PDFs from the chat history only for the current (very last) user message.
+      // Older attachments in history are skipped to save tokens and prevent 429 quota/rate limit errors.
+      const isLastMessage = (i === history.length - 1);
+      if (isLastMessage && msg.images && Array.isArray(msg.images)) {
+        msg.images.forEach(imgBase64 => {
+          if (imgBase64.startsWith('data:')) {
+            const mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
+            const data = imgBase64.substring(imgBase64.indexOf(',') + 1);
+            parts.push({ inlineData: { data, mimeType } });
+          }
+        });
+      }
+      
+      return { role: msg.role, parts };
     });
 
     // Append images to the last user message's parts if includeImages is true and we have images

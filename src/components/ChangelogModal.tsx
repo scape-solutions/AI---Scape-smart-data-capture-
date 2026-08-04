@@ -31,7 +31,7 @@ export function ChangelogModal({ show, onClose, changelog }: ChangelogModalProps
                   <div>
                     <p className="text-sm font-bold text-slate-900">{log.action}</p>
                     <p className="text-[10px] text-slate-400 font-medium">
-                      User: {log.userName || log.userId} • {log.timestamp?.toDate().toLocaleString()}
+                      User: {log.userName || log.userId}{log.userRole ? ` (${log.userRole})` : ''} • {log.timestamp?.toDate().toLocaleString()}
                     </p>
                   </div>
                 </div>

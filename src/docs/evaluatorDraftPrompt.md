@@ -9,7 +9,7 @@ or edit the /config/prompts document directly in the Firebase Console.
 -->
 
 <!--
-PROMPT VERSION: evaluatorDraftPrompt v7 | 2026-06-15 13:10
+PROMPT VERSION: evaluatorDraftPrompt v3 | 2026-07-03 12:25
 -->
 
 ---

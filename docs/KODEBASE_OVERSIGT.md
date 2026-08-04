@@ -43,7 +43,7 @@ I ældre sprog ændrer man tit en variabel direkte (`projekt.navn = "Nyt"`). I R
 UI bygges udelukkende med funktioner der returnerer HTML. De tager én parameter (`props`), som er en samling af variabler og funktioner, som parent-komponenten (f.eks. `App.tsx`) har givet dem.
 
 ### C. Deklarativ Rendering og Arrays
-I React undgår vi typisk klassiske `for`-loops i selve HTML'en. Vi bruger JavaScript Array-metoder:
+I React undgår vi typisk klassiske `for`-loops i selve HTML'en. Vi bruger JavaScript Array-metoder:◊
 * **`.map()`**: Tager en liste (f.eks. projekter) og omdanner hvert element til et stykke HTML (`<ProjectCard>`).
 * **`.filter()`**: Løber en liste igennem og returnerer en ny liste, der kun indeholder de elementer, der overholder en bestemt betingelse (f.eks. søgefunktionen i Dashboardet).
 

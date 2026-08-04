@@ -7,7 +7,7 @@
  */
 import { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { updateDoc, doc, onSnapshot, waitForPendingWrites } from 'firebase/firestore';
+import { updateDoc, doc, onSnapshot, waitForPendingWrites, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 
 import { useAuth, isScapeEmployee, getEffectiveAdminStatus, isDynamicAllowedEvaluator, isDynamicSuperuser } from './hooks/useAuth';
@@ -18,6 +18,7 @@ import { Header } from './components/Header';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ChangelogModal } from './components/ChangelogModal';
 import { SplashScreen } from './components/SplashScreen';
+import { OnboardingModal } from './components/OnboardingModal';
 
 import { AuthView } from './views/AuthView';
 import { ProfileSetupView } from './views/ProfileSetupView';
@@ -116,7 +117,7 @@ const prepareAIRequest = (project: ProjectState, basePrompt: string, includeImag
 };
 
 /**
- * Henter Data Capture Advice.
+ * Henter Project Information Advice.
  * Bruger det lokale SDK hvis en API-nøgle er tilgængelig, ellers kaldes det sikre server-side endpoint.
  */
 async function generateAdviceAPI(project: ProjectState): Promise<string> {
@@ -288,7 +289,10 @@ async function sendChatAPI(
       }
       
       const parts: any[] = [{ text }];
-      if (includeImages && msg.images && Array.isArray(msg.images)) {
+      // We always send attachments uploaded in the current (very last) user turn.
+      // Older attachments in history are skipped to save tokens and prevent 429 quota/rate limit errors.
+      const isLastMessage = (i === history.length - 1);
+      if (isLastMessage && msg.images && Array.isArray(msg.images)) {
         msg.images.forEach((imgBase64: string) => {
           if (imgBase64.startsWith('data:')) {
             const mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
@@ -469,6 +473,7 @@ export default function App() {
     onConfirm: () => void;
     confirmText?: string;
     type?: 'danger' | 'info';
+    requireTextConfirm?: string;
   }>({ show: false, title: '', message: '', onConfirm: () => {} });
 
   // Questionnaire state - holder styr på, hvor langt brugeren er i formularen
@@ -480,6 +485,29 @@ export default function App() {
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   const [isAssistantThinking, setIsAssistantThinking] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [showToSModal, setShowToSModal] = useState(false);
+
+  const handleAcceptOnboarding = async (updatedData: { name: string; company: string; phone: string; role: 'enduser' | 'integrator' }) => {
+    if (!user) return;
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const updates = {
+        name: updatedData.name,
+        company: updatedData.company,
+        organization: updatedData.company,
+        phone: updatedData.phone,
+        role: updatedData.role,
+        tosAcceptedAt: serverTimestamp()
+      };
+      await updateDoc(userRef, updates);
+      setProfile(prev => prev ? { ...prev, ...updates } : null);
+      setGlobalSuccess("Welcome! Onboarding completed successfully.");
+      setTimeout(() => setGlobalSuccess(null), 1500);
+    } catch (err) {
+      handleAppError(err, OperationType.UPDATE, `users/${user.uid}`);
+    }
+  };
 
   // Splash screen state og inaktivitets-timer (5 minutter)
   const [showSplash, setShowSplash] = useState(true);
@@ -518,7 +546,7 @@ export default function App() {
   const createNewProject = (withAI = false) => {
     setCurrentProject({
       id: null,
-      projectName: "New Bin-Picking Evaluation",
+      projectName: "New Scape Bin-Picker Project",
       generalResponses: {},
       parts: [{ responses: {}, images: [] }],
       report: null,
@@ -576,6 +604,7 @@ export default function App() {
         message,
         type: 'danger',
         confirmText: "Delete Permanently",
+        requireTextConfirm: "delete",
         onConfirm: async () => {
           try {
             await deleteProject(p, true);
@@ -592,6 +621,7 @@ export default function App() {
         message: `Are you sure you want to move project "${p.projectName}" to the trash?`,
         type: 'danger',
         confirmText: "Move to Trash",
+        requireTextConfirm: "delete",
         onConfirm: async () => {
           try {
             await deleteProject(p, false);
@@ -639,7 +669,7 @@ export default function App() {
           { ...currentProject, report: text, fieldObservations: observations },
           'report',
           text,
-          'AI generated data capture advice'
+          'AI generated Project Information Advice'
         );
         if (Object.keys(observations).length > 0) {
           await updateProjectField(
@@ -717,11 +747,13 @@ export default function App() {
     } catch (e: any) {
       console.error(e);
       // Show the error as a message bubble inside the chat so the user sees it in context
-      const errorText = `⚠️ AI error: ${e?.message || 'Unknown error. Check the browser console for details.'}`;
+      let errorMessage = e?.message || 'Unknown error. Check the browser console for details.';
+      if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('exhausted') || errorMessage.toLowerCase().includes('rate limit')) {
+        errorMessage = "You have exceeded the Gemini API quota or rate limit. If you just uploaded a large PDF, it may have exceeded the allowed token count for your current AI Studio billing plan. Please check your Google AI Studio plan and budget caps, or try using a smaller document (Max 5MB).";
+      }
+      const errorText = `⚠️ AI error: ${errorMessage}`;
       const errorHistory = [...newHistory, { role: 'model' as const, text: errorText }];
       setCurrentProject({ ...currentProject, chatHistory: errorHistory });
-      // Also surface it in the global toast for visibility
-      handleAppError(e);
     } finally {
       setIsAssistantThinking(false);
     }
@@ -781,6 +813,7 @@ export default function App() {
           setView={setView} logout={handleLogout} switchMode={switchMode}
           isAllowedEvaluator={isDynamicAllowedEvaluator} isScapeEmployee={isScapeEmployee}
           saveProfile={saveProfile}
+          onOpenToS={() => setShowToSModal(true)}
           projectName={view === 'questionnaire' && currentProject ? currentProject.projectName : undefined}
           projectId={view === 'questionnaire' && currentProject ? currentProject.id : undefined}
           ownerName={view === 'questionnaire' && currentProject ? currentProject.ownerName : undefined}
@@ -813,9 +846,21 @@ export default function App() {
             deleteProject={triggerDeleteProject}
             restoreProject={restoreProject}
             toggleLock={(p) => updateProjectField(p, 'isLocked', !p.isLocked, `Project lock state changed to ${!p.isLocked}`)}
-            takeProject={(p) => updateProjectField(p, 'takenBy', user.uid, `Project assigned to ${profile?.name}`)}
+            takeProject={async (p) => {
+              if (!p.id) return;
+              const evaluatorName = profile?.name || 'Scape Engineer';
+              try {
+                await updateDoc(doc(db, 'projects', p.id), { 
+                  takenBy: user.uid, 
+                  takenByName: evaluatorName 
+                });
+                await logChange(p.id, `Project assigned to ${evaluatorName}`);
+                fetchProjects(profile?.isAdmin);
+              } catch (e) {
+                console.error("Failed to assign case:", e);
+              }
+            }}
             updateStatus={(p, status) => updateProjectField(p, 'status', status, `Project status changed to ${status}`)}
-            toggleSpecified={(p) => updateProjectField(p, 'isFullySpecified', !p.isFullySpecified, `Project fully specified status changed to ${!p.isFullySpecified}`)}
             toggleInactive={(p) => updateProjectField(p, 'isInactive', !p.isInactive, `Project marked as ${!p.isInactive ? 'inactive' : 'active'}`)}
             isGeneratingDemo={isGeneratingDemo}
             isCleaningDemo={isCleaningDemo}
@@ -857,6 +902,7 @@ export default function App() {
             saveProfile={saveProfile}
             updateProjectField={(p, field, value, comment) => updateProjectField(p, field, value, comment)}
             handleAppError={handleAppError}
+            fetchProjectImages={fetchProjectImages}
           />
         )}
       </main>
@@ -871,12 +917,29 @@ export default function App() {
         onCancel={() => setConfirmModal(prev => ({ ...prev, show: false }))}
         confirmText={confirmModal.confirmText}
         type={confirmModal.type}
+        requireTextConfirm={confirmModal.requireTextConfirm}
       />
 
       <ChangelogModal 
         show={showLog}
         onClose={() => setShowLog(false)}
         changelog={changelog}
+      />
+
+      <OnboardingModal
+        show={!!(user && profile && !profile.tosAcceptedAt)}
+        user={user}
+        profile={profile}
+        readOnly={false}
+        onAccept={handleAcceptOnboarding}
+      />
+
+      <OnboardingModal
+        show={showToSModal}
+        user={user}
+        profile={profile}
+        readOnly={true}
+        onClose={() => setShowToSModal(false)}
       />
     </div>
   );

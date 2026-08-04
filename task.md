@@ -1,0 +1,10 @@
+- [ ] Create task checklist
+- [ ] Replace "Data Capture Advice" with "Project Information Advice" across docs and code
+- [ ] Replace "Bin-Picking Information Advice" with "Project Information Advice"
+- [ ] Replace "Bin-Picking Project Information" with "Scape Bin-Picker Projects"
+- [ ] Rename application name from "Scape Bin-Picking Evaluator" to "Scape Bin-Picker Projects" in headings, titles, and UI strings
+- [ ] Update UI strings and route slug to `/scape-bin-picker-projects`
+- [ ] Update PDF generator text to new app name
+- [ ] Update SplashScreen, AuthView, Header, DashboardView texts
+- [ ] Verify all changes and run application
+- [ ] Commit changes

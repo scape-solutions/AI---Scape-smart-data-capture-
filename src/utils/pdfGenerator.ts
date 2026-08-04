@@ -127,19 +127,20 @@ export const generateProjectPdf = (project: ProjectState, profile?: UserProfile 
 
     const label = getGeneralQuestionLabel(key);
     const obs = project.fieldObservations?.[key];
-    const obsMarker = obs ? (obs.severity === 'critical' ? ' [!]' : ' [⚠]') : '';
+    const obsMarker = obs ? (obs.severity === 'critical' ? ' [!]' : ' [!]') : '';
     
     // Check if we need to split text
     const maxValWidth = contentWidth - 65;
     const splitVal = doc.splitTextToSize(valueStr, maxValWidth);
-    const neededHeight = Math.max(6, splitVal.length * 5);
+    
+    const labelLines = doc.splitTextToSize(label + obsMarker, 60);
+    const neededHeight = Math.max(6, labelLines.length * 5, splitVal.length * 5) + 3; // Measure both label & value height
 
     checkPageBreak(neededHeight);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(obs?.severity === 'critical' ? 180 : obs ? 146 : 71, obs ? 30 : 85, obs?.severity === 'critical' ? 46 : obs ? 0 : 105);
+    doc.setTextColor(obs?.severity === 'critical' ? 191 : obs ? 217 : 71, obs ? 30 : 119, obs?.severity === 'critical' ? 46 : obs ? 119 : 105);
     
     // Print label with obs marker
-    const labelLines = doc.splitTextToSize(label + obsMarker, 60);
     labelLines.forEach((lblLine: string, idx: number) => {
       doc.text(lblLine, margin, y + (idx * 5));
     });
@@ -149,6 +150,10 @@ export const generateProjectPdf = (project: ProjectState, profile?: UserProfile 
     splitVal.forEach((valLine: string, idx: number) => {
       doc.text(valLine, margin + 62, y + (idx * 5));
     });
+
+    // Subtle horizontal border line separating entries
+    doc.setDrawColor(241, 245, 249);
+    doc.line(margin, y + neededHeight - 1, margin + contentWidth, y + neededHeight - 1);
 
     y += neededHeight;
   });
@@ -234,16 +239,17 @@ export const generateProjectPdf = (project: ProjectState, profile?: UserProfile 
 
       const label = getPartQuestionLabel(key);
       const obs = project.fieldObservations?.[key];
-      const obsMarker = obs ? (obs.severity === 'critical' ? ' [!]' : ' [⚠]') : '';
+      const obsMarker = obs ? (obs.severity === 'critical' ? ' [!]' : ' [!]') : '';
       const maxValWidth = contentWidth - 65;
       const splitVal = doc.splitTextToSize(valueStr, maxValWidth);
-      const neededHeight = Math.max(6, splitVal.length * 5);
+      
+      const labelLines = doc.splitTextToSize(label + obsMarker, 60);
+      const neededHeight = Math.max(6, labelLines.length * 5, splitVal.length * 5) + 3; // Measure both label & value height
 
       checkPageBreak(neededHeight);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(obs?.severity === 'critical' ? 180 : obs ? 146 : 71, obs ? 30 : 85, obs?.severity === 'critical' ? 46 : obs ? 0 : 105);
+      doc.setTextColor(obs?.severity === 'critical' ? 191 : obs ? 217 : 71, obs ? 30 : 119, obs?.severity === 'critical' ? 46 : obs ? 119 : 105);
 
-      const labelLines = doc.splitTextToSize(label + obsMarker, 60);
       labelLines.forEach((lblLine: string, idx: number) => {
         doc.text(lblLine, margin, y + (idx * 5));
       });
@@ -254,6 +260,10 @@ export const generateProjectPdf = (project: ProjectState, profile?: UserProfile 
         doc.text(valLine, margin + 62, y + (idx * 5));
       });
 
+      // Subtle horizontal border line separating entries
+      doc.setDrawColor(241, 245, 249);
+      doc.line(margin, y + neededHeight - 1, margin + contentWidth, y + neededHeight - 1);
+
       y += neededHeight;
     });
 
@@ -261,162 +271,51 @@ export const generateProjectPdf = (project: ProjectState, profile?: UserProfile 
   });
 
   // ==========================================================================
-  // SECTION B — Data Capture Advice (shown when advice has been run)
+  // SECTION B — Field Observations Summary (data coming from field-level observations)
   // ==========================================================================
-  if (project.report) {
+  const obsEntries = Object.entries(project.fieldObservations || {});
+  if (obsEntries.length > 0) {
     y += 4;
     checkPageBreak(25);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(15, 23, 42);
-    doc.text('Data Capture Advice', margin, y);
+    doc.text('Field Observations Summary', margin, y);
     y += 7;
     doc.setDrawColor(226, 232, 240);
     doc.line(margin, y, margin + contentWidth, y);
     y += 5;
 
-    // Helper to print markdown-like text
-    const printMarkdownText = (rawText: string) => {
-      const paragraphs = rawText.split('\n');
-      paragraphs.forEach(p => {
-        const cleaned = p.replace(/\*\*|###|##|#/g, '').trim();
-        if (cleaned === '') { y += 2; return; }
-        const isHeader = p.startsWith('#');
-        const isBullet = p.trim().startsWith('*') || p.trim().startsWith('-');
-        const fontSize = isHeader ? 11 : 9.5;
-        const fontStyle = isHeader ? 'bold' : 'normal';
-        const color = isHeader ? [15, 23, 42] : [51, 65, 85];
-        const indent = isBullet ? 20 : 15;
-        doc.setFont('helvetica', fontStyle);
-        doc.setFontSize(fontSize);
-        doc.setTextColor(color[0], color[1], color[2]);
-        const bulletPrefix = isBullet ? '• ' : '';
-        const textToSplit = bulletPrefix + (isBullet ? cleaned.substring(1).trim() : cleaned);
-        const splitLines = doc.splitTextToSize(textToSplit, contentWidth - (indent - 15));
-        const paragraphHeight = splitLines.length * 5 + (isHeader ? 2 : 0);
-        checkPageBreak(paragraphHeight);
-        splitLines.forEach((line: string, idx: number) => {
-          doc.text(line, indent, y + (idx * 5));
-        });
-        y += paragraphHeight + 1.5;
+    obsEntries.forEach(([fieldId, obs]) => {
+      const allQuestions = [
+        ...GENERAL_STEPS.flatMap(s => s.questions),
+        ...PART_STEPS.flatMap(s => s.questions)
+      ];
+      const fieldLabel = allQuestions.find(q => q.id === fieldId)?.label || fieldId;
+      const isCritical = obs.severity === 'critical';
+      const marker = isCritical ? '[!]' : '[!]';
+      const entryText = `${marker} ${fieldLabel}: ${obs.text}`;
+      const splitEntry = doc.splitTextToSize(entryText, contentWidth - 8);
+      const entryHeight = Math.max(7, splitEntry.length * 5 + 2);
+
+      checkPageBreak(entryHeight + 2);
+
+      // Coloured left strip
+      doc.setFillColor(isCritical ? 254 : 254, isCritical ? 226 : 243, isCritical ? 226 : 199);
+      doc.rect(margin, y - 1, contentWidth, entryHeight, 'F');
+      doc.setFillColor(isCritical ? 239 : 245, isCritical ? 68 : 158, isCritical ? 68 : 11);
+      doc.rect(margin, y - 1, 2, entryHeight, 'F');
+
+      doc.setFont('helvetica', isCritical ? 'bold' : 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(isCritical ? 153 : 120, isCritical ? 27 : 53, isCritical ? 27 : 15);
+      splitEntry.forEach((line: string, idx: number) => {
+        doc.text(line, margin + 5, y + 3.5 + (idx * 5));
       });
-    };
+      y += entryHeight + 2;
+    });
 
-    // Sub-section: structured field observations (if any)
-    const obsEntries = Object.entries(project.fieldObservations || {});
-    if (obsEntries.length > 0) {
-      checkPageBreak(15);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(71, 85, 105);
-      doc.text('Field Observations Summary', margin, y);
-      y += 6;
-
-      obsEntries.forEach(([fieldId, obs]) => {
-        const allQuestions = [
-          ...GENERAL_STEPS.flatMap(s => s.questions),
-          ...PART_STEPS.flatMap(s => s.questions)
-        ];
-        const fieldLabel = allQuestions.find(q => q.id === fieldId)?.label || fieldId;
-        const isCritical = obs.severity === 'critical';
-        const marker = isCritical ? '[!]' : '[⚠]';
-        const entryText = `${marker} ${fieldLabel}: ${obs.text}`;
-        const splitEntry = doc.splitTextToSize(entryText, contentWidth - 8);
-        const entryHeight = Math.max(7, splitEntry.length * 5 + 2);
-
-        checkPageBreak(entryHeight + 2);
-
-        // Coloured left strip
-        doc.setFillColor(isCritical ? 254 : 254, isCritical ? 226 : 243, isCritical ? 226 : 199);
-        doc.rect(margin, y - 1, contentWidth, entryHeight, 'F');
-        doc.setFillColor(isCritical ? 239 : 245, isCritical ? 68 : 158, isCritical ? 68 : 11);
-        doc.rect(margin, y - 1, 2, entryHeight, 'F');
-
-        doc.setFont('helvetica', isCritical ? 'bold' : 'normal');
-        doc.setFontSize(9);
-        doc.setTextColor(isCritical ? 153 : 120, isCritical ? 27 : 53, isCritical ? 27 : 15);
-        splitEntry.forEach((line: string, idx: number) => {
-          doc.text(line, margin + 5, y + 3.5 + (idx * 5));
-        });
-        y += entryHeight + 2;
-      });
-
-      y += 4;
-    }
-
-    // Full advice narrative text
-    printMarkdownText(project.report);
     y += 6;
-  }
-
-  // ==========================================================================
-  // SECTION D — Review (role-aware: finalVerdict > evaluatorDraft)
-  // ==========================================================================
-  const canSeeVerdict = isAdmin ||
-    project.isVerdictVisible ||
-    project.status === 'approved' ||
-    project.status === 'rejected';
-
-  const showVerdict = project.finalVerdict && canSeeVerdict;
-  const showDraft = !showVerdict && isAdmin && project.evaluatorDraft;
-
-  if (showVerdict || showDraft) {
-    y += 4;
-    checkPageBreak(25);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.setTextColor(15, 23, 42);
-    doc.text(
-      showVerdict ? 'Project Review from Scape Solutions' : 'Evaluator AI Draft',
-      margin,
-      y
-    );
-    y += 7;
-    doc.setDrawColor(15, 23, 42);
-    doc.line(margin, y, margin + contentWidth, y);
-    y += 5;
-
-    const printMarkdownSectionD = (rawText: string) => {
-      const paragraphs = rawText.split('\n');
-      paragraphs.forEach(p => {
-        const cleaned = p.replace(/\*\*|###|##|#/g, '').trim();
-        if (cleaned === '') { y += 2; return; }
-        const isHeader = p.startsWith('#');
-        const isBullet = p.trim().startsWith('*') || p.trim().startsWith('-');
-        const fontSize = isHeader ? 11 : 9.5;
-        const fontStyle = isHeader ? 'bold' : 'normal';
-        const color = isHeader ? [15, 23, 42] : [51, 65, 85];
-        const indent = isBullet ? 20 : 15;
-        doc.setFont('helvetica', fontStyle);
-        doc.setFontSize(fontSize);
-        doc.setTextColor(color[0], color[1], color[2]);
-        const bulletPrefix = isBullet ? '• ' : '';
-        const textToSplit = bulletPrefix + (isBullet ? cleaned.substring(1).trim() : cleaned);
-        const splitLines = doc.splitTextToSize(textToSplit, contentWidth - (indent - 15));
-        const paragraphHeight = splitLines.length * 5 + (isHeader ? 2 : 0);
-        checkPageBreak(paragraphHeight);
-        splitLines.forEach((line: string, idx: number) => {
-          doc.text(line, indent, y + (idx * 5));
-        });
-        y += paragraphHeight + 1.5;
-      });
-    };
-
-    const contentText = showVerdict ? project.finalVerdict! : project.evaluatorDraft!;
-    if (showVerdict) {
-      // Wrap verdict in a bordered panel
-      checkPageBreak(20);
-      doc.setFillColor(248, 250, 252);
-      doc.setDrawColor(226, 232, 240);
-      const startY = y;
-      y += 5;
-      printMarkdownSectionD(contentText);
-      doc.rect(margin, startY, contentWidth, y - startY, 'S');
-      y += 8;
-    } else {
-      printMarkdownSectionD(contentText);
-      y += 6;
-    }
   }
 
   // 7. Visual Attachments Appendix (if images exist)
@@ -432,6 +331,11 @@ export const generateProjectPdf = (project: ProjectState, profile?: UserProfile 
     if (part.images && part.images.length > 0) {
       part.images.forEach((img, idx) => {
         allImages.push({ dataUrl: img, label: `Part ${partIdx + 1} Photo ${idx + 1}` });
+      });
+    }
+    if (part.placementImages && part.placementImages.length > 0) {
+      part.placementImages.forEach((img, idx) => {
+        allImages.push({ dataUrl: img, label: `Part ${partIdx + 1} Placement Photo ${idx + 1}` });
       });
     }
   });

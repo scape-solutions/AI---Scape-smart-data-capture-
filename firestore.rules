@@ -8,8 +8,8 @@ service cloud.firestore {
     function isScape() {
       return isSignedIn() && (
         (request.auth.token.email != null && (
-          request.auth.token.email.lower().matches('.*@scapesolutions\\\\.eu$') ||
-          request.auth.token.email.lower().matches('.*@scapesolutions\\\\.com$')
+          request.auth.token.email.lower().matches('.*@scapesolutions\\.eu$') ||
+          request.auth.token.email.lower().matches('.*@scapesolutions\\.com$')
         )) ||
         request.auth.uid == "PvdZWFVtE6YKsa16loWrUNwjuif1"
       );
@@ -26,8 +26,7 @@ service cloud.firestore {
       allow create: if isScape() || (isSignedIn() && request.resource.data.userId == request.auth.uid);
       allow update: if isScape() || (
         resource != null && 
-        resource.data.userId == request.auth.uid && 
-        resource.data.get('isLocked', false) == false
+        resource.data.userId == request.auth.uid
       );
       allow delete: if isScape() || (resource != null && resource.data.userId == request.auth.uid);
 

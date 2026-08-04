@@ -15,7 +15,7 @@ const FIELD_LABEL_MAP: Record<string, string> = {};
 interface AIAssistantTabProps {
   currentProject: ProjectState; // Det nuværende projekt-state
   setCurrentProject: (p: ProjectState) => void; // Funktion til at opdatere projekt-state lokalt
-  sendMessageToAssistant: (msg: string) => Promise<void>; // Funktion til at sende en besked til AI-assistenten
+  sendMessageToAssistant: (msg: string, images?: string[]) => Promise<void>; // Funktion til at sende en besked til AI-assistenten
   isGeneratingReport: boolean; // Angiver om AI'en er i gang med at generere et svar (viser loading)
   updateProjectField: (p: ProjectState, field: keyof ProjectState, value: any, comment: string) => Promise<void>; // Opdaterer et specifikt felt i Firestore
   saveProject?: (status?: ProjectState['status'], projectToSave?: ProjectState) => Promise<ProjectState | null>; // Gemmer hele projektet i databasen
@@ -39,7 +39,18 @@ function parseAIResponse(text: string): ParsedAIResponse {
   let jsonProposal: any = null;
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (jsonMatch) {
-    try { jsonProposal = JSON.parse(jsonMatch[1]); } catch { /* ignorer parse-fejl */ }
+    try { 
+      jsonProposal = JSON.parse(jsonMatch[1]);
+      
+      // Fallback: If AI puts images directly into parts array instead of using suggestedAction
+      if (!jsonProposal.suggestedAction && jsonProposal.parts && Array.isArray(jsonProposal.parts)) {
+        const partWithImageIdx = jsonProposal.parts.findIndex((p: any) => p.images && p.images.length > 0);
+        if (partWithImageIdx !== -1) {
+          jsonProposal.suggestedAction = 'assign_image';
+          jsonProposal.targetPart = partWithImageIdx;
+        }
+      }
+    } catch { /* ignorer parse-fejl */ }
   }
   // Fjern JSON-blokken fra den tekst, vi skal lede efter headers i
   const stripped = text.replace(/```(?:json)?\s*[\s\S]*?\s*```/i, '').trim();
@@ -82,6 +93,9 @@ export function areValuesEqual(currentVal: any, proposalVal: any): boolean {
 export function isProposalAlreadyApplied(proposal: any, currentProject: ProjectState, activePartIndex: number): boolean {
   if (!proposal) return false;
   if (proposal.suggestedAction === 'assign_image') return false;
+  if (proposal.suggestedAction === 'move_image') return false;
+  if (proposal.suggestedAction === 'copy_image') return false;
+  if (proposal.suggestedAction === 'delete_image') return false;
 
   // Tjek generelle stamdata (generalResponses)
   if (proposal.generalResponses) {
@@ -130,6 +144,7 @@ export function AIAssistantTab({
 }: AIAssistantTabProps) {
   const [input, setInput] = useState(''); // Indtastningsfeltet til chatten
   const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null); // Reference til chat-vinduet til styring af scrollbar
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -139,6 +154,62 @@ export function AIAssistantTab({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [currentProject.chatHistory]);
+
+  const processFiles = (files: FileList | File[]) => {
+    Array.from(files).forEach(file => {
+      if (file.type.startsWith('image/')) {
+        if (file.size > 10 * 1024 * 1024) {
+          alert("Billedet er for stort / Image is too large. Max 10MB allowed.");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const result = ev.target?.result as string;
+          
+          // Simple compress before adding
+          const img = new Image();
+          img.src = result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 1000;
+            const MAX_HEIGHT = 1000;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > MAX_WIDTH) {
+                height = Math.round((height *= MAX_WIDTH / width));
+                width = MAX_WIDTH;
+              }
+            } else {
+              if (height > MAX_HEIGHT) {
+                width = Math.round((width *= MAX_HEIGHT / height));
+                height = MAX_HEIGHT;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.8);
+            setPendingImages(prev => [...prev, compressed]);
+          };
+        };
+        reader.readAsDataURL(file);
+      } else if (file.type === 'application/pdf') {
+        if (file.size > 5 * 1024 * 1024) {
+          alert("PDF-filen er for stor / PDF is too large. Max 5MB allowed to prevent API quota/timeout issues.");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const result = ev.target?.result as string;
+          setPendingImages(prev => [...prev, result]);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  };
 
   // Håndterer afsendelse af chat-beskeder
   const handleSend = () => {
@@ -151,45 +222,29 @@ export function AIAssistantTab({
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const result = ev.target?.result as string;
-        
-        // Simple compress before adding
-        const img = new Image();
-        img.src = result;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1000;
-          const MAX_HEIGHT = 1000;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height = Math.round((height *= MAX_WIDTH / width));
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width = Math.round((width *= MAX_HEIGHT / height));
-              height = MAX_HEIGHT;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL('image/jpeg', 0.8);
-          setPendingImages(prev => [...prev, compressed]);
-        };
-      };
-      reader.readAsDataURL(file);
-    });
+    processFiles(files);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (isReadOnly) return;
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (isReadOnly) return;
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files);
     }
   };
 
@@ -206,7 +261,21 @@ export function AIAssistantTab({
   }, [currentProject.chatHistory]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div 
+      className="flex flex-col h-full bg-slate-50 relative"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="absolute inset-0 bg-indigo-600/10 backdrop-blur-xs border-2 border-dashed border-indigo-500 z-[100] flex flex-col items-center justify-center pointer-events-none animate-fadeIn">
+          <div className="bg-white px-6 py-4 rounded-2xl shadow-xl flex flex-col items-center gap-2 text-indigo-600">
+            <Paperclip className="w-8 h-8 animate-bounce" />
+            <span className="text-sm font-bold">Drop images or PDFs here to attach</span>
+            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Images and PDF files only</span>
+          </div>
+        </div>
+      )}
       {/* Top bjælke med titel og ikon */}
       <div className="p-3 md:p-5 bg-white border-b border-slate-200 shrink-0">
         <h2 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -267,9 +336,17 @@ export function AIAssistantTab({
                   <div className="bg-indigo-600 text-white p-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm">
                     {msg.images && msg.images.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-2">
-                        {msg.images.map((img, imgIdx) => (
-                          <img key={imgIdx} src={img} alt="User upload" className="w-24 h-24 object-cover rounded-lg border border-indigo-400" />
-                        ))}
+                        {msg.images.map((img, imgIdx) => {
+                          const isPdf = img.startsWith('data:application/pdf');
+                          return isPdf ? (
+                            <div key={imgIdx} className="w-24 h-24 bg-white/10 rounded-lg border border-indigo-400 flex flex-col items-center justify-center text-white p-2">
+                              <span className="text-[10px] font-black uppercase text-indigo-100">PDF</span>
+                              <span className="text-[8px] opacity-70 mt-1 truncate max-w-full text-center">Document</span>
+                            </div>
+                          ) : (
+                            <img key={imgIdx} src={img} alt="User upload" className="w-24 h-24 object-cover rounded-lg border border-indigo-400" />
+                          );
+                        })}
                       </div>
                     )}
                     {msg.text}
@@ -385,17 +462,26 @@ export function AIAssistantTab({
           <div className="flex flex-col gap-2">
             {pendingImages.length > 0 && (
               <div className="flex flex-wrap gap-2 px-1">
-                {pendingImages.map((img, i) => (
-                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm">
-                    <img src={img} alt="upload" className="w-full h-full object-cover" />
-                    <button 
-                      onClick={() => setPendingImages(prev => prev.filter((_, idx) => idx !== i))}
-                      className="absolute top-1 right-1 bg-slate-900/60 text-white rounded-full p-0.5 hover:bg-red-500 transition-colors"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+                {pendingImages.map((img, i) => {
+                  const isPdf = img.startsWith('data:application/pdf');
+                  return (
+                    <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center bg-slate-50">
+                      {isPdf ? (
+                        <div className="flex flex-col items-center justify-center text-red-600 font-bold p-1">
+                          <span className="text-[10px] uppercase font-black">PDF</span>
+                        </div>
+                      ) : (
+                        <img src={img} alt="upload" className="w-full h-full object-cover" />
+                      )}
+                      <button 
+                        onClick={() => setPendingImages(prev => prev.filter((_, idx) => idx !== i))}
+                        className="absolute top-1 right-1 bg-slate-900/60 text-white rounded-full p-0.5 hover:bg-red-500 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
             <div className="flex items-end gap-2 relative">
@@ -403,7 +489,7 @@ export function AIAssistantTab({
                 type="file" 
                 ref={fileInputRef}
                 multiple
-                accept="image/*"
+                accept="image/*,application/pdf"
                 className="hidden"
                 onChange={handleImageUpload}
               />
@@ -553,36 +639,49 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
   if (proposal.suggestedAction === 'assign_image') {
     const targetIdx = proposal.targetPart !== undefined ? proposal.targetPart : activePartIndex;
     const userMsgsWithImages = currentProject.chatHistory?.filter(m => m.role === 'user' && m.images && m.images.length > 0);
-    const lastImages = userMsgsWithImages?.[userMsgsWithImages.length - 1]?.images || [];
+    const lastImages = (userMsgsWithImages?.[userMsgsWithImages.length - 1]?.images || []).filter(img => !img.startsWith('data:application/pdf'));
     
     if (lastImages.length > 0) {
+      const isProjectTarget = proposal.targetPart === 'project';
+      
       return (
         <div className={`bg-indigo-50 border-2 border-indigo-200 rounded-2xl overflow-hidden shadow-sm transition-all`}>
            <div className={`flex items-center justify-between px-4 py-3 border-b bg-indigo-100 border-indigo-200`}>
              <h3 className={`font-bold text-sm flex items-center gap-2 text-indigo-900`}>
                <Paperclip className="w-4 h-4" />
-               Assign image(s) to Part {targetIdx + 1}
+               Assign image(s) to {isProjectTarget ? 'Project' : `Part ${targetIdx + 1}`}
              </h3>
              <button
                 onClick={async () => {
                   setIsSaving(true);
                   try {
                     const updatedProject = { ...currentProject };
-                    const newParts = updatedProject.parts.map(p => ({ ...p, images: [...(p.images || [])] }));
-                    if (!newParts[targetIdx]) newParts[targetIdx] = { responses: {}, images: [] };
-                    newParts[targetIdx].images.push(...lastImages);
-                    updatedProject.parts = newParts;
+                    
+                    if (isProjectTarget) {
+                      updatedProject.generalImages = [...(updatedProject.generalImages || []), ...lastImages];
+                    } else {
+                      const newParts = updatedProject.parts.map(p => ({ ...p, images: [...(p.images || [])] }));
+                      if (!newParts[targetIdx]) newParts[targetIdx] = { responses: {}, images: [] };
+                      newParts[targetIdx].images.push(...lastImages);
+                      updatedProject.parts = newParts;
+                    }
+                    
                     setCurrentProject(updatedProject);
                     
-                    if (saveProject && updatedProject.id) {
-                       await saveProject(updatedProject.status || 'draft', updatedProject);
+                    if (saveProject) {
+                       const saved = await saveProject(updatedProject.status || 'draft', updatedProject);
+                       if (saved) updatedProject.id = saved.id;
                     } else if (updatedProject.id) {
-                       const partsToSave = updatedProject.parts.map(p => ({
-                         responses: p.responses,
-                         images: p.images ?? [],
-                         cadFile: p.cadFile ?? null,
-                       }));
-                       await updateProjectField(updatedProject, 'parts', partsToSave, 'AI auto-fill: assign images');
+                       if (isProjectTarget) {
+                         await updateProjectField(updatedProject, 'generalImages', updatedProject.generalImages, 'AI auto-fill: assign general images');
+                       } else {
+                         const partsToSave = updatedProject.parts.map(p => ({
+                           responses: p.responses,
+                           images: p.images ?? [],
+                           cadFile: p.cadFile ?? null,
+                         }));
+                         await updateProjectField(updatedProject, 'parts', partsToSave, 'AI auto-fill: assign images');
+                       }
                     }
                     wasManuallyApplied.current = true;
                     setIsApplied(true);
@@ -600,6 +699,125 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
              {lastImages.map((img: string, i: number) => (
                <img key={i} src={img} className="h-20 w-20 object-cover rounded-lg border border-slate-200 shadow-sm" alt="pending assignment" />
              ))}
+           </div>
+        </div>
+      );
+    }
+  }
+
+  if (proposal.suggestedAction === 'copy_image' || proposal.suggestedAction === 'move_image') {
+    const fromIdx = proposal.fromPart;
+    const toIdx = proposal.toPart;
+    const imgIdx = proposal.imageIndex !== undefined ? proposal.imageIndex : 0;
+    const isMove = proposal.suggestedAction === 'move_image';
+    
+    const sourceImages = currentProject.parts?.[fromIdx]?.images || [];
+    const imageToHandle = sourceImages[imgIdx];
+    
+    if (imageToHandle && fromIdx !== undefined && toIdx !== undefined) {
+      return (
+        <div className={`bg-blue-50 border-2 border-blue-200 rounded-2xl overflow-hidden shadow-sm transition-all`}>
+           <div className={`flex items-center justify-between px-4 py-3 border-b bg-blue-100 border-blue-200`}>
+             <h3 className={`font-bold text-sm flex items-center gap-2 text-blue-900`}>
+               <Paperclip className="w-4 h-4" />
+               {isMove ? 'Move' : 'Copy'} image from Part {fromIdx + 1} to Part {toIdx + 1}
+             </h3>
+             <button
+                onClick={async () => {
+                  setIsSaving(true);
+                  try {
+                    const updatedProject = { ...currentProject };
+                    const newParts = updatedProject.parts.map(p => ({ ...p, images: [...(p.images || [])] }));
+                    if (!newParts[toIdx]) newParts[toIdx] = { responses: {}, images: [] };
+                    
+                    newParts[toIdx].images.push(imageToHandle);
+                    if (isMove) {
+                      newParts[fromIdx].images.splice(imgIdx, 1);
+                    }
+                    
+                    updatedProject.parts = newParts;
+                    setCurrentProject(updatedProject);
+                    
+                    if (saveProject) {
+                       const saved = await saveProject(updatedProject.status || 'draft', updatedProject);
+                       if (saved) updatedProject.id = saved.id;
+                    } else if (updatedProject.id) {
+                       const partsToSave = updatedProject.parts.map(p => ({
+                         responses: p.responses,
+                         images: p.images ?? [],
+                         cadFile: p.cadFile ?? null,
+                       }));
+                       await updateProjectField(updatedProject, 'parts', partsToSave, `AI auto-fill: ${isMove ? 'move' : 'copy'} image`);
+                    }
+                    wasManuallyApplied.current = true;
+                    setIsApplied(true);
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                disabled={isSaving || isReadOnly}
+                className="text-xs px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-sm"
+             >
+                {isSaving ? 'Saving...' : 'Approve'}
+             </button>
+           </div>
+           <div className="p-4 flex gap-2 overflow-x-auto">
+             <img src={imageToHandle} alt="preview" className="h-16 w-16 object-cover rounded shadow-sm border border-black/10" />
+           </div>
+        </div>
+      );
+    }
+  }
+
+  if (proposal.suggestedAction === 'delete_image') {
+    const targetIdx = proposal.targetPart !== undefined ? proposal.targetPart : activePartIndex;
+    const imgIdx = proposal.imageIndex !== undefined ? proposal.imageIndex : 0;
+    const sourceImages = currentProject.parts?.[targetIdx]?.images || [];
+    const imageToDelete = sourceImages[imgIdx];
+    
+    if (imageToDelete) {
+      return (
+        <div className={`bg-rose-50 border-2 border-rose-200 rounded-2xl overflow-hidden shadow-sm transition-all`}>
+           <div className={`flex items-center justify-between px-4 py-3 border-b bg-rose-100 border-rose-200`}>
+             <h3 className={`font-bold text-sm flex items-center gap-2 text-rose-900`}>
+               <X className="w-4 h-4" />
+               Delete image from Part {targetIdx + 1}
+             </h3>
+             <button
+                onClick={async () => {
+                  setIsSaving(true);
+                  try {
+                    const updatedProject = { ...currentProject };
+                    const newParts = updatedProject.parts.map(p => ({ ...p, images: [...(p.images || [])] }));
+                    newParts[targetIdx].images.splice(imgIdx, 1);
+                    updatedProject.parts = newParts;
+                    setCurrentProject(updatedProject);
+                    
+                    if (saveProject) {
+                       const saved = await saveProject(updatedProject.status || 'draft', updatedProject);
+                       if (saved) updatedProject.id = saved.id;
+                    } else if (updatedProject.id) {
+                       const partsToSave = updatedProject.parts.map(p => ({
+                         responses: p.responses,
+                         images: p.images ?? [],
+                         cadFile: p.cadFile ?? null,
+                       }));
+                       await updateProjectField(updatedProject, 'parts', partsToSave, 'AI auto-fill: delete image');
+                    }
+                    wasManuallyApplied.current = true;
+                    setIsApplied(true);
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                disabled={isSaving || isReadOnly}
+                className="text-xs px-4 py-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-bold shadow-sm"
+             >
+                {isSaving ? 'Saving...' : 'Approve'}
+             </button>
+           </div>
+           <div className="p-4 flex gap-2 overflow-x-auto">
+             <img src={imageToDelete} alt="preview" className="h-16 w-16 object-cover rounded shadow-sm border border-rose-500/50 opacity-50" />
            </div>
         </div>
       );
