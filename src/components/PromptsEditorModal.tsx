@@ -33,7 +33,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Revision history state
   const [history, setHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -109,7 +109,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
     try {
       const timestamp = new Date().toISOString();
       const docRef = doc(db, 'config', 'prompts');
-      
+
       // Update active prompts
       await setDoc(docRef, {
         externalAdvicePrompt: prompts.externalAdvice,
@@ -155,11 +155,11 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
 
   const handleResetToDefault = () => {
     if (confirm("Are you sure you want to reset the current active tab prompt to its local markdown file default values?")) {
-      const defaultText = 
+      const defaultText =
         activeTab === 'externalAdvice' ? defaultExternalAdvice.trim() :
-        activeTab === 'evaluatorDraft' ? defaultEvaluatorDraft.trim() :
-        activeTab === 'autoFill' ? defaultAutoFill.trim() :
-        defaultObservationsExtraction.trim();
+          activeTab === 'evaluatorDraft' ? defaultEvaluatorDraft.trim() :
+            activeTab === 'autoFill' ? defaultAutoFill.trim() :
+              defaultObservationsExtraction.trim();
 
       setPrompts(prev => ({
         ...prev,
@@ -284,7 +284,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 md:p-10 bg-slate-900/60 backdrop-blur-xs select-none">
       {/* Modal Box */}
       <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 max-w-7xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-fadeIn">
-        
+
         {/* Header */}
         <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-3">
@@ -296,7 +296,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
               <p className="text-[11px] text-slate-400 font-semibold tracking-wider uppercase mt-0.5">Dynamically adjust Gemini system prompts</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
           >
@@ -306,7 +306,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-8 flex flex-col md:flex-row gap-8 min-h-0">
-          
+
           {/* Left Column: Editor */}
           <div className="flex-1 flex flex-col min-h-0">
             {/* Tabs header */}
@@ -352,9 +352,9 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
             {/* Include Images Toggle Switch */}
             <div className="flex items-center gap-3 mb-4 select-none self-start">
               <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={includeImages[activeTab]} 
+                <input
+                  type="checkbox"
+                  checked={includeImages[activeTab]}
                   onChange={(e) => setIncludeImages(prev => ({ ...prev, [activeTab]: e.target.checked }))}
                   className="sr-only peer"
                 />
@@ -373,7 +373,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
                   {parsedHeader?.name || `${activeTab}Prompt`}
                 </span>
               </div>
-              
+
               <div className="w-full sm:w-28 flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Version</label>
                 <input
@@ -428,7 +428,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
                 className="flex-1 font-mono text-xs leading-relaxed bg-slate-50 border border-slate-200 rounded-2xl p-5 w-full outline-none focus:bg-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400 resize-none custom-scrollbar"
               />
             </div>
-            
+
             {/* Fallback & Import/Export/Reset row */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4">
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-left">
@@ -482,7 +482,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
                 <p className="text-[10px] text-slate-400">Last 6 saves to cloud</p>
               </div>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 max-h-[400px] pr-1">
               {historyLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-2">
@@ -495,8 +495,8 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
                 </div>
               ) : (
                 history.map((item) => (
-                  <div 
-                    key={item.id} 
+                  <div
+                    key={item.id}
                     className="p-3 bg-slate-50 border border-slate-100 hover:border-slate-200 rounded-xl flex flex-col gap-2 transition-all text-left"
                   >
                     <div className="flex items-center justify-between">
