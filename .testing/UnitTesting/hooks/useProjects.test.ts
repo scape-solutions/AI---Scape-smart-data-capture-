@@ -23,6 +23,8 @@ vi.mock('firebase/firestore', () => ({
   deleteDoc: vi.fn(),
   orderBy: vi.fn(),
   onSnapshot: vi.fn(),
+  getFirestore: vi.fn().mockReturnValue({}),
+  getDocFromServer: vi.fn().mockResolvedValue({}),
 }));
 
 describe('useProjects utilities', () => {

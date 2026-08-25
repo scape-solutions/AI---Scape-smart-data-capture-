@@ -838,6 +838,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   isAllowedEvaluator={isAllowedEvaluator}
                   isScapeEmployee={isScapeEmployee}
                   saveProfile={saveProfile}
+                  projectName={currentProject?.projectName}
                 />
               </div>
 

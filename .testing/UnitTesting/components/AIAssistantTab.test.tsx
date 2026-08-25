@@ -21,6 +21,11 @@ vi.mock('lucide-react', () => ({
   HelpCircle: () => <div data-testid="help-icon" />,
   Paperclip: () => <div data-testid="clip-icon" />,
   X: () => <div data-testid="x-icon" />,
+  Settings2: () => <div data-testid="settings-icon" />,
+  Box: () => <div data-testid="box-icon" />,
+  Maximize: () => <div data-testid="maximize-icon" />,
+  Zap: () => <div data-testid="zap-icon" />,
+  Camera: () => <div data-testid="camera-icon" />,
 }));
 
 describe('AIAssistantTab utilities', () => {

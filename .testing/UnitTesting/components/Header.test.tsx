@@ -59,8 +59,8 @@ describe('Header', () => {
       screen.getByTitle('Om Scape Bin-Picker Projects')
     ).toBeInTheDocument();
 
-    expect(screen.getByText('SC')).toBeInTheDocument();
-    expect(screen.getByText('PE')).toBeInTheDocument();
+    expect(screen.getByText(/SC/)).toBeInTheDocument();
+    expect(screen.getByText(/PE/)).toBeInTheDocument();
   });
 
   it('displays global errors and handles dismissal', () => {

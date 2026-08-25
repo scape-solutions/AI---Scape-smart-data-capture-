@@ -101,14 +101,13 @@ describe('Questionnaire Integration Flow', () => {
     fireEvent.change(projectNameInput, { target: { value: 'Updated Project Name' } });
     fireEvent.blur(projectNameInput);
 
-    // Blur triggers save or update callback
-    await waitFor(() => {
-      expect(mockUpdateProjectField).toHaveBeenCalledWith(
-        expect.any(Object),
-        'projectName',
-        'Updated Project Name',
-        expect.any(String)
-      );
-    });
+    // Change triggers setCurrentProject callback with the new name response
+    expect(mockSetCurrentProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generalResponses: expect.objectContaining({
+          '1.01': 'Updated Project Name'
+        })
+      })
+    );
   });
 });

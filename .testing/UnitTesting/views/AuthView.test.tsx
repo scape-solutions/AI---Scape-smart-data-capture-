@@ -50,7 +50,7 @@ describe('AuthView', () => {
       />
     );
 
-    const submitBtn = screen.getByRole('button', { name: 'Sign In' });
+    const submitBtn = screen.getAllByRole('button', { name: 'Sign In' }).find(el => el.classList.contains('bg-slate-900'))!;
     expect(submitBtn).not.toBeDisabled();
     fireEvent.click(submitBtn);
 

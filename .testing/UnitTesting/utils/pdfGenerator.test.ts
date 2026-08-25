@@ -85,14 +85,14 @@ describe('generateProjectPdf', () => {
 
     generateProjectPdf(mockProject);
 
-    expect(mockSave).toHaveBeenCalledWith('scape_evaluation_test_bin_picking_project.pdf');
-    expect(mockText).toHaveBeenCalledWith(expect.stringContaining('SCAPE BIN-PICKING EVALUATION'), expect.any(Number), expect.any(Number));
-    expect(mockText).toHaveBeenCalledWith(expect.stringContaining('Test Bin Picking Project'), expect.any(Number), expect.any(Number));
-    expect(mockAddImage).toHaveBeenCalled();
+    expect(mockPdf.save).toHaveBeenCalledWith('scape_evaluation_test_bin_picking_project.pdf');
+    expect(mockPdf.text).toHaveBeenCalledWith(expect.stringContaining('SCAPE BIN-PICKING EVALUATION'), expect.any(Number), expect.any(Number));
+    expect(mockPdf.text).toHaveBeenCalledWith(expect.stringContaining('Test Bin Picking Project'), expect.any(Number), expect.any(Number));
+    expect(mockPdf.addImage).toHaveBeenCalled();
   });
 
   it('should handle image rendering errors gracefully', () => {
-    mockAddImage.mockImplementation(() => {
+    mockPdf.addImage.mockImplementation(() => {
       throw new Error('Image format error');
     });
 
@@ -116,8 +116,8 @@ describe('generateProjectPdf', () => {
     generateProjectPdf(mockProject);
 
     // It should draw red placeholder box and text, rather than crashing
-    expect(mockSetDrawColor).toHaveBeenCalledWith(239, 68, 68); // Scape Red error border
-    expect(mockText).toHaveBeenCalledWith(expect.stringContaining('[Image Render Fail]'), expect.any(Number), expect.any(Number));
-    expect(mockSave).toHaveBeenCalledWith('scape_evaluation_error_image_project.pdf');
+    expect(mockPdf.setDrawColor).toHaveBeenCalledWith(239, 68, 68); // Scape Red error border
+    expect(mockPdf.text).toHaveBeenCalledWith(expect.stringContaining('[Image Render Fail]'), expect.any(Number), expect.any(Number));
+    expect(mockPdf.save).toHaveBeenCalledWith('scape_evaluation_error_image_project.pdf');
   });
 });

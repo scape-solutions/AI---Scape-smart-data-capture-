@@ -92,7 +92,7 @@ describe('Project Creation Flow Integration', () => {
     // Verify option dialog pops up
     expect(screen.getByText('Create New Project')).toBeInTheDocument();
 
-    const blankBtn = screen.getByRole('button', { name: /Start from scratch/i });
+    const blankBtn = screen.getByRole('button', { name: /Start Manually/i });
     fireEvent.click(blankBtn);
 
     expect(mockCreateNewProject).toHaveBeenCalledWith(false); // withAI = false

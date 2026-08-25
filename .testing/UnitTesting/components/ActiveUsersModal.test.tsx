@@ -21,6 +21,9 @@ vi.mock('firebase/firestore', () => ({
   collection: vi.fn(),
   getDocsFromServer: vi.fn(),
   getDocs: vi.fn(),
+  getFirestore: vi.fn().mockReturnValue({}),
+  doc: vi.fn(),
+  getDocFromServer: vi.fn().mockResolvedValue({}),
 }));
 
 describe('ActiveUsersModal', () => {

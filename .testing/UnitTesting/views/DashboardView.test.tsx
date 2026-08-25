@@ -87,7 +87,7 @@ describe('DashboardView', () => {
 
   it('renders DashboardView header and project cards', () => {
     render(<DashboardView {...baseProps} />);
-    expect(screen.getByText('Bin-Picking Projects')).toBeInTheDocument();
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
     
     const projectCards = screen.getAllByTestId('project-card');
     expect(projectCards).toHaveLength(2);
