@@ -26,6 +26,7 @@ import { DashboardView } from './views/DashboardView';
 import { QuestionnaireView } from './views/QuestionnaireView';
 
 import { ProjectState, OperationType } from './types';
+import { computeDataDiff, getCurrentResponsesSnapshot } from './utils/diffHelper';
 
 import externalAdvicePromptRaw from './docs/externalAdvicePrompt.md?raw';
 import evaluatorDraftPromptRaw from './docs/evaluatorDraftPrompt.md?raw';
@@ -282,12 +283,26 @@ async function sendChatAPI(
       }
     });
 
+    const systemInstruction = `${activeClientPrompts.autoFillPrompt}
+
+QUESTIONNAIRE SCHEMA:
+${JSON.stringify(schema, null, 2)}
+
+VERIFIED CURRENT PROJECT STATE (ABSOLUTE GROUND TRUTH):
+${JSON.stringify(cleanProject, null, 2)}
+
+ACTIVE PART INDEX (0-based): ${activePartIndex}
+
+DATA DISCREPANCY RULE FOR CHAT HISTORY:
+The chat history transcript below contains past conversation messages. If any user or assistant message in history mentions values that contradict VERIFIED CURRENT PROJECT STATE (for example, history mentions "CCC" but VERIFIED CURRENT PROJECT STATE has "AAA"), VERIFIED CURRENT PROJECT STATE is the final result of manual user edits and SUPERSEDES all historical chat messages. Treat conflicting history values as obsolete and NEVER propose overwriting VERIFIED CURRENT PROJECT STATE with obsolete values from history.`;
+
     const contents = history.map((msg, i) => {
       let text = msg.text;
-      if (i === history.length - 1 && msg.role === 'user') {
-         text = `${activeClientPrompts.autoFillPrompt}\n\nQUESTIONNAIRE SCHEMA:\n${JSON.stringify(schema, null, 2)}\n\nCURRENT PROJECT STATE:\n${JSON.stringify(cleanProject, null, 2)}\n\nACTIVE PART INDEX (0-based): ${activePartIndex}\n\nUSER MESSAGE:\n${text}`;
+      // Strip raw JSON proposal blocks from past assistant turns in history so obsolete JSON proposals don't pollute Gemini context
+      if (msg.role === 'model' || msg.role === 'assistant') {
+        text = text.replace(/```(?:json)?\s*[\s\S]*?\s*```/ig, '').trim();
       }
-      
+
       const parts: any[] = [{ text }];
       // We always send attachments uploaded in the current (very last) user turn.
       // Older attachments in history are skipped to save tokens and prevent 429 quota/rate limit errors.
@@ -315,6 +330,9 @@ async function sendChatAPI(
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
+      config: {
+        systemInstruction,
+      },
       contents,
     });
     return response.text || "";
@@ -480,6 +498,7 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState(0);
   const [activePartIndex, setActivePartIndex] = useState(0);
   const [isReviewing, setIsReviewing] = useState(false);
+  const [activeCustomSection, setActiveCustomSection] = useState<'business-case' | 'additional-opportunities' | 'scape-review' | null>(null);
   const [reviewTab, setReviewTab] = useState<'advice' | 'evaluation'>('advice');
   const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
@@ -557,10 +576,15 @@ export default function App() {
       ownerCompany: profile?.company || undefined,
       ownerPhone: profile?.phone || undefined,
       isSplitScreen: withAI,
+      lastActiveStep: 0,
+      lastActivePartIndex: 0,
+      lastActiveCustomSection: null,
+      lastIsReviewing: false,
     });
     setView('questionnaire');
     setCurrentStep(0);
     setIsReviewing(false);
+    setActiveCustomSection(null);
     setReviewTab('advice');
     setActivePartIndex(0);
   };
@@ -568,7 +592,22 @@ export default function App() {
   const openProject = async (p: ProjectState) => {
     setCurrentProject(p);
     setView('questionnaire');
-    setIsReviewing(true); // Åbner altid projektet på "Final Verdict" siden
+    
+    // Restore the exact section and view mode the project was last in
+    if (p.lastActiveCustomSection !== undefined && p.lastActiveCustomSection !== null) {
+      setActiveCustomSection(p.lastActiveCustomSection);
+      setIsReviewing(false);
+    } else if (p.lastIsReviewing !== undefined) {
+      setIsReviewing(p.lastIsReviewing);
+      setActiveCustomSection(null);
+    } else {
+      // Default to section 0 (Project & Cell Info)
+      setIsReviewing(false);
+      setActiveCustomSection(null);
+    }
+
+    setCurrentStep(p.lastActiveStep !== undefined ? p.lastActiveStep : 0);
+    setActivePartIndex(p.lastActivePartIndex !== undefined ? p.lastActivePartIndex : 0);
     setReviewTab(p.status === 'submitted' ? 'evaluation' : 'advice');
     
     // Hent billederne asynkront i baggrunden for super-hurtig UI-respons
@@ -650,8 +689,20 @@ export default function App() {
     if (!currentProject || profile?.isAdmin) return;
     setIsGeneratingAdvice(true);
     try {
+      // Step 0: Calculate diff from last snapshot
+      const diffList = computeDataDiff(currentProject);
+      const newSnapshot = getCurrentResponsesSnapshot(currentProject);
+      const timestamp = new Date().toLocaleString();
+
       // Step 1: Generate the full advice narrative
-      const text = await generateAdviceAPI(currentProject);
+      let text = await generateAdviceAPI(currentProject);
+
+      // Prepend diff section if changes exist
+      if (diffList.length > 0) {
+        const diffBlock = `### 🔄 Data Changes Since Last Advice Request\n*Report updated: ${timestamp}*\n\n` +
+          diffList.map(item => `- ${item}`).join('\n') + '\n\n---\n\n';
+        text = diffBlock + text;
+      }
 
       // Step 2: Extract structured field-level observations from the advice
       let observations: Record<string, { severity: 'warning' | 'critical'; text: string }> = {};
@@ -662,22 +713,22 @@ export default function App() {
         console.warn('Could not extract field observations:', obsErr);
       }
 
-      // Step 3: Update state and persist both fields in one Firestore write
-      setCurrentProject({ ...currentProject, report: text, fieldObservations: observations });
+      // Step 3: Update state and persist fields
+      const updatedProject: ProjectState = {
+        ...currentProject,
+        report: text,
+        fieldObservations: observations,
+        lastAdviceResponsesSnapshot: newSnapshot,
+        lastAdviceTimestamp: timestamp
+      };
+
+      setCurrentProject(updatedProject);
       if (currentProject.id) {
-        await updateProjectField(
-          { ...currentProject, report: text, fieldObservations: observations },
-          'report',
-          text,
-          'AI generated Project Information Advice'
-        );
+        await updateProjectField(updatedProject, 'report', text, 'AI generated Project Information Advice');
+        await updateProjectField(updatedProject, 'lastAdviceResponsesSnapshot', newSnapshot, 'Updated responses snapshot');
+        await updateProjectField(updatedProject, 'lastAdviceTimestamp', timestamp, 'Updated advice timestamp');
         if (Object.keys(observations).length > 0) {
-          await updateProjectField(
-            { ...currentProject, report: text, fieldObservations: observations },
-            'fieldObservations',
-            observations,
-            'AI field observations extracted'
-          );
+          await updateProjectField(updatedProject, 'fieldObservations', observations, 'AI field observations extracted');
         }
       }
     } catch (e) {
@@ -805,7 +856,7 @@ export default function App() {
   return (
     <div className="h-screen overflow-hidden bg-white flex flex-col font-sans text-slate-900">
       {/* Headeren modtager data via 'props' (parametrene i komponent-kaldet) */}
-      <div className={view === 'questionnaire' ? 'hidden md:block' : 'block'}>
+      {view !== 'questionnaire' && (
         <Header 
           user={user} profile={profile}
           globalError={globalError} setGlobalError={setGlobalError}
@@ -814,21 +865,8 @@ export default function App() {
           isAllowedEvaluator={isDynamicAllowedEvaluator} isScapeEmployee={isScapeEmployee}
           saveProfile={saveProfile}
           onOpenToS={() => setShowToSModal(true)}
-          projectName={view === 'questionnaire' && currentProject ? currentProject.projectName : undefined}
-          projectId={view === 'questionnaire' && currentProject ? currentProject.id : undefined}
-          ownerName={view === 'questionnaire' && currentProject ? currentProject.ownerName : undefined}
-          ownerCompany={view === 'questionnaire' && currentProject ? currentProject.ownerCompany : undefined}
-          ownerEmail={view === 'questionnaire' && currentProject ? currentProject.ownerEmail : undefined}
-          ownerPhone={view === 'questionnaire' && currentProject ? currentProject.ownerPhone : undefined}
-          locationLabel={view === 'questionnaire' && currentProject ? (
-            isReviewing 
-              ? 'Review / Submit' 
-              : currentStep === 0 
-                ? 'Project & Cell Info' 
-                : `Part #${activePartIndex + 1}: ${currentProject.parts[activePartIndex]?.responses?.['2.01'] || 'Unnamed Part'}`
-          ) : undefined}
         />
-      </div>
+      )}
 
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* && bruges i React som eine 'if'. Hvis det til venstre er sandt, vis det til højre. */}
@@ -881,6 +919,7 @@ export default function App() {
             currentStep={currentStep} setCurrentStep={setCurrentStep}
             activePartIndex={activePartIndex} setActivePartIndex={setActivePartIndex}
             isReviewing={isReviewing} setIsReviewing={setIsReviewing}
+            activeCustomSection={activeCustomSection} setActiveCustomSection={setActiveCustomSection}
             reviewTab={reviewTab} setReviewTab={setReviewTab}
             isGeneratingAdvice={isGeneratingAdvice}
             isGeneratingDraft={isGeneratingDraft}
@@ -903,6 +942,7 @@ export default function App() {
             updateProjectField={(p, field, value, comment) => updateProjectField(p, field, value, comment)}
             handleAppError={handleAppError}
             fetchProjectImages={fetchProjectImages}
+            onOpenToS={() => setShowToSModal(true)}
           />
         )}
       </main>

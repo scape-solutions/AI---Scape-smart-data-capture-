@@ -93,7 +93,7 @@ export const PART_STEPS: Step[] = [
       { id: '2.03_material', label: 'Part Material', type: 'text', placeholder: 'e.g. Cast Iron, Plastic', important: true },
       { id: '2.04', label: 'Desired Average Cycle Time (sec)', type: 'number', placeholder: 'e.g. 15', important: true },
       { id: '2.05', label: 'Average Cycle Time Based On', type: 'text', placeholder: 'e.g. 1 bin, 1 shift, or 50 cycles' },
-      { id: '2.06', label: 'CAD file available for the part?', type: 'boolean', description: 'Preferred format is STL (~0.01 mm accuracy). Other formats (STP/STEP, IGS/IGES, DWG/DXF) can be converted.' }
+      { id: '2.06', label: 'CAD file available for the part?', type: 'boolean', description: 'Preferred format is STL (~0.01 mm accuracy). Other formats (STP/STEP, IGS/IGES) can be converted (no DWG/DXF).' }
     ]
   },
   {

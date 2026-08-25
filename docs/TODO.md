@@ -68,9 +68,8 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 ### BUNDLE 1: AI Auto-fill State & Conflict Management (AI Logik & Data)
 *Opgaver vedrørende AI-assistentens dataudtrækning, prioritering af manuelle valg fremfor historik, samt fejlfinding af forudindtagede svar og data-degradering.*
 
-- [ ] **Konflikthåndtering mellem manuelle input og AI-opdateringer (Undersøgelse & Design):**
-  - **Udfordring:** Når en bruger manuelt har udfyldt eller rettet et felt, må AI'en ikke efterfølgende overskrive dette felt lydløst med informationer udledt fra chatten.
-  - **Udestående diskussion:** Vi skal diskutere og afklare dette grundigt, da der ikke er én entydig rigtig løsning (f.eks. skal manuelle ændringer låse feltet for AI'en, eller skal AI'en bede om bekræftelse før en overskrivning?).
+- [x] **Konflikthåndtering mellem manuelle input og AI-opdateringer:**
+  - **Løsning:** Implementeret i systemInstruction (`DATA DISCREPANCY RULE FOR CHAT HISTORY`), stript af gamle JSON-blokke fra historik, samt visuel advarsels-badge (`⚠️ Overwrites manual value`) med rose-farve ved AI-forslag på manuelle felter.
 - [ ] **AI-markering af 'kritiske' felter og gen-evaluering (Undersøgelse):**
   - **Udfordring:** AI'en kan markere et felt som "Critical" (kritisk), selvom det allerede er udfyldt manuelt, hvis den mener brugeren skal dobbelttjekke det. Vi skal afklare, om dette er en ønsket funktion, og *hvornår* felterne skal gen-evalueres, efter der er indtastet nye oplysninger.
 - [ ] **AI-forsøg på uventet at nulstille felt [2.11] (Bug):**
@@ -79,9 +78,8 @@ This document tracks actionable tasks and fixes derived from recent testing feed
   - **Udfordring:** AI'en præsterer dårligere (eller overser data), når der indføres meget information eller mange emner (parts) i et projekt (f.eks. ved ikke at udfylde felter, den har bekræftet, eller rydde manuelle data). Kræver fejlfinding med et reproducerbart eksempel.
 - [ ] **Afklaring af AI-forvirring omkring cyklustider [2.04]/[2.05] (Undersøgelse):**
   - **Udfordring:** AI'en bliver af og til forvirret omkring felt `[2.04]` (Required Cycle Time) og `[2.05]` (Desired Cycle Time) og beder brugeren præcisere cyklustypen, selvom det fremgår direkte af feltnavnene. Tilpasses i AI-prompterne, når de endelige spørgsmål er fastlagt.
-- [ ] **Automatisk oprettelse af emner ud fra felt [1.02] (Undersøgelse & Design):**
-  - **Nuværende adfærd:** Hvis en bruger ændrer felt `1.02` (Total of different parts) til f.eks. 3, sker der intet automatisk i UI. Men hvis AI'en foreslår svar for 3 emner, og brugeren trykker "Apply", oprettes de nye emner automatisk.
-  - **Overvejelse:** Skal manuel indtastning i felt `1.02` i fremtiden automatisk oprette/slette emne-faner i UI for at matche tallet?
+- [x] **Automatisk oprettelse af emner ud fra felt [1.02]:**
+  - **Løsning:** Implementeret real-time registrering af felt `1.02` samt en Prompt Banner i UI med knappen `+ Add X Parts` til hurtigt at udvide emne-fanerne.
 - [ ] **Historik og visualisering af AI-bekræftelser (Undersøgelse & Design):**
   - **Udfordring:** Når AI-ændringer i de gule kort (Apply Changes) godkendes, kan man bagefter ikke se præcist, hvad der blev bekræftet i dialogen. De lysegrønne felter i skemaet virker ikke koblet direkte sammen med det godkendte.
 
@@ -134,8 +132,8 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 
 - [ ] **Multi-language app:**
   - Gør applikationen multi-language (understøttelse af flere sprog i UI og prompts).
-- [ ] **Opsamling af ustruktureret AI-data:**
-  - Opsaml ustrukturerede chat-oplysninger, der ikke passer direkte i form-felterne, i et separat generelt notefelt i databasen.
+- [x] **Opsamling af ustruktureret AI-data:**
+  - **Løsning:** Implementeret via felt `1.06` (Generel projektinformation) og `2.15` (Ekstra emne-information) i `questionnaire.ts` og `autoFillPrompt.md` (v7), hvor ustrukturerede chat-oplysninger opsamles og gemmes i databasen.
 - [ ] **Håndtering af udløbet session (UX fejlbesked):**
   - Ryd error states ved login/logout, og fang udløbne tokens (auth/id-token-expired) for at redirecte pænt med en klar besked ("Session udløbet") i stedet for en rå databasefejl.
 - [ ] **Budget & Alarmer:**

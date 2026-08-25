@@ -146,6 +146,19 @@ const getProjectDiffAction = (oldProj: ProjectState, newProj: ProjectState, newS
   return changes;
 };
 
+export function sanitizeParts(parts: any[]): any[] {
+  const arr = Array.isArray(parts) ? parts : [];
+  if (arr.length === 0) {
+    return [{ responses: {}, images: [], placementImages: [], cadFile: null }];
+  }
+  return arr.map((part: any) => ({
+    responses: part?.responses || {},
+    images: Array.isArray(part?.images) ? part.images : [],
+    placementImages: Array.isArray(part?.placementImages) ? part.placementImages : [],
+    cadFile: part?.cadFile || null
+  }));
+}
+
 export function normalizeProject(p: any): ProjectState {
   const generalResponses = p?.generalResponses || {};
   
@@ -1275,6 +1288,7 @@ export function useProjects(
     if (!user) return null;
     const project = projectToSave || currentProject;
     if (!project) return null;
+    project.parts = sanitizeParts(project.parts);
 
     // Hvis projektet er låst (f.eks. Submitted), og man ikke er Admin, forhindrer vi gem.
     if (project.isLocked && !profile?.isAdmin && project.id) {
@@ -1584,8 +1598,12 @@ export function useProjects(
   const updateProjectField = async (p: ProjectState, field: string, value: any, logMessage: string) => {
     if (!p.id) return;
     try {
+      let finalValue = value;
+      if (field === 'parts' && Array.isArray(value)) {
+        finalValue = sanitizeParts(value);
+      }
       // Firkantede parenteser [field] betyder at vi bruger variabel-navnet som nøgle (key).
-      await updateDoc(doc(db, 'projects', p.id), { [field]: value });
+      await updateDoc(doc(db, 'projects', p.id), { [field]: finalValue });
       await logChange(p.id, logMessage);
       
       // Opdater også den lokale visning, hvis man er inde på projektet lige nu

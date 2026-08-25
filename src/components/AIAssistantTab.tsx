@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Check, Edit2, CheckCircle2, HelpCircle, Paperclip, X } from 'lucide-react';
+import { Send, Bot, User, Check, Edit2, CheckCircle2, HelpCircle, Paperclip, X, FileText, MessageSquare } from 'lucide-react';
 import { ProjectState } from '../types';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
+import ReactMarkdown from 'react-markdown';
 
 // ─── FELT-LABEL OPSLAGSTABEL ───────────────────────────────────────────────────
 // Vi opbygger en ordbog (map) over alle felt-ID'er og deres tilhørende tekst-labels.
@@ -147,13 +148,37 @@ export function AIAssistantTab({
   const [isDragging, setIsDragging] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null); // Reference til chat-vinduet til styring af scrollbar
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState<'chat' | 'report'>('chat'); // Aktiv fane: chat eller rapport
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Scroll automatisk til bunden af chatten, hver gang historikken ændrer sig
+  // Juster højden på textarea automatisk baseret på indhold og skærmstørrelse
   useEffect(() => {
-    if (scrollRef.current) {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    
+    // Reset højde for at genberegne scrollHeight korrekt
+    textarea.style.height = 'auto';
+    
+    // Højderestriktioner: max 90px på mobil (under 768px), max 200px på desktop
+    const isMobile = window.innerWidth < 768;
+    const maxHeight = isMobile ? 90 : 200;
+    
+    const scrollHeight = textarea.scrollHeight;
+    if (scrollHeight > maxHeight) {
+      textarea.style.height = `${maxHeight}px`;
+      textarea.style.overflowY = 'auto';
+    } else {
+      textarea.style.height = `${scrollHeight}px`;
+      textarea.style.overflowY = 'hidden';
+    }
+  }, [input]);
+
+  // Scroll automatisk til bunden af chatten, hver gang historikken ændrer sig eller fane skiftes
+  useEffect(() => {
+    if (activeTab === 'chat' && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [currentProject.chatHistory]);
+  }, [currentProject.chatHistory, activeTab]);
 
   const processFiles = (files: FileList | File[]) => {
     Array.from(files).forEach(file => {
@@ -276,259 +301,311 @@ export function AIAssistantTab({
           </div>
         </div>
       )}
-      {/* Top bjælke med titel og ikon */}
-      <div className="p-3 md:p-5 bg-white border-b border-slate-200 shrink-0">
-        <h2 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
-          <Bot className="w-5 h-5 text-indigo-500" />
-          AI Auto-fill Assistant
-        </h2>
-        <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
-          Describe your project freely. The AI extracts facts and asks for what's missing.
-        </p>
+
+      {/* Top bjælke med titel og ikon og fane-vælger */}
+      <div className="p-3 md:p-5 bg-white border-b border-slate-200 shrink-0 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
+            <Bot className="w-5 h-5 text-indigo-500" />
+            AI Assistant
+          </h2>
+        </div>
+        
+        {/* Double-Tab navigation */}
+        <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200/40 select-none">
+          <button 
+            type="button"
+            onClick={() => setActiveTab('chat')}
+            className={`flex-1 text-[11px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'chat' 
+                ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/20' 
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Chat Assistant
+          </button>
+          <button 
+            type="button"
+            onClick={() => setActiveTab('report')}
+            className={`flex-1 text-[11px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'report' 
+                ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/20' 
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            AI Advice Report
+          </button>
+        </div>
       </div>
 
-      {/* Advarselsbjælke i toppen, hvis der ligger ubehandlede ændringer */}
-      {hasUnappliedProposals && !isReadOnly && (
-        <div className="bg-amber-50 border-b border-amber-200 px-3.5 py-2 md:px-5 md:py-2.5 text-xs text-amber-800 font-semibold flex items-center gap-1.5 animate-fadeIn select-none shrink-0">
-          <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-          You have proposed changes that haven't been applied yet. Scroll to review them.
+      {activeTab === 'report' ? (
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-900 text-slate-300 leading-relaxed custom-scrollbar selection:bg-blue-600 selection:text-white">
+          {currentProject.report ? (
+            <div className="space-y-4 text-sm font-medium [&>h1]:text-2xl [&>h1]:font-black [&>h1]:text-white [&>h1]:border-b [&>h1]:border-white/10 [&>h1]:pb-2 [&>h1]:mt-6 [&>h1]:mb-4 [&>h2]:text-lg [&>h2]:font-bold [&>h2]:text-white [&>h2]:mt-5 [&>h2]:mb-3 [&>h3]:text-base [&>h3]:font-semibold [&>h3]:text-white [&>h3]:mt-4 [&>h3]:mb-2 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-5 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-5 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-white [&>strong]:font-bold [&>a]:text-blue-400 [&>a]:hover:underline">
+              <ReactMarkdown>
+                {currentProject.report}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 py-12 px-6">
+              <FileText className="w-12 h-12 mb-3 opacity-30 animate-pulse" />
+              <p className="font-bold text-sm">No report generated yet.</p>
+              <p className="text-xs mt-1 max-w-xs opacity-75">
+                Go to the **Review / Submit** tab and generate your feasibility report. Once created, it will display here.
+              </p>
+            </div>
+          )}
         </div>
-      )}
+      ) : (
+        <>
+          {/* Advarselsbjælke i toppen, hvis der ligger ubehandlede ændringer */}
+          {hasUnappliedProposals && !isReadOnly && (
+            <div className="bg-amber-50 border-b border-amber-200 px-3.5 py-2 md:px-5 md:py-2.5 text-xs text-amber-800 font-semibold flex items-center gap-1.5 animate-fadeIn select-none shrink-0">
+              <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+              You have proposed changes that haven't been applied yet. Scroll to review them.
+            </div>
+          )}
 
-      {/* Selve chat-beskedlisten */}
-      <div 
-        className="flex-1 overflow-y-auto p-3.5 md:p-4 space-y-4 md:space-y-5" 
-        ref={scrollRef}
-        onTouchStart={(e) => {
-          // På mobiler lukker vi tastaturet (blur), hvis brugeren scroller på baggrunden
-          const active = document.activeElement;
-          if (active instanceof HTMLElement && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) {
-            const target = e.target as HTMLElement;
-            if (!target.closest('button') && !target.closest('input') && !target.closest('textarea')) {
-              active.blur();
-            }
-          }
-        }}
-      >
-        {/* Velkomstskærm hvis chatten er tom */}
-        {(!currentProject.chatHistory || currentProject.chatHistory.length === 0) && (
-          <div className="text-center mt-12 text-slate-400 px-6">
-            <Bot className="w-14 h-14 mx-auto mb-3 opacity-40" />
-            <p className="font-medium">Start by describing your project.</p>
-            <p className="text-sm mt-1 opacity-70">
-              E.g. "We need to pick metal cylinders from a bin using a Kuka robot…"
-            </p>
-          </div>
-        )}
+          {/* Selve chat-beskedlisten */}
+          <div 
+            className="flex-1 overflow-y-auto p-3.5 md:p-4 space-y-4 md:space-y-5" 
+            ref={scrollRef}
+            onTouchStart={(e) => {
+              // På mobiler lukker vi tastaturet (blur), hvis brugeren scroller på baggrunden
+              const active = document.activeElement;
+              if (active instanceof HTMLElement && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT')) {
+                const target = e.target as HTMLElement;
+                if (!target.closest('button') && !target.closest('input') && !target.closest('textarea')) {
+                  active.blur();
+                }
+              }
+            }}
+          >
+            {/* Velkomstskærm hvis chatten er tom */}
+            {(!currentProject.chatHistory || currentProject.chatHistory.length === 0) && (
+              <div className="text-center mt-12 text-slate-400 px-6">
+                <Bot className="w-14 h-14 mx-auto mb-3 opacity-40" />
+                <p className="font-medium">Start by describing your project.</p>
+                <p className="text-sm mt-1 opacity-70">
+                  E.g. "We need to pick metal cylinders from a bin using a Kuka robot…"
+                </p>
+              </div>
+            )}
 
-        {/* Loop igennem chat-historikken */}
-        {currentProject.chatHistory?.map((msg, idx) => {
-          const isUser = msg.role === 'user';
+            {currentProject.chatHistory?.map((msg, idx) => {
+              const isUser = msg.role === 'user';
 
-          // Hvis beskeden er fra brugeren (User)
-          if (isUser) {
-            return (
-              <div key={idx} className="flex justify-end">
-                <div className="flex items-start gap-2.5 max-w-[85%] flex-row-reverse">
-                  <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
-                    <User className="w-3.5 h-3.5 text-white" />
+              // Hvis beskeden er fra brugeren (User)
+              if (isUser) {
+                return (
+                  <div key={idx} className="flex justify-end">
+                    <div className="flex items-start gap-2.5 max-w-[85%] flex-row-reverse">
+                      <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
+                        <User className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      <div className="bg-indigo-600 text-white p-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm">
+                        {msg.images && msg.images.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {msg.images.map((img, imgIdx) => {
+                              const isPdf = img.startsWith('data:application/pdf');
+                              return isPdf ? (
+                                <div key={imgIdx} className="w-24 h-24 bg-white/10 rounded-lg border border-indigo-400 flex flex-col items-center justify-center text-white p-2">
+                                  <span className="text-[10px] font-black uppercase text-indigo-100">PDF</span>
+                                  <span className="text-[8px] opacity-70 mt-1 truncate max-w-full text-center">Document</span>
+                                </div>
+                              ) : (
+                                <img key={imgIdx} src={img} alt="User upload" className="w-24 h-24 object-cover rounded-lg border border-indigo-400" />
+                              );
+                            })}
+                          </div>
+                        )}
+                        {msg.text}
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-indigo-600 text-white p-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm">
-                    {msg.images && msg.images.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {msg.images.map((img, imgIdx) => {
-                          const isPdf = img.startsWith('data:application/pdf');
-                          return isPdf ? (
-                            <div key={imgIdx} className="w-24 h-24 bg-white/10 rounded-lg border border-indigo-400 flex flex-col items-center justify-center text-white p-2">
-                              <span className="text-[10px] font-black uppercase text-indigo-100">PDF</span>
-                              <span className="text-[8px] opacity-70 mt-1 truncate max-w-full text-center">Document</span>
-                            </div>
-                          ) : (
-                            <img key={imgIdx} src={img} alt="User upload" className="w-24 h-24 object-cover rounded-lg border border-indigo-400" />
-                          );
-                        })}
+                );
+              }
+
+              // Hvis beskeden er fra AI-assistenten (Model) -> Split den op og vis kort
+              const parsed = parseAIResponse(msg.text);
+
+              return (
+                <div key={idx} className="flex flex-col items-start gap-3">
+                  {/* AI-avatar */}
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
+                      <Bot className="w-3.5 h-3.5 text-slate-600" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">AI Assistant</span>
+                  </div>
+
+                  <div className="ml-9 space-y-3 w-[90%]">
+                    {/* 1. Vis AI'ens indledende tekst/prosa */}
+                    {parsed.prose && (
+                      <div className="bg-white border border-slate-200 rounded-2xl p-3 text-sm text-slate-700 leading-relaxed shadow-xs break-words">
+                        <ReactMarkdown>
+                          {parsed.prose}
+                        </ReactMarkdown>
                       </div>
                     )}
-                    {msg.text}
+
+                    {/* 2. Det grønne FAKTA-kort (bekræftede feltværdier) */}
+                    {parsed.facts.length > 0 && (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl overflow-hidden shadow-xs">
+                        <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-100 border-b border-emerald-200">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span className="text-xs font-black text-emerald-800 uppercase tracking-widest">
+                            Facts confirmed so far
+                          </span>
+                        </div>
+                        <ul className="px-4 py-3 space-y-1.5">
+                          {parsed.facts.map((fact, i) => (
+                            <li key={i} className="text-sm text-emerald-900 flex items-start gap-2">
+                              <span className="text-emerald-400 mt-0.5 shrink-0">•</span>
+                              <span>{fact}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* 3. Det lilla SPØRGSMÅLS-kort (mangler, der udestår) */}
+                    {parsed.questions.length > 0 && (
+                      <div className="bg-indigo-50 border border-indigo-200 rounded-2xl overflow-hidden shadow-xs">
+                        <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-100 border-b border-indigo-200">
+                          <HelpCircle className="w-4 h-4 text-indigo-600 shrink-0" />
+                          <span className="text-xs font-black text-indigo-800 uppercase tracking-widest">
+                            Still need to know
+                          </span>
+                        </div>
+                        <ul className="px-4 py-3 space-y-1.5">
+                          {parsed.questions.map((q, i) => (
+                            <li key={i} className="text-sm text-indigo-900 flex items-start gap-3">
+                              <span className="w-5 h-5 rounded-full bg-indigo-200 text-indigo-800 text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5 select-none">
+                                {i + 1}
+                              </span>
+                              <span className="pt-0.5">{q}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* 4. Det gule FORSLAGS-kort (hvis der er foreslåede feltændringer i JSON) */}
+                    {parsed.jsonProposal && (
+                      <ProposedChangesCard
+                        proposal={parsed.jsonProposal}
+                        currentProject={currentProject}
+                        setCurrentProject={setCurrentProject}
+                        updateProjectField={updateProjectField}
+                        saveProject={saveProject}
+                        activePartIndex={activePartIndex}
+                        isReadOnly={isReadOnly}
+                        isLatest={idx === lastProposalMsgIdx}
+                      />
+                    )}
                   </div>
                 </div>
-              </div>
-            );
-          }
+              );
+            })}
 
-          // Hvis beskeden er fra AI-assistenten (Model) -> Split den op og vis kort
-          const parsed = parseAIResponse(msg.text);
-
-          return (
-            <div key={idx} className="flex flex-col items-start gap-3">
-              {/* AI-avatar */}
-              <div className="flex items-center gap-2">
+            {/* Skrive-indikator (når AI'en tænker og genererer svar) */}
+            {isGeneratingReport && (
+              <div className="flex items-start gap-2.5 animate-fadeIn">
                 <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
                   <Bot className="w-3.5 h-3.5 text-slate-600" />
                 </div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">AI Assistant</span>
-              </div>
-
-              <div className="ml-9 space-y-3 w-[90%]">
-                {/* 1. Vis AI'ens indledende tekst/prosa */}
-                {parsed.prose && (
-                  <div className="bg-white border border-slate-200 rounded-2xl p-3 text-sm text-slate-700 leading-relaxed shadow-xs">
-                    {parsed.prose}
-                  </div>
-                )}
-
-                {/* 2. Det grønne FAKTA-kort (bekræftede feltværdier) */}
-                {parsed.facts.length > 0 && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl overflow-hidden shadow-xs">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-100 border-b border-emerald-200">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="text-xs font-black text-emerald-800 uppercase tracking-widest">
-                        Facts confirmed so far
-                      </span>
-                    </div>
-                    <ul className="px-4 py-3 space-y-1.5">
-                      {parsed.facts.map((fact, i) => (
-                        <li key={i} className="text-sm text-emerald-900 flex items-start gap-2">
-                          <span className="text-emerald-400 mt-0.5 shrink-0">•</span>
-                          <span>{fact}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* 3. Det lilla SPØRGSMÅLS-kort (mangler, der udestår) */}
-                {parsed.questions.length > 0 && (
-                  <div className="bg-indigo-50 border border-indigo-200 rounded-2xl overflow-hidden shadow-xs">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-100 border-b border-indigo-200">
-                      <HelpCircle className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <span className="text-xs font-black text-indigo-800 uppercase tracking-widest">
-                        Still need to know
-                      </span>
-                    </div>
-                    <ul className="px-4 py-3 space-y-1.5">
-                      {parsed.questions.map((q, i) => (
-                        <li key={i} className="text-sm text-indigo-900 flex items-start gap-3">
-                          <span className="w-5 h-5 rounded-full bg-indigo-200 text-indigo-800 text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5 select-none">
-                            {i + 1}
-                          </span>
-                          <span className="pt-0.5">{q}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* 4. Det gule FORSLAGS-kort (hvis der er foreslåede feltændringer i JSON) */}
-                {parsed.jsonProposal && (
-                  <ProposedChangesCard
-                    proposal={parsed.jsonProposal}
-                    currentProject={currentProject}
-                    setCurrentProject={setCurrentProject}
-                    updateProjectField={updateProjectField}
-                    saveProject={saveProject}
-                    activePartIndex={activePartIndex}
-                    isReadOnly={isReadOnly}
-                    isLatest={idx === lastProposalMsgIdx}
-                  />
-                )}
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Skrive-indikator (når AI'en tænker og genererer svar) */}
-        {isGeneratingReport && (
-          <div className="flex items-start gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
-              <Bot className="w-3.5 h-3.5 text-slate-600" />
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex gap-1.5 items-center">
-              <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" />
-              <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:0.1s]" />
-              <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:0.2s]" />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Skrivefelt og send-knap i bunden */}
-      <div className="p-2.5 md:p-4 bg-white border-t border-slate-200 shrink-0 animate-fadeIn">
-        {isReadOnly ? (
-          <div className="text-center py-2 px-3 bg-slate-100/80 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500">
-            This project is submitted or locked and is read-only.
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {pendingImages.length > 0 && (
-              <div className="flex flex-wrap gap-2 px-1">
-                {pendingImages.map((img, i) => {
-                  const isPdf = img.startsWith('data:application/pdf');
-                  return (
-                    <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center bg-slate-50">
-                      {isPdf ? (
-                        <div className="flex flex-col items-center justify-center text-red-600 font-bold p-1">
-                          <span className="text-[10px] uppercase font-black">PDF</span>
-                        </div>
-                      ) : (
-                        <img src={img} alt="upload" className="w-full h-full object-cover" />
-                      )}
-                      <button 
-                        onClick={() => setPendingImages(prev => prev.filter((_, idx) => idx !== i))}
-                        className="absolute top-1 right-1 bg-slate-900/60 text-white rounded-full p-0.5 hover:bg-red-500 transition-colors"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  );
-                })}
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex gap-1.5 items-center">
+                  <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" />
+                  <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:0.1s]" />
+                  <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:0.2s]" />
+                </div>
               </div>
             )}
-            <div className="flex items-end gap-2 relative">
-              <input 
-                type="file" 
-                ref={fileInputRef}
-                multiple
-                accept="image/*,application/pdf"
-                className="hidden"
-                onChange={handleImageUpload}
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="p-2.5 md:p-3 bg-slate-100 text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-colors shrink-0"
-                title="Attach images"
-              >
-                <Paperclip className="w-5 h-5" />
-              </button>
-              <textarea
-                className="flex-1 border border-slate-300 rounded-xl p-2.5 md:p-3 text-base md:text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
-                placeholder="Describe your project…"
-                rows={1}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  // Return gør nu bare ingenting (laver et linjeskift), da man skal bruge send-knappen.
-                }}
-                onFocus={() => {
-                  // Scroll til bunden efter et kort stykke tid for at gøre plads til tastaturet
-                  setTimeout(() => {
-                    if (scrollRef.current) {
-                      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-                    }
-                  }, 150);
-                }}
-              />
-              <button
-                onClick={handleSend}
-                disabled={isGeneratingReport || (!input.trim() && pendingImages.length === 0)}
-                className="p-2.5 md:p-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
           </div>
-        )}
-      </div>
+
+          {/* Skrivefelt og send-knap i bunden */}
+          <div className="p-2.5 md:p-4 bg-white border-t border-slate-200 shrink-0">
+            {isReadOnly ? (
+              <div className="text-center py-2.5 px-4 bg-slate-100/80 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500 select-none">
+                This project is submitted or locked and is read-only.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {pendingImages.length > 0 && (
+                  <div className="flex flex-wrap gap-2 px-1">
+                    {pendingImages.map((img, i) => {
+                      const isPdf = img.startsWith('data:application/pdf');
+                      return (
+                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center bg-slate-50">
+                          {isPdf ? (
+                            <div className="flex flex-col items-center justify-center text-red-600 font-bold p-1">
+                              <span className="text-[10px] uppercase font-black">PDF</span>
+                            </div>
+                          ) : (
+                            <img src={img} alt="upload" className="w-full h-full object-cover" />
+                          )}
+                          <button 
+                            onClick={() => setPendingImages(prev => prev.filter((_, idx) => idx !== i))}
+                            className="absolute top-1 right-1 bg-slate-900/60 text-white rounded-full p-0.5 hover:bg-red-500 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="flex items-end gap-2 relative">
+                  <input 
+                    type="file" 
+                    ref={fileInputRef}
+                    multiple
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2.5 md:p-3 bg-slate-100 text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-colors shrink-0"
+                    title="Attach images"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
+                  <textarea
+                    ref={textareaRef}
+                    className="flex-1 border border-slate-300 rounded-xl p-2.5 md:p-3 text-base md:text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
+                    placeholder="Describe your project…"
+                    rows={1}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Return gør nu bare ingenting (laver et linjeskift), da man skal bruge send-knappen.
+                    }}
+                    onFocus={() => {
+                      // Scroll til bunden efter et kort stykke tid for at gøre plads til tastaturet
+                      setTimeout(() => {
+                        if (scrollRef.current) {
+                          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                        }
+                      }, 150);
+                    }}
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={isGeneratingReport || (!input.trim() && pendingImages.length === 0)}
+                    className="p-2.5 md:p-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -825,16 +902,19 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
   }
 
   // Opbyg rækkerne af forslåede ændringer til den sammenlignende tabel (Før vs. Efter)
-  const allRows: { key: string; label: string; old: string; newVal: string; onChange: (v: string) => void }[] = [];
+  const allRows: { key: string; label: string; old: string; newVal: string; isConflict: boolean; onChange: (v: string) => void }[] = [];
 
   // Tilføj stamdata-rækker
   if (editedProposal.generalResponses) {
     Object.entries(editedProposal.generalResponses).forEach(([key, value]) => {
+      const oldVal = String(currentProject.generalResponses?.[key] ?? '');
+      const isConflict = oldVal.trim() !== '' && !areValuesEqual(oldVal, value);
       allRows.push({
         key: `gen-${key}`,
         label: `${key} · ${FIELD_LABEL_MAP[key] || key}`,
-        old: String(currentProject.generalResponses?.[key] ?? ''),
+        old: oldVal,
         newVal: String(value),
+        isConflict,
         onChange: (v) => setEditedProposal({
           ...editedProposal,
           generalResponses: { ...editedProposal.generalResponses, [key]: v }
@@ -849,11 +929,14 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
       const targetIdx = (isSinglePartProposal && activePartIndex > 0) ? activePartIndex : pIdx;
       if (part.responses) {
         Object.entries(part.responses).forEach(([key, value]) => {
+          const oldVal = String(currentProject.parts?.[targetIdx]?.responses?.[key] ?? '');
+          const isConflict = oldVal.trim() !== '' && !areValuesEqual(oldVal, value);
           allRows.push({
             key: `part${targetIdx}-${key}`,
             label: `Part ${targetIdx + 1} – ${key} · ${FIELD_LABEL_MAP[key] || key}`,
-            old: String(currentProject.parts?.[targetIdx]?.responses?.[key] ?? ''),
+            old: oldVal,
             newVal: String(value),
+            isConflict,
             onChange: (v) => {
               const nextParts = editedProposal.parts.map((p: any, i: number) =>
                 i === pIdx ? { ...p, responses: { ...p.responses, [key]: v } } : p
@@ -897,9 +980,16 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
       <div className="p-4 space-y-3">
         {rows.map(row => (
           <div key={row.key}>
-            <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 ${isReadOnly ? 'text-slate-500' : 'text-amber-700'}`}>
-              {row.label}
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={`block text-[10px] font-black uppercase tracking-widest ${isReadOnly ? 'text-slate-500' : 'text-amber-700'}`}>
+                {row.label}
+              </label>
+              {row.isConflict && (
+                <span className="text-[10px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  ⚠️ Overwrites manual value
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-2">
               {/* Gammel værdi */}
               <div className="bg-white border border-slate-200 text-slate-400 p-2 rounded-lg text-xs line-through opacity-70 min-h-[32px] break-words whitespace-pre-wrap">
@@ -910,7 +1000,9 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
                 className={`border bg-white p-2 rounded-lg text-base md:text-xs outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none min-h-[32px] ${
                   isReadOnly 
                     ? 'border-slate-200 bg-slate-50/50 text-slate-400 cursor-not-allowed' 
-                    : 'border-amber-300 text-slate-800'
+                    : row.isConflict 
+                      ? 'border-rose-300 bg-rose-50/30 text-slate-800 focus:border-rose-400' 
+                      : 'border-amber-300 text-slate-800'
                 }`}
                 rows={2}
                 value={row.newVal}

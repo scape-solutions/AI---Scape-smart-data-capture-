@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, User as UserIcon, X, Settings, Mail } from 'lucide-react';
+import { LogOut, User as UserIcon, X, Settings, Mail, LayoutDashboard, Bot, Zap } from 'lucide-react';
 import { isDynamicSuperuser } from '../hooks/useAuth';
 import { UserProfile } from '../types';
 
@@ -16,7 +16,7 @@ interface HeaderProps {
   isAllowedEvaluator: (email: string | null | undefined) => boolean;
   isScapeEmployee: (email: string | null | undefined, uid?: string | null) => boolean;
   saveProfile: (data: any) => Promise<void>;
-  onOpenToS: () => void;
+  onOpenToS?: () => void;
   projectName?: string;
   projectId?: string;
   locationLabel?: string;
@@ -24,6 +24,10 @@ interface HeaderProps {
   ownerCompany?: string;
   ownerEmail?: string;
   ownerPhone?: string;
+  onBackToDashboard?: () => void;
+  isSplitScreenMode?: boolean;
+  onToggleSplitScreen?: () => void;
+  onOpenAIAdviceDrawer?: () => void;
 }
 
 export function Header({
@@ -46,7 +50,11 @@ export function Header({
   ownerName,
   ownerCompany,
   ownerEmail,
-  ownerPhone
+  ownerPhone,
+  onBackToDashboard,
+  isSplitScreenMode,
+  onToggleSplitScreen,
+  onOpenAIAdviceDrawer
 }: HeaderProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
@@ -96,7 +104,7 @@ export function Header({
   };
 
   return (
-    <header className="h-16 flex items-center justify-between px-4 md:px-8 bg-white border-b border-slate-200 relative md:sticky top-0 z-[50]">
+    <header className="h-16 flex items-center justify-between px-3 sm:px-4 md:px-6 bg-white border-b border-slate-200 relative md:sticky top-0 z-[50] w-full min-w-0 max-w-full overflow-hidden">
       {/* Hvis globalError er sat til noget (ikke null), viser vi denne røde boks. */}
       {globalError && (
         <div className="absolute top-16 left-0 right-0 bg-red-600 text-white text-[10px] py-1 px-4 md:px-8 font-bold flex justify-between items-center z-[60]">
@@ -113,37 +121,80 @@ export function Header({
         </div>
       )}
       
-      <div 
-        className="flex items-center gap-2 cursor-pointer shrink-0 select-none hover:opacity-90 active:scale-[0.98] transition-all" 
-        onClick={() => setIsAboutModalOpen(true)}
-        title="Om Scape Bin-Picker Projects"
-      >
-        <span className="font-extrabold text-2xl tracking-[0.04em] text-slate-900 flex items-center select-none">
-          SC
-          <span className="inline-flex items-center justify-center mx-[0.5px] relative top-[0.5px]">
-            <svg width="20" height="20" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-slate-900">
-              {/* Left slanted leg of A */}
-              <path d="M 22,90 L 50,15 L 62,15 L 34,90 Z" fill="currentColor" />
-              {/* Right slanted leg of A */}
-              <path d="M 50,15 L 68,55 L 56,55 L 42,23 Z" fill="currentColor" />
-              {/* Slanted red block leg of A */}
-              <path d="M 61,62 L 70,62 L 78,82 L 69,82 Z" fill="#bf1e2e" />
-            </svg>
+      <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0">
+        <div 
+          className="flex items-center gap-2 cursor-pointer shrink-0 select-none hover:opacity-90 active:scale-[0.98] transition-all" 
+          onClick={() => setIsAboutModalOpen(true)}
+          title="Om Scape Bin-Picker Projects"
+        >
+          <span className="font-extrabold text-2xl tracking-[0.04em] text-slate-900 flex items-center select-none">
+            SC
+            <span className="inline-flex items-center justify-center mx-[0.5px] relative top-[0.5px]">
+              <svg width="20" height="20" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-slate-900">
+                {/* Left slanted leg of A */}
+                <path d="M 22,90 L 50,15 L 62,15 L 34,90 Z" fill="currentColor" />
+                {/* Right slanted leg of A */}
+                <path d="M 50,15 L 68,55 L 56,55 L 42,23 Z" fill="currentColor" />
+                {/* Slanted red block leg of A */}
+                <path d="M 61,62 L 70,62 L 78,82 L 69,82 Z" fill="#bf1e2e" />
+              </svg>
+            </span>
+            PE
           </span>
-          PE
-        </span>
-        {/* En lille info-indikator ved siden af logoet for at vise at det kan klikkes */}
-        <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1 py-0.5 rounded-md leading-none select-none">
-          Info
-        </span>
+          <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 border border-slate-200 px-1 py-0.5 rounded-md leading-none select-none">
+            Info
+          </span>
+        </div>
+
+        {onBackToDashboard && (
+          <button
+            type="button"
+            onClick={onBackToDashboard}
+            className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all cursor-pointer shrink-0 shadow-2xs active:scale-95"
+            title="Back to Dashboard"
+          >
+            <LayoutDashboard className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Dashboard</span>
+          </button>
+        )}
+
+        {onToggleSplitScreen && (
+          <button 
+            type="button"
+            onClick={onToggleSplitScreen}
+            className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl border transition-all cursor-pointer shrink-0 shadow-2xs active:scale-95 ${
+              isSplitScreenMode 
+                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' 
+                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+            title={isSplitScreenMode ? "Switch to Manual Mode" : "Switch to AI Auto-fill Mode"}
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{isSplitScreenMode ? 'Switch to Manual Mode' : 'Switch to AI Mode'}</span>
+            <span className="sm:hidden">{isSplitScreenMode ? 'Manual' : 'AI'}</span>
+          </button>
+        )}
+
+        {onOpenAIAdviceDrawer && (
+          <button 
+            type="button"
+            onClick={onOpenAIAdviceDrawer}
+            className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl border border-amber-200/80 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-all cursor-pointer shrink-0 shadow-2xs active:scale-95"
+            title="Open AI Feasibility Advice Drawer"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+            <span className="hidden xl:inline">AI Advice</span>
+            <span className="hidden sm:inline xl:hidden">Advice</span>
+            <span className="sm:hidden">⚡</span>
+          </button>
+        )}
       </div>
 
-      
       {projectName && (
-        <div className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-500 max-w-md lg:max-w-xl mx-4 select-none overflow-hidden animate-fadeIn">
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/60 px-3 py-1.5 rounded-xl shrink-0">
-            <span className="uppercase tracking-wider text-[9px] text-slate-400 font-bold">Project:</span>
-            <span className="text-slate-800 font-black truncate max-w-[120px] lg:max-w-[200px]" title={projectName}>
+        <div className="hidden lg:flex items-center gap-2 text-xs font-bold text-slate-500 max-w-[130px] sm:max-w-md lg:max-w-xl mx-1 sm:mx-4 select-none overflow-hidden animate-fadeIn min-w-0">
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/60 px-2 py-1 sm:px-3 sm:py-1.5 rounded-xl min-w-0">
+            <span className="uppercase tracking-wider text-[9px] text-slate-400 font-bold shrink-0">Project:</span>
+            <span className="text-slate-800 font-black truncate max-w-[80px] sm:max-w-[120px] lg:max-w-[180px]" title={projectName}>
               {projectName}
             </span>
             {projectId && (
@@ -216,13 +267,12 @@ export function Header({
         </div>
       )}
       
-      <div className="flex items-center gap-2 md:gap-6">
-
+      <div className="flex items-center gap-1 sm:gap-2 md:gap-4 shrink-0">
         
         {/* Interactive clickable Profile area */}
         <div 
           onClick={() => setIsModalOpen(true)}
-          className="group flex items-center gap-3 px-3 py-1.5 rounded-2xl border border-transparent hover:border-slate-100 hover:bg-slate-50 cursor-pointer transition-all duration-200 select-none text-right"
+          className="group flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-3 py-1 rounded-2xl border border-slate-100 sm:border-transparent hover:border-slate-200 hover:bg-slate-50 cursor-pointer transition-all duration-200 select-none text-right shrink-0 bg-slate-50/50 sm:bg-transparent"
           title="Vis / ret profil & kontaktdata"
         >
           <div className="flex flex-col sm:items-end justify-center">
@@ -235,9 +285,9 @@ export function Header({
                profile?.requestedRole === 'evaluator' ? "Evaluator" :
                profile?.isAdmin ? "Scape Eng" : "User"}
             </span>
-            <div className="hidden sm:block text-right">
-              <span className="text-xs font-bold text-slate-800 group-hover:text-slate-950 transition-colors block">{profile?.name}</span>
-              <p className="text-[10px] text-slate-400 group-hover:text-slate-500 transition-colors font-medium leading-tight">{user?.email}</p>
+            <div className="hidden lg:block text-right min-w-0 max-w-[140px] truncate">
+              <span className="text-xs font-bold text-slate-800 group-hover:text-slate-950 transition-colors block truncate">{profile?.name}</span>
+              <p className="text-[10px] text-slate-400 group-hover:text-slate-500 transition-colors font-medium leading-tight truncate">{user?.email}</p>
             </div>
           </div>
           <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center text-slate-500 group-hover:text-slate-700 border border-slate-200 transition-all duration-200 shrink-0">
