@@ -22,8 +22,11 @@ import {
   Briefcase,
   Factory,
   Clock,
-  FileText
+  FileText,
+  Send,
+  CheckSquare
 } from 'lucide-react';
+import { downloadMarkdownFile } from '../utils/markdownExport';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 import { ProjectState, UserProfile } from '../types';
 import imageCompression from 'browser-image-compression';
@@ -60,6 +63,8 @@ interface QuestionnaireViewProps {
   setActivePartIndex: (index: number) => void;
   isReviewing: boolean;
   setIsReviewing: (r: boolean) => void;
+  activeCustomSection: 'business-case' | 'additional-opportunities' | 'scape-review' | null;
+  setActiveCustomSection: (section: 'business-case' | 'additional-opportunities' | 'scape-review' | null) => void;
   /** true while generateExternalAdvice() is running */
   isGeneratingAdvice: boolean;
   /** true while generateEvaluatorDraft() is running */
@@ -90,6 +95,7 @@ interface QuestionnaireViewProps {
   updateProjectField: (p: ProjectState, field: string, value: any, logMessage: string) => Promise<void>;
   handleAppError: (e: any, op?: any, path?: string) => void;
   fetchProjectImages: (p: ProjectState) => Promise<ProjectState>;
+  onOpenToS?: () => void;
 }
 
 export function QuestionnaireView({
@@ -103,6 +109,8 @@ export function QuestionnaireView({
   setActivePartIndex,
   isReviewing,
   setIsReviewing,
+  activeCustomSection,
+  setActiveCustomSection,
   isGeneratingAdvice,
   isGeneratingDraft,
   isAssistantThinking,
@@ -129,16 +137,100 @@ export function QuestionnaireView({
   setReviewTab,
   updateProjectField,
   handleAppError,
-  fetchProjectImages
+  fetchProjectImages,
+  onOpenToS
 }: QuestionnaireViewProps) {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeCustomSection, setActiveCustomSection] = useState<'business-case' | 'additional-opportunities' | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [dismissedPartSyncBanner, setDismissedPartSyncBanner] = useState(false);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [showRequestUnlockModal, setShowRequestUnlockModal] = useState(false);
   const [requestReason, setRequestReason] = useState('');
   const [localIsSplitScreen, setLocalIsSplitScreen] = useState<boolean | null>(null);
+
+  const [aiPaneWidth, setAiPaneWidth] = useState<number>(() => {
+    try {
+      const cached = localStorage.getItem('aiPaneWidth');
+      return cached ? parseInt(cached, 10) : 450;
+    } catch {
+      return 450;
+    }
+  });
+
+  const [isResizing, setIsResizing] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('aiPaneWidth', String(aiPaneWidth));
+    } catch { /* ignore */ }
+  }, [aiPaneWidth]);
+
+  const startResizing = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const isMobile = window.innerWidth < 768;
+      const minW = 320;
+      const maxW = isMobile ? window.innerWidth - 60 : 700;
+      let newWidth = e.clientX;
+      if (newWidth < minW) newWidth = minW;
+      if (newWidth > maxW) newWidth = maxW;
+      setAiPaneWidth(newWidth);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      const touch = e.touches[0];
+      const isMobile = window.innerWidth < 768;
+      const minW = 320;
+      const maxW = isMobile ? window.innerWidth - 60 : 700;
+      let newWidth = touch.clientX;
+      if (newWidth < minW) newWidth = minW;
+      if (newWidth > maxW) newWidth = maxW;
+      setAiPaneWidth(newWidth);
+    };
+
+    const stopResizing = () => {
+      setIsResizing(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', stopResizing);
+    window.addEventListener('touchmove', handleTouchMove);
+    window.addEventListener('touchend', stopResizing);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', stopResizing);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', stopResizing);
+    };
+  }, [isResizing]);
+
+  // Luk automatisk AI-panelet hvis AI'en foreslår 'close_chat'
+  useEffect(() => {
+    const history = currentProject.chatHistory ?? [];
+    if (history.length > 0) {
+      const lastMsg = history[history.length - 1];
+      if (lastMsg.role === 'model') {
+        const jsonMatch = lastMsg.text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (jsonMatch) {
+          try {
+            const proposal = JSON.parse(jsonMatch[1]);
+            if (proposal.suggestedAction === 'close_chat') {
+              setLocalIsSplitScreen(false); // Luk AI-panelet
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    }
+  }, [currentProject.chatHistory]);
 
   useEffect(() => {
     setLocalIsSplitScreen(null);
@@ -179,6 +271,17 @@ export function QuestionnaireView({
     };
   }, [isAIAssistantOpen]);
 
+  // Auto-close floating side drawer when switching to mobile screen (< 768px) in Manual Mode
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768 && isAIAssistantOpen) {
+        setIsAIAssistantOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isAIAssistantOpen]);
+
   const [isAdviceExpanded, setIsAdviceExpanded] = useState(true);
   const [isDraftExpanded, setIsDraftExpanded] = useState(true);
   const [draftViewMode, setDraftViewMode] = useState<'markdown' | 'raw'>('markdown');
@@ -187,6 +290,8 @@ export function QuestionnaireView({
   const [mobileSplitView, setMobileSplitView] = useState<'chat' | 'form'>('chat');
   /** ID of the field whose observation popover is currently open, or null */
   const [openObservationId, setOpenObservationId] = useState<string | null>(null);
+  const [isAdviceDrawerOpen, setIsAdviceDrawerOpen] = useState(false);
+  const [isEvaluatorAdviceExpanded, setIsEvaluatorAdviceExpanded] = useState(false);
 
   // Helper to extract JSON from model message
   const extractJSONFromText = (text: string) => {
@@ -269,6 +374,72 @@ export function QuestionnaireView({
     ? localIsSplitScreen
     : (currentProject?.isSplitScreen === true && !profile?.isAdmin);
 
+  const navigateToSection = async (options: {
+    step?: number;
+    partIndex?: number;
+    customSection?: 'business-case' | 'additional-opportunities' | 'scape-review' | null;
+    isReviewing?: boolean;
+  }) => {
+    const nextStep = options.step !== undefined ? options.step : (options.customSection || options.isReviewing ? currentStep : 0);
+    const nextPartIdx = options.partIndex !== undefined ? options.partIndex : activePartIndex;
+    const nextCustomSection = options.customSection !== undefined ? options.customSection : null;
+    const nextIsReviewing = options.isReviewing !== undefined ? options.isReviewing : false;
+
+    setCurrentStep(nextStep);
+    setActivePartIndex(nextPartIdx);
+    setActiveCustomSection(nextCustomSection);
+    setIsReviewing(nextIsReviewing);
+
+    const updated = {
+      ...currentProject,
+      lastActiveStep: nextStep,
+      lastActivePartIndex: nextPartIdx,
+      lastActiveCustomSection: nextCustomSection,
+      lastIsReviewing: nextIsReviewing,
+      isSplitScreen: isSplitScreenMode,
+    };
+    setCurrentProject(updated);
+
+    if (currentProject.id) {
+      try {
+        if (!isReadOnly && (currentProject.status || 'draft') === 'draft' && saveProject) {
+          await saveProject(currentProject.status || 'draft', updated);
+        } else {
+          await updateDoc(doc(db, 'projects', currentProject.id), {
+            lastActiveCustomSection: nextCustomSection,
+            lastActiveStep: nextStep,
+            lastActivePartIndex: nextPartIdx,
+            lastIsReviewing: nextIsReviewing,
+            isSplitScreen: isSplitScreenMode,
+          });
+        }
+      } catch (err) {
+        console.warn("Could not persist navigation state:", err);
+      }
+    }
+  };
+
+  // Synchronize current navigation & mode state on currentProject so saveProject persists it automatically
+  useEffect(() => {
+    if (!currentProject) return;
+    if (
+      currentProject.lastActiveStep !== currentStep ||
+      currentProject.lastActivePartIndex !== activePartIndex ||
+      currentProject.lastActiveCustomSection !== activeCustomSection ||
+      currentProject.lastIsReviewing !== isReviewing ||
+      currentProject.isSplitScreen !== isSplitScreenMode
+    ) {
+      setCurrentProject({
+        ...currentProject,
+        lastActiveStep: currentStep,
+        lastActivePartIndex: activePartIndex,
+        lastActiveCustomSection: activeCustomSection,
+        lastIsReviewing: isReviewing,
+        isSplitScreen: isSplitScreenMode,
+      });
+    }
+  }, [currentStep, activePartIndex, activeCustomSection, isReviewing, isSplitScreenMode]);
+
   // Helper to calculate question fill progress for a step
   const getStepProgress = (step: any, responses: Record<string, any>, part?: any) => {
     let filled = 0;
@@ -344,7 +515,21 @@ export function QuestionnaireView({
   }, []);
 
   const handleBackToDashboard = async () => {
-    if (!isReadOnly) {
+    if (currentProject?.id) {
+      try {
+        await updateDoc(doc(db, 'projects', currentProject.id), {
+          lastActiveCustomSection: activeCustomSection,
+          lastActiveStep: currentStep,
+          lastActivePartIndex: activePartIndex,
+          lastIsReviewing: isReviewing,
+          isSplitScreen: isSplitScreenMode,
+        });
+      } catch (err) {
+        console.warn("Could not save navigation on dashboard return:", err);
+      }
+    }
+
+    if (!isReadOnly && currentProject.status === 'draft') {
       setIsSaving(true);
       try {
         await saveProject(currentProject.status || 'draft', currentProject);
@@ -356,6 +541,8 @@ export function QuestionnaireView({
     }
     setView('dashboard');
   };
+
+
 
   const handleAddPart = async () => {
     if (isReadOnly) return;
@@ -600,82 +787,103 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
   };
 
   return (
-    <>
-      <div className={`flex-1 flex ${isSplitScreenMode ? 'flex-col md:flex-row' : 'flex-col md:flex-row'} h-full overflow-hidden relative`} style={viewportStyle}>
+    <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-50 min-w-0 max-w-full" style={viewportStyle}>
+      {/* Single Unified Header */}
+      <Header
+        user={user}
+        profile={profile}
+        globalError={null}
+        globalSuccess={null}
+        setGlobalError={() => { }}
+        setGlobalSuccess={() => { }}
+        setView={setView}
+        logout={logout}
+        switchMode={switchMode}
+        isAllowedEvaluator={isAllowedEvaluator}
+        isScapeEmployee={isScapeEmployee}
+        saveProfile={saveProfile}
+        onOpenToS={onOpenToS}
+        projectName={currentProject.projectName}
+        projectId={currentProject.id}
+        ownerName={currentProject.ownerName}
+        ownerCompany={currentProject.ownerCompany}
+        ownerEmail={currentProject.ownerEmail}
+        ownerPhone={currentProject.ownerPhone}
+        onBackToDashboard={handleBackToDashboard}
+        isSplitScreenMode={isSplitScreenMode}
+        onToggleSplitScreen={async () => {
+          const nextMode = !isSplitScreenMode;
+          setLocalIsSplitScreen(nextMode);
+          setMobileSplitView('chat');
+          const updated = { ...currentProject, isSplitScreen: nextMode };
+          setCurrentProject(updated);
+          if (currentProject.id) {
+            await updateProjectField(updated, 'isSplitScreen', nextMode, `Toggled AI mode to ${nextMode}`);
+          }
+        }}
+        onOpenAIAdviceDrawer={() => setIsAdviceDrawerOpen(true)}
+      />
+
+      {/* Main split-screen/sidebar layout area container */}
+      <div className="flex-1 flex flex-row overflow-hidden relative min-w-0 max-w-full">
 
         {/* Split Screen AI Assistant (Left) */}
         {isSplitScreenMode && (
-          <aside className={`${mobileSplitView === 'chat' ? 'flex' : 'hidden'} md:flex w-full md:w-[400px] xl:w-[450px] shrink-0 border-r border-slate-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 bg-white flex-col h-full relative`}>
-            <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
-              <button
-                onClick={() => setMobileSplitView('form')}
-                className="md:hidden bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1.5 rounded-full hover:bg-indigo-200"
-              >
-                Go to Form ➔
-              </button>
-              <span className="hidden md:inline bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">AI Mode</span>
-            </div>
-            <AIAssistantTab
-              currentProject={currentProject}
-              setCurrentProject={setCurrentProject}
-              sendMessageToAssistant={sendMessageToAssistant}
-              isGeneratingReport={isAssistantThinking}
-              updateProjectField={updateProjectField}
-              saveProject={saveProject}
-              activePartIndex={activePartIndex}
-              isReadOnly={isReadOnly}
-              hasUnappliedProposals={hasUnappliedProposals}
-            />
-          </aside>
+          <>
+            <aside
+              style={{ width: mobileSplitView === 'chat' ? '100%' : `${aiPaneWidth}px` }}
+              className={`${mobileSplitView === 'chat' ? 'flex' : 'hidden'} md:flex shrink-0 border-r border-slate-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 bg-white flex-col h-full relative`}
+            >
+
+              <AIAssistantTab
+                currentProject={currentProject}
+                setCurrentProject={setCurrentProject}
+                sendMessageToAssistant={async (msg, images) => {
+                  const normalized = msg.trim().toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "");
+                  const closeKeywords = ['done', 'finished', 'jeg er færdig', 'jeg er ferdig', 'færdig', 'ferdig', 'afslut', 'luk'];
+                  const isCloseTrigger = closeKeywords.some(phrase =>
+                    normalized === phrase || normalized.startsWith(phrase + ' ') || normalized.endsWith(' ' + phrase)
+                  );
+
+                  if (isCloseTrigger) {
+                    setLocalIsSplitScreen(false); // Close AI panel
+                  }
+                  await sendMessageToAssistant(msg, images);
+                }}
+                isGeneratingReport={isAssistantThinking}
+                updateProjectField={updateProjectField}
+                saveProject={saveProject}
+                activePartIndex={activePartIndex}
+                isReadOnly={isReadOnly}
+                hasUnappliedProposals={hasUnappliedProposals}
+              />
+            </aside>
+            {/* Draggable Vertical Divider Resizer Handle */}
+            {mobileSplitView !== 'chat' && (
+              <div
+                onMouseDown={startResizing}
+                onTouchStart={startResizing}
+                className="hidden md:block w-1.5 hover:w-2 bg-slate-200/50 hover:bg-indigo-400 active:bg-indigo-500 cursor-col-resize z-50 transition-all select-none shrink-0"
+                title="Resize assistant pane"
+              />
+            )}
+          </>
         )}
 
         {/* Existing Layout container wrapped for safe flexing */}
-        <div className={`flex-1 flex flex-col md:flex-row h-full overflow-hidden relative min-w-0 ${isSplitScreenMode && mobileSplitView === 'chat' ? 'hidden md:flex' : ''}`}>
+        <div className={`flex-1 flex flex-col md:flex-row h-full overflow-hidden relative min-w-0 max-w-full ${isSplitScreenMode && mobileSplitView === 'chat' ? 'hidden md:flex' : ''}`}>
 
-          {/* Split Screen Mobile Toggle on Form Side */}
-          {isSplitScreenMode && (
-            <div className="md:hidden bg-white border-b border-slate-200 p-3 flex justify-between items-center shrink-0">
-              <span className="text-sm font-bold text-slate-800">Form View</span>
-              <button
-                onClick={() => setMobileSplitView('chat')}
-                className="bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-full hover:bg-indigo-700 flex items-center gap-2"
-              >
-                <Bot className="w-3.5 h-3.5" />
-                Back to AI Chat
-              </button>
-            </div>
-          )}
+
 
           {/* Sidebar on the Left (Desktop-only) */}
           <aside className={`hidden md:flex ${isSplitScreenMode ? 'md:w-64' : 'md:w-64 lg:w-80'} bg-white md:border-r border-slate-200 p-6 flex-col gap-4 overflow-y-auto shrink-0 z-10`}>
-            <div className="flex flex-col gap-3 mb-6">
-              <button
-                onClick={handleBackToDashboard}
-                disabled={isSaving}
-                className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSaving ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-                ) : (
-                  <LayoutDashboard className="w-4 h-4" />
-                )}
-                <span>Dashboard</span>
-              </button>
 
-              <button
-                onClick={() => setLocalIsSplitScreen(!isSplitScreenMode)}
-                className={`flex items-center gap-2 text-sm font-medium transition-colors ${isSplitScreenMode ? 'text-indigo-600 hover:text-indigo-800' : 'text-slate-500 hover:text-indigo-600'}`}
-              >
-                <Bot className="w-4 h-4" />
-                <span>Switch to {isSplitScreenMode ? 'Manual Mode' : 'AI Mode'}</span>
-              </button>
-            </div>
 
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Structure</h2>
 
             {/* Project & Cell Info */}
             <button
-              onClick={() => { setIsReviewing(false); setActiveCustomSection(null); setCurrentStep(0); }}
+              onClick={() => navigateToSection({ step: 0, customSection: null, isReviewing: false })}
               className={`w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-all ${currentStep === 0 && !isReviewing && !activeCustomSection ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
             >
               <div className="flex items-center gap-3">
@@ -719,8 +927,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${isExpanded ? '' : '-rotate-90'}`}
                       />
                       <span className={`text-xs truncate transition-all ${activePartIndex === partIdx && !isReviewing
-                        ? 'font-black text-slate-900'
-                        : 'font-bold text-slate-500 group-hover:text-slate-800'
+                          ? 'font-black text-slate-900'
+                          : 'font-bold text-slate-500 group-hover:text-slate-800'
                         }`}>
                         Part #{partIdx + 1}: {partName}
                       </span>
@@ -755,7 +963,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         return (
                           <button
                             key={step.id}
-                            onClick={() => { setIsReviewing(false); setActiveCustomSection(null); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); }}
+                            onClick={() => navigateToSection({ step: stepIdx + 1, partIndex: partIdx, customSection: null, isReviewing: false })}
                             className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${currentStep === stepIdx + 1 && activePartIndex === partIdx && !isReviewing && !activeCustomSection ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
                           >
                             <div className="flex items-center gap-2">
@@ -778,97 +986,91 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               );
             })}
 
-            {/* Add Part Button */}
-            <button
-              disabled={isReadOnly}
-              onClick={handleAddPart}
-              className={`mt-4 flex items-center gap-2 text-xs font-bold px-3 py-2.5 rounded-xl transition-all select-none ${isReadOnly ? 'text-slate-300 cursor-not-allowed bg-slate-50' : 'text-blue-600 hover:text-blue-800 bg-blue-50/50 hover:bg-blue-50'}`}
-            >
-              <PlusCircle className="w-4 h-4" /> Add Part
-            </button>
-
-            {/* Final Verdict */}
-            <div className="mt-4">
+            {/* Add Part Button inline inside parts list */}
+            {!isReadOnly && (
               <button
-                onClick={() => { setIsReviewing(true); setActiveCustomSection(null); }}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${isReviewing && !activeCustomSection ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                onClick={handleAddPart}
+                className="w-full mt-2 flex items-center gap-2 text-xs font-bold px-3 py-2.5 rounded-xl transition-all select-none text-blue-600 hover:text-blue-800 bg-blue-50/50 hover:bg-blue-50 cursor-pointer"
               >
-                <Sparkles className="w-4 h-4" /> Review / Submit
+                <PlusCircle className="w-4 h-4" /> Add Another Part
               </button>
-            </div>
+            )}
 
             {/* Extended Analysis / Custom Sections */}
-            <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="mt-4 pt-4 border-t border-slate-100 space-y-1">
               <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Extended Analysis</h2>
 
               <button
-                onClick={() => { setIsReviewing(false); setActiveCustomSection('business-case'); }}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${activeCustomSection === 'business-case' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                onClick={() => navigateToSection({ customSection: 'business-case', isReviewing: false })}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${activeCustomSection === 'business-case' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-50'}`}
               >
                 <Briefcase className="w-4 h-4" />
                 <span>Business Case</span>
               </button>
 
               <button
-                onClick={() => { setIsReviewing(false); setActiveCustomSection('additional-opportunities'); }}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${activeCustomSection === 'additional-opportunities' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                onClick={() => navigateToSection({ customSection: 'additional-opportunities', isReviewing: false })}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${activeCustomSection === 'additional-opportunities' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-50'}`}
               >
                 <Factory className="w-4 h-4" />
                 <span>Additional Opportunities</span>
               </button>
+
+              {/* Submit Item (User) or Review/approve (Evaluator) */}
+              <button
+                onClick={() => navigateToSection({ isReviewing: true, customSection: null })}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all ${isReviewing && !activeCustomSection ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                {profile?.isAdmin ? (
+                  <>
+                    <CheckSquare className="w-4 h-4 text-indigo-600" />
+                    <span>Review/approve</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 text-blue-600" />
+                    <span>Submit</span>
+                  </>
+                )}
+              </button>
+
+              {/* Scape Review - Placed as the VERY LAST item for User View */}
+              {!profile?.isAdmin && (
+                <button
+                  onClick={() => navigateToSection({ customSection: 'scape-review', isReviewing: false })}
+                  className={`w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-all mt-2 ${activeCustomSection === 'scape-review'
+                      ? 'bg-rose-50 text-rose-800 font-black border border-rose-200 shadow-3xs'
+                      : 'text-slate-700 hover:bg-rose-50/50 hover:text-rose-800'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center justify-center relative">
+                      <svg width="16" height="16" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-slate-900">
+                        <path d="M 22,90 L 50,15 L 62,15 L 34,90 Z" fill="currentColor" />
+                        <path d="M 50,15 L 68,55 L 56,55 L 42,23 Z" fill="currentColor" />
+                        <path d="M 61,62 L 70,62 L 78,82 L 69,82 Z" fill="#bf1e2e" />
+                      </svg>
+                    </span>
+                    <span>Scape Review</span>
+                  </div>
+                  {(currentProject.status === 'approved' || currentProject.status === 'rejected' || currentProject.isVerdictVisible) ? (
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" title="Official Verdict Available" />
+                  ) : (
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600 bg-rose-100/70 px-1.5 py-0.5 rounded">Official</span>
+                  )}
+                </button>
+              )}
             </div>
           </aside>
 
           {/* Main Content Area */}
-          <div className="flex-1 px-4 pb-4 pt-0 md:p-12 overflow-y-auto bg-slate-50">
-            <div className="max-w-2xl mx-auto w-full">
+          <div className="flex-1 min-w-0 w-full px-4 sm:px-6 md:px-8 lg:px-12 pb-6 pt-4 overflow-y-auto overflow-x-hidden bg-slate-50">
+            <div className="max-w-3xl w-full min-w-0">
 
-              {/* Mobile-Only Header inside the scrollable container */}
-              <div className="md:hidden -mx-4 mt-0 mb-4 select-none">
-                <Header
-                  user={user}
-                  profile={profile}
-                  globalError={null}
-                  globalSuccess={null}
-                  setGlobalError={() => { }}
-                  setGlobalSuccess={() => { }}
-                  setView={setView}
-                  logout={logout}
-                  switchMode={switchMode}
-                  isAllowedEvaluator={isAllowedEvaluator}
-                  isScapeEmployee={isScapeEmployee}
-                  saveProfile={saveProfile}
-                  projectName={currentProject?.projectName}
-                />
-              </div>
 
               {/* Sticky Mobile Header Bar (Only visible on screens < md) */}
-              <div className="md:hidden sticky top-0 z-30 -mx-4 mb-6 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-xs select-none">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleBackToDashboard}
-                    disabled={isSaving}
-                    className="p-1.5 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl text-slate-500 transition-all active:scale-95 disabled:opacity-50"
-                    title="Dashboard"
-                  >
-                    {isSaving ? (
-                      <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
-                    ) : (
-                      <LayoutDashboard className="w-5 h-5" />
-                    )}
-                  </button>
+              <div className="md:hidden sticky top-0 z-30 -mx-4 sm:-mx-6 -mt-4 mb-6 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs select-none min-w-0">
 
-                  <button
-                    onClick={() => {
-                      setLocalIsSplitScreen(!isSplitScreenMode);
-                      setMobileSplitView('chat'); // Reset mobile view to chat when switching to AI mode
-                    }}
-                    className={`p-1.5 rounded-xl border transition-all active:scale-95 ${isSplitScreenMode ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'hover:bg-slate-50 border-transparent hover:border-slate-100 text-slate-500'}`}
-                    title={`Switch to ${isSplitScreenMode ? 'Manual Mode' : 'AI Mode'}`}
-                  >
-                    <Bot className="w-5 h-5" />
-                  </button>
-                </div>
 
                 <div
                   onClick={() => setIsMobileMenuOpen(true)}
@@ -876,14 +1078,16 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 >
                   <span className="text-xs font-black text-slate-700">
                     {isReviewing
-                      ? 'Review / Submit'
+                      ? (profile?.isAdmin ? 'Review/approve' : 'Submit')
                       : activeCustomSection === 'business-case'
                         ? 'Business Case'
                         : activeCustomSection === 'additional-opportunities'
                           ? 'Additional Opportunities'
-                          : currentStep === 0
-                            ? 'Project & Cell Info'
-                            : `Part #${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
+                          : activeCustomSection === 'scape-review'
+                            ? 'Scape Review'
+                            : currentStep === 0
+                              ? 'Project & Cell Info'
+                              : `Part #${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                 </div>
@@ -896,6 +1100,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   <Menu className="w-5 h-5" />
                 </button>
               </div>
+
+
 
 
               {/* Locked / Read-Only Banner */}
@@ -922,6 +1128,56 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 </div>
               )}
 
+              {/* Part Count Sync Prompt Banner (Field 1.02) */}
+              {(() => {
+                const targetPartCount = parseInt(String(currentProject.generalResponses?.['1.02'] || ''), 10);
+                const currentPartCount = currentProject.parts?.length || 0;
+                const diffPartCount = targetPartCount - currentPartCount;
+                if (!isReadOnly && !isReviewing && !activeCustomSection && targetPartCount > 0 && diffPartCount > 0 && !dismissedPartSyncBanner) {
+                  return (
+                    <div className="mb-6 p-4 bg-blue-50/90 border border-blue-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-fadeIn">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-blue-600 text-white rounded-xl shrink-0">
+                          <PlusCircle className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-blue-950">
+                            You specified {targetPartCount} total part{targetPartCount !== 1 ? 's' : ''} in Project Info (Field 1.02)
+                          </h4>
+                          <p className="text-[11px] text-blue-700 font-medium mt-0.5">
+                            You currently have {currentPartCount} part tab{currentPartCount !== 1 ? 's' : ''}. Would you like to add {diffPartCount} more part tab{diffPartCount !== 1 ? 's' : ''}?
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                        <button
+                          onClick={() => setDismissedPartSyncBanner(true)}
+                          className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-blue-100/50 rounded-xl transition-colors cursor-pointer"
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const newParts = [...currentProject.parts];
+                            for (let i = 0; i < diffPartCount; i++) {
+                              newParts.push({ responses: {}, images: [] });
+                            }
+                            const updated = { ...currentProject, parts: newParts };
+                            setCurrentProject(updated);
+                            if (saveProject) await saveProject(currentProject.status || 'draft', updated);
+                            setDismissedPartSyncBanner(true);
+                          }}
+                          className="px-4 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+                        >
+                          + Add {diffPartCount} Part{diffPartCount !== 1 ? 's' : ''}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               {/* Tab Pages rendering */}
               {isReviewing ? (
                 /* Final Verdict Review Page */
@@ -935,147 +1191,113 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       </div>
                     </div>
                   )}
-                  <div className="flex justify-end items-center flex-wrap gap-3 border-b border-slate-200 pb-4">
-                    <button
-                      onClick={async () => {
-                        try {
-                          const full = await fetchProjectImages(currentProject);
-                          generateProjectPdf(full, profile);
-                        } catch (err) {
-                          console.error("PDF Export failed:", err);
-                        }
-                      }}
-                      className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all select-none shadow-md shadow-amber-600/10 cursor-pointer flex items-center gap-1.5 active:scale-95 hover:scale-[1.01]"
-                    >
-                      <FileText className="w-4 h-4" /> Export PDF Report
-                    </button>
-
-                    {((currentProject.generalImages && currentProject.generalImages.length > 0) || currentProject.parts.some(p => p.cadFile || (p.images && p.images.length > 0) || (p.placementImages && p.placementImages.length > 0))) && (
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          let downloadIndex = 0;
-
-                          // 1. General/Environmental images
-                          if (currentProject.generalImages) {
-                            currentProject.generalImages.forEach((img: string, imgIdx: number) => {
-                              setTimeout(() => {
-                                const link = document.createElement('a');
-                                link.href = img;
-                                link.download = `general-image-${imgIdx + 1}.png`;
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                              }, downloadIndex * 250);
-                              downloadIndex++;
-                            });
-                          }
-
-                          // 2. Parts files (CAD + Images)
-                          currentProject.parts.forEach((part: any, pIdx: number) => {
-                            if (part.cadFile) {
-                              setTimeout(() => {
-                                const link = document.createElement('a');
-                                link.href = part.cadFile.dataUrl;
-                                link.download = part.cadFile.name;
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                              }, downloadIndex * 250);
-                              downloadIndex++;
-                            }
-                            if (part.images) {
-                              part.images.forEach((img: string, imgIdx: number) => {
-                                setTimeout(() => {
-                                  const link = document.createElement('a');
-                                  link.href = img;
-                                  link.download = `part-${pIdx + 1}-image-${imgIdx + 1}.png`;
-                                  document.body.appendChild(link);
-                                  link.click();
-                                  document.body.removeChild(link);
-                                }, downloadIndex * 250);
-                                downloadIndex++;
-                              });
-                            }
-                            if (part.placementImages) {
-                              part.placementImages.forEach((img: string, imgIdx: number) => {
-                                setTimeout(() => {
-                                  const link = document.createElement('a');
-                                  link.href = img;
-                                  link.download = `part-${pIdx + 1}-placement-${imgIdx + 1}.png`;
-                                  document.body.appendChild(link);
-                                  link.click();
-                                  document.body.removeChild(link);
-                                }, downloadIndex * 250);
-                                downloadIndex++;
-                              });
-                            }
-                          });
-                        }}
-                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all active:scale-95 shadow-sm shadow-blue-100 flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Download className="w-4 h-4" /> Download All Media Files
-                      </button>
-                    )}
-                  </div>
-
-                  {/* AI Advice Box (External) */}
+                  {/* User Submit Tab View (Non-admin) */}
                   {!profile?.isAdmin && (
-                    <div className="bg-slate-900 text-white p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
-                      <Sparkles className="absolute top-0 right-0 w-40 h-40 opacity-10" />
+                    <div className="space-y-8 animate-fadeIn">
+                      {/* Data Quality & Feasibility Advice Guidance Box */}
+                      <div className="p-6 sm:p-8 bg-blue-50/80 border border-blue-200/80 rounded-3xl space-y-4 shadow-xs">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-blue-600 text-white rounded-2xl shadow-xs">
+                            <Info className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-extrabold text-blue-950">Data Accuracy & Submission Guidance</h3>
+                            <p className="text-xs text-blue-700 mt-0.5">Please review your project parameters before final submission.</p>
+                          </div>
+                        </div>
 
-                      <div className="flex justify-between items-center mb-6 relative z-10">
-                        <h3 className="text-xl font-bold flex items-center gap-2">
-                          <Zap className="text-blue-400" /> Project Information Advice
+                        <div className="text-xs text-slate-700 leading-relaxed space-y-2 font-medium">
+                          <p>
+                            Accurate cell dimensions, physical part parameters, cycle times, and real part photos are essential for Scape Solutions engineers to conduct a reliable bin-picking feasibility study.
+                          </p>
+                          <p className="text-slate-600">
+                            💡 <strong>Important:</strong> Check the <span className="font-bold text-amber-800">⚡ AI Advice</span> drawer (in top header bar) to verify that no severe data gaps or critical warnings remain.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Submission Comments & Context Textarea */}
+                      <div className="p-6 sm:p-8 bg-white border border-slate-200/80 rounded-3xl space-y-3 shadow-xs">
+                        <label className="block text-sm font-bold text-slate-800">
+                          Additional Submission Notes or Comments (Optional)
+                        </label>
+                        <p className="text-xs text-slate-500">
+                          Provide any extra context for the Scape evaluator (e.g. explanations of complex part geometry, missing CAD files, or specific production constraints).
+                        </p>
+                        <textarea
+                          disabled={isReadOnly}
+                          rows={4}
+                          value={currentProject.userSubmissionNotes || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCurrentProject({ ...currentProject, userSubmissionNotes: val });
+                          }}
+                          className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs md:text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all font-medium disabled:opacity-50"
+                          placeholder="e.g. Parts are stacked horizontally in 1200x800 Euro bins. CAD file will be emailed separately."
+                        />
+                      </div>
+
+                      {/* Primary Submit Button */}
+                      {!isReadOnly && currentProject.status === 'draft' && (
+                        <div className="flex justify-end pt-2">
+                          <button
+                            onClick={async () => {
+                              setIsSaving(true);
+                              try {
+                                const res = await saveProject('submitted', currentProject);
+                                if (res) {
+                                  setCurrentProject({ ...currentProject, status: 'submitted' });
+                                  setGlobalSuccess("Project successfully submitted for Scape evaluation!");
+                                  setTimeout(() => setGlobalSuccess(null), 4000);
+                                }
+                              } finally {
+                                setIsSaving(false);
+                              }
+                            }}
+                            disabled={isSaving}
+                            className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm uppercase tracking-wider rounded-2xl transition-all shadow-lg shadow-blue-600/20 active:scale-95 cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                          >
+                            {isSaving ? (
+                              <>
+                                <Loader2 className="w-5 h-5 animate-spin text-white" />
+                                <span>Submitting...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send className="w-5 h-5" /> Submit Project
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Evaluator Unfoldable AI Advice Accordion */}
+                  {profile?.isAdmin && (
+                    <div className="bg-slate-900 text-white p-5 sm:p-8 rounded-2xl md:rounded-3xl shadow-lg relative overflow-hidden">
+                      <div className="flex justify-between items-center relative z-10">
+                        <h3 className="text-base font-bold flex items-center gap-2">
+                          <Zap className="text-amber-400" /> User AI Advice Report
                         </h3>
                         <button
-                          onClick={() => setIsAdviceExpanded(!isAdviceExpanded)}
-                          className="px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-white/10 hover:bg-white/20 transition-all select-none border border-white/10"
+                          onClick={() => setIsEvaluatorAdviceExpanded(!isEvaluatorAdviceExpanded)}
+                          className="px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white transition-all border border-white/10 cursor-pointer"
                         >
-                          {isAdviceExpanded ? 'Hide Advice' : 'Show Advice'}
+                          {isEvaluatorAdviceExpanded ? 'Fold Advice' : 'Unfold Advice'}
                         </button>
                       </div>
 
-                      {isAdviceExpanded && (
-                        <div className="relative z-10 space-y-6 animate-fadeIn">
-                          {isGeneratingAdvice ? (
-                            <div className="flex items-center gap-3 py-6">
-                              <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
-                              <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Analyzing Data...</span>
+                      {isEvaluatorAdviceExpanded && (
+                        <div className="relative z-10 mt-6 space-y-4 animate-fadeIn border-t border-slate-800 pt-6">
+                          {currentProject.report ? (
+                            <div className="max-h-[50vh] overflow-y-auto pr-4 text-slate-300 text-xs leading-relaxed [&>h1]:text-xl [&>h1]:font-bold [&>h1]:mb-3 [&>h2]:text-lg [&>h2]:font-bold [&>h2]:mb-2 [&>h3]:text-base [&>h3]:font-bold [&>h3]:mb-2 [&>p]:mb-3 [&>ul]:list-disc [&>ul]:ml-5 [&>ul]:mb-3 [&>strong]:text-white custom-scrollbar">
+                              <ReactMarkdown>
+                                {cleanMarkdownWrapper(currentProject.report)}
+                              </ReactMarkdown>
                             </div>
-                          ) : currentProject.report ? (
-                            <>
-                              <div className="max-h-[55vh] overflow-y-auto pr-4 text-slate-300 leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-white custom-scrollbar">
-                                <ReactMarkdown>
-                                  {cleanMarkdownWrapper(currentProject.report)}
-                                </ReactMarkdown>
-                              </div>
-                              {!isReadOnly && (
-                                <button
-                                  onClick={generateExternalAdvice}
-                                  disabled={isGeneratingAdvice}
-                                  className="px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border border-slate-700 text-slate-300 hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-                                >
-                                  <RotateCcw className="w-4 h-4" /> Re-generate Advice
-                                </button>
-                              )}
-                            </>
                           ) : (
-                            <div className="bg-slate-800/40 border border-slate-700/60 rounded-3xl p-8 text-center flex flex-col items-center justify-center gap-4 max-w-md mx-auto my-4">
-                              <Bot className="w-12 h-12 text-indigo-400 animate-pulse" />
-                              <h4 className="font-bold text-white text-base">Generate Project Feasibility Advice</h4>
-                              <p className="text-xs text-slate-400 leading-relaxed">
-                                Analyze your cell configuration, part physical parameters, and potential bin-picking challenges using AI.
-                              </p>
-                              {!isReadOnly && (
-                                <button
-                                  onClick={generateExternalAdvice}
-                                  className="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-indigo-950/20 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
-                                >
-                                  <Sparkles className="w-4 h-4" /> Get Advice Data
-                                </button>
-                              )}
-                            </div>
+                            <p className="text-xs text-slate-400 italic">No AI Advice report generated for this project yet.</p>
                           )}
                         </div>
                       )}
@@ -1084,7 +1306,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
                   {/* Evaluator AI Draft Box (Admin Only) */}
                   {profile?.isAdmin && (
-                    <div className="bg-blue-50/50 border border-blue-100 p-10 rounded-[3rem] shadow-sm relative">
+                    <div className="bg-blue-50/50 border border-blue-100 p-5 sm:p-8 md:p-10 rounded-2xl md:rounded-[3rem] shadow-sm relative">
                       <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                         <h3 className="text-xl font-bold text-blue-900 flex items-center gap-2">
                           <Zap className="text-blue-600" /> Evaluator AI Draft
@@ -1158,7 +1380,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
                   {/* Final Verdict Box (Visible to Admin, OR to User if NOT draft AND (Published or Approved/Rejected)) */}
                   {(profile?.isAdmin || (currentProject.status !== 'draft' && (currentProject.isVerdictVisible || currentProject.status === 'approved' || currentProject.status === 'rejected'))) && (
-                    <div className="bg-white border-2 border-slate-900 p-10 rounded-[3rem] shadow-xl relative">
+                    <div className="bg-white border-2 border-slate-900 p-5 sm:p-8 md:p-10 rounded-2xl md:rounded-[3rem] shadow-xl relative min-w-0 overflow-x-hidden">
                       <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                         <div>
                           <h3 className="text-2xl font-black text-slate-900">Project Review from Scape Solutions</h3>
@@ -1277,86 +1499,6 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     </div>
                   )}
 
-                  {/* Parts Summary list */}
-                  <div className="space-y-4">
-                    <h3 className="font-bold flex items-center gap-2">
-                      <Box className="w-4 h-4" /> Parts Summary
-                    </h3>
-                    <div className="space-y-2">
-                      {currentProject.parts.map((part, index) => (
-                        <div key={index} className="bg-white p-4 rounded-xl flex flex-wrap justify-between items-center gap-3 shadow-sm border border-slate-100 hover:border-slate-200 transition-all">
-                          <span className="font-bold text-slate-800 text-sm md:text-base">
-                            Part #0{index + 1}: {part.responses['2.01'] || 'Unnamed Part'}
-                          </span>
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2">
-                              {part.cadFile && (
-                                <span className="text-[10px] text-blue-600 font-bold bg-blue-50 border border-blue-100/50 px-2.5 py-1.5 rounded-lg flex items-center gap-1 select-none">
-                                  <UploadCloud className="w-3.5 h-3.5 animate-pulse" /> CAD
-                                </span>
-                              )}
-                              <span className="text-[10px] text-slate-400 font-bold bg-slate-50 border px-2.5 py-1.5 rounded-lg select-none">
-                                {part.images ? part.images.length : 0} Images
-                              </span>
-                              {part.placementImages && part.placementImages.length > 0 && (
-                                <span className="text-[10px] text-slate-400 font-bold bg-slate-50 border px-2.5 py-1.5 rounded-lg select-none">
-                                  {part.placementImages.length} Placement
-                                </span>
-                              )}
-                            </div>
-                            {((part.images && part.images.length > 0) || (part.placementImages && part.placementImages.length > 0) || part.cadFile) && (
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  let dlIndex = 0;
-                                  if (part.cadFile) {
-                                    const link = document.createElement('a');
-                                    link.href = part.cadFile.dataUrl;
-                                    link.download = part.cadFile.name;
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
-                                    dlIndex++;
-                                  }
-                                  if (part.images) {
-                                    part.images.forEach((img: string, imgIdx: number) => {
-                                      setTimeout(() => {
-                                        const link = document.createElement('a');
-                                        link.href = img;
-                                        link.download = `part-${index + 1}-image-${imgIdx + 1}.png`;
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                      }, dlIndex * 250);
-                                      dlIndex++;
-                                    });
-                                  }
-                                  if (part.placementImages) {
-                                    part.placementImages.forEach((img: string, imgIdx: number) => {
-                                      setTimeout(() => {
-                                        const link = document.createElement('a');
-                                        link.href = img;
-                                        link.download = `part-${index + 1}-placement-${imgIdx + 1}.png`;
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                      }, dlIndex * 250);
-                                      dlIndex++;
-                                    });
-                                  }
-                                }}
-                                className="px-3 py-1.5 hover:bg-slate-50 border border-slate-200 hover:border-slate-400 rounded-lg text-slate-700 hover:text-slate-900 transition-all active:scale-95 flex items-center gap-1 text-[10px] font-bold shadow-3xs cursor-pointer select-none"
-                                title="Download all files for this part"
-                              >
-                                <Download className="w-3.5 h-3.5" /> Download Files
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                  </div>
 
                   {/* Lock / Submit buttons */}
                   <div className="flex flex-col gap-4">
@@ -1495,27 +1637,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       )
                     ) : (
                       // User (Customer) Actions
-                      currentProject.status === 'draft' ? (
-                        <button
-                          onClick={async () => {
-                            setIsSaving(true);
-                            try {
-                              const res = await saveProject('submitted', currentProject);
-                              if (res) {
-                                setView('dashboard');
-                                setGlobalSuccess("Project submitted to Scape Solutions successfully!");
-                                setTimeout(() => setGlobalSuccess(null), 5000);
-                              }
-                            } finally {
-                              setIsSaving(false);
-                            }
-                          }}
-                          disabled={isSaving}
-                          className="w-full py-5 rounded-2xl font-bold text-white bg-blue-600 shadow-lg shadow-blue-200 hover:scale-[1.01] transition-all select-none flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit to Scape Solutions"}
-                        </button>
-                      ) : (
+                      currentProject.status === 'draft' ? null : (
                         // Project is not draft (it's submitted, approved, or rejected)
                         currentProject.isLocked || currentProject.status === 'approved' || currentProject.status === 'rejected' ? (
                           // Project is LOCKED or has a verdict, so user cannot unsubmit directly. They must request unlock.
@@ -1829,11 +1951,67 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     </button>
                   </div>
                 </div>
+              ) : activeCustomSection === 'scape-review' ? (
+                /* Scape Review View for Users */
+                <div className="space-y-6 animate-fadeIn">
+                  <div>
+                    <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Scape Review</h1>
+                    <p className="text-sm text-slate-500">
+                      Official evaluation conclusion and verdict from Scape Solutions engineering.
+                    </p>
+                  </div>
+
+                  {currentProject.status !== 'draft' && (currentProject.isVerdictVisible || currentProject.status === 'approved' || currentProject.status === 'rejected') && currentProject.finalVerdict ? (
+                    <div className="bg-white border-2 border-slate-900 p-6 sm:p-8 md:p-10 rounded-2xl md:rounded-[3rem] shadow-xl relative min-w-0 overflow-x-hidden">
+                      <div className="flex justify-between items-center mb-6 flex-wrap gap-4 border-b border-slate-100 pb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+                            <ShieldCheck className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-extrabold text-slate-900">Project Review from Scape Solutions</h3>
+                            <p className="text-xs text-slate-400 font-medium">Verified technical verdict</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const full = await fetchProjectImages(currentProject);
+                              generateProjectPdf(full, profile);
+                            } catch (err) {
+                              console.error("PDF Export failed:", err);
+                            }
+                          }}
+                          className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-amber-600/10 cursor-pointer flex items-center gap-1.5 active:scale-95"
+                          title="Download PDF Verdict Report (.pdf)"
+                        >
+                          <FileText className="w-4 h-4" /> Export PDF Verdict
+                        </button>
+                      </div>
+
+                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80 text-slate-700 text-sm leading-relaxed [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-slate-900 custom-markdown">
+                        <ReactMarkdown>
+                          {cleanMarkdownWrapper(currentProject.finalVerdict)}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4 border border-slate-200/80 shadow-xs max-w-md mx-auto my-8">
+                      <Clock className="w-12 h-12 text-slate-400 animate-pulse" />
+                      <h4 className="font-bold text-slate-900 text-base">Review Pending</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        {currentProject.status === 'draft'
+                          ? 'Submit your project in the "Submit" section to request an official evaluation review from Scape Solutions.'
+                          : 'Your project has been submitted to Scape Solutions. The engineering team is currently conducting the technical review. Check back soon for your official verdict!'}
+                      </p>
+                    </div>
+                  )}
+                </div>
               ) : (
                 /* Questionnaire Step Form Editing */
                 <div className="space-y-6 animate-fadeIn">
                   <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">
-                    {currentStep === 0 ? 'Project & Cell Info' : PART_STEPS[currentStep - 1].title}
+                    {currentStep === 0 ? 'Project & Cell Info' : `Part #${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
                   </h1>
                   <div className="space-y-6">
                     {(currentStep === 0 ? GENERAL_STEPS[0] : PART_STEPS[currentStep - 1]).questions.map(q => {
@@ -1866,21 +2044,21 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       return (
                         <div
                           key={q.id}
-                          className={`space-y-2.5 animate-fadeIn border-l-3 pl-4 py-2.5 rounded-r-2xl transition-all duration-300 ${isReadOnly
-                            ? 'border-transparent pl-0'
-                            : filled
-                              ? 'border-slate-200/50 bg-transparent'
-                              : q.important
-                                ? 'border-amber-500 bg-amber-500/5 shadow-3xs animate-fadeIn'
-                                : 'border-slate-300 bg-slate-500/2'
+                          className={`space-y-2.5 animate-fadeIn border-l-3 px-4 py-3 rounded-2xl transition-all duration-300 ${isReadOnly
+                              ? 'border-transparent px-0'
+                              : filled
+                                ? 'border-slate-200/50 bg-transparent'
+                                : q.important
+                                  ? 'border-amber-500 bg-amber-500/5 shadow-3xs animate-fadeIn'
+                                  : 'border-slate-300 bg-slate-500/2'
                             }`}
                         >
                           <div className="flex items-center gap-2 flex-wrap">
                             <label className="block text-sm font-bold text-slate-700">[{q.id}] {q.label}</label>
                             {!isReadOnly && !filled && (
                               <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md select-none shrink-0 ${q.important
-                                ? 'bg-amber-100 text-amber-800 animate-pulse'
-                                : 'bg-slate-100 text-slate-500'
+                                  ? 'bg-amber-100 text-amber-800 animate-pulse'
+                                  : 'bg-slate-100 text-slate-500'
                                 }`}>
                                 {q.important ? 'Important' : 'Optional'}
                               </span>
@@ -1896,16 +2074,16 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                     onClick={() => setOpenObservationId(prev => prev === q.id ? null : q.id)}
                                     title={obs.text}
                                     className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md select-none shrink-0 cursor-pointer transition-all ${isCritical
-                                      ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                                      : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                        ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                        : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
                                       }`}
                                   >
                                     {isCritical ? '🔴 Critical' : '⚠️ Note'}
                                   </button>
                                   {openObservationId === q.id && (
                                     <div className={`absolute z-50 bottom-full mb-2 left-0 w-72 p-3 rounded-xl shadow-xl text-xs font-medium leading-relaxed border animate-fadeIn ${isCritical
-                                      ? 'bg-red-50 border-red-200 text-red-800'
-                                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                                        ? 'bg-red-50 border-red-200 text-red-800'
+                                        : 'bg-amber-50 border-amber-200 text-amber-800'
                                       }`}>
                                       <p className="font-bold mb-1">{isCritical ? '🔴 Critical Observation' : '⚠️ Observation'}</p>
                                       <p>{obs.text}</p>
@@ -1944,6 +2122,11 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                   setCurrentProject({ ...currentProject, parts });
                                 }
                               }}
+                              onBlur={() => {
+                                if (currentProject.id && !isReadOnly && (currentProject.status || 'draft') === 'draft' && saveProject) {
+                                  saveProject(currentProject.status || 'draft', currentProject);
+                                }
+                              }}
                             />
                           )}
 
@@ -1967,6 +2150,11 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                   const parts = [...currentProject.parts];
                                   parts[activePartIndex].responses[q.id] = val;
                                   setCurrentProject({ ...currentProject, parts });
+                                }
+                              }}
+                              onBlur={() => {
+                                if (currentProject.id && !isReadOnly && (currentProject.status || 'draft') === 'draft' && saveProject) {
+                                  saveProject(currentProject.status || 'draft', currentProject);
                                 }
                               }}
                             >
@@ -2039,19 +2227,19 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                           if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                                             const file = e.dataTransfer.files[0];
                                             const extension = file.name.split('.').pop()?.toLowerCase();
-                                            const allowedExtensions = ['stl', 'step', 'stp', 'igs', 'iges', 'dwg', 'dxf'];
+                                            const allowedExtensions = ['stl', 'step', 'stp', 'igs', 'iges'];
                                             if (extension && allowedExtensions.includes(extension)) {
                                               await processCadFile(file);
                                             } else {
-                                              alert("Invalid file format. Please upload a CAD file (.stl, .step, .stp, .igs, .iges, .dwg, .dxf).");
+                                              alert("Invalid file format. Please upload a CAD file (.stl, .step, .stp, .igs, .iges).");
                                             }
                                           }
                                         }}
                                         className={`w-full h-32 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all ${isReadOnly
-                                          ? 'opacity-50 cursor-not-allowed border-slate-300 bg-white'
-                                          : isDraggingCad
-                                            ? 'border-blue-500 bg-blue-50/50 cursor-pointer scale-[1.01]'
-                                            : 'border-slate-300 bg-white hover:bg-slate-50 cursor-pointer'
+                                            ? 'opacity-50 cursor-not-allowed border-slate-300 bg-white'
+                                            : isDraggingCad
+                                              ? 'border-blue-500 bg-blue-50/50 cursor-pointer scale-[1.01]'
+                                              : 'border-slate-300 bg-white hover:bg-slate-50 cursor-pointer'
                                           }`}
                                       >
                                         <UploadCloud className={`w-8 h-8 ${isDraggingCad ? 'text-blue-500 scale-110' : 'text-slate-400'} transition-all animate-pulse`} />
@@ -2061,7 +2249,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                         <span className="text-[10px] text-slate-400 mt-1 font-semibold">Supports STL, STEP, STP, IGES, IGS</span>
                                         <input
                                           type="file"
-                                          accept=".stl,.step,.stp,.igs,.iges,.dwg,.dxf"
+                                          accept=".stl,.step,.stp,.igs,.iges"
                                           disabled={isReadOnly}
                                           className="hidden"
                                           onChange={handleUploadCadFile}
@@ -2149,6 +2337,11 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                   const parts = [...currentProject.parts];
                                   parts[activePartIndex].responses[q.id] = val;
                                   setCurrentProject({ ...currentProject, parts });
+                                }
+                              }}
+                              onBlur={() => {
+                                if (currentProject.id && !isReadOnly && (currentProject.status || 'draft') === 'draft' && saveProject) {
+                                  saveProject(currentProject.status || 'draft', currentProject);
                                 }
                               }}
                             />
@@ -2523,7 +2716,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             <div className="flex-1 overflow-y-auto space-y-4 pr-1">
               {/* Project & Cell Info Card */}
               <button
-                onClick={() => { setIsReviewing(false); setActiveCustomSection(null); setCurrentStep(0); setIsMobileMenuOpen(false); }}
+                onClick={() => { navigateToSection({ step: 0, customSection: null, isReviewing: false }); setIsMobileMenuOpen(false); }}
                 className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${currentStep === 0 && !isReviewing && !activeCustomSection ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
               >
                 <div className="flex items-center gap-3">
@@ -2567,7 +2760,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       return (
                         <button
                           key={step.id}
-                          onClick={() => { setIsReviewing(false); setActiveCustomSection(null); setActivePartIndex(partIdx); setCurrentStep(stepIdx + 1); setIsMobileMenuOpen(false); }}
+                          onClick={() => { navigateToSection({ step: stepIdx + 1, partIndex: partIdx, customSection: null, isReviewing: false }); setIsMobileMenuOpen(false); }}
                           className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all ${isActive ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'}`}
                         >
                           <div className="flex items-center gap-2.5">
@@ -2582,38 +2775,26 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 </div>
               ))}
 
-              {/* Final Verdict Card */}
-              <div className="mt-8 mb-4">
-                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2 px-3">Review & Actions</h3>
-              </div>
-
-              <button
-                onClick={() => { setIsReviewing(true); setActiveCustomSection(null); setIsMobileMenuOpen(false); }}
-                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${isReviewing && !activeCustomSection ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl ${isReviewing && !activeCustomSection ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold">Review / Submit</h4>
-                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">Submit & view AI Advisor feasibility</p>
-                  </div>
-                </div>
-                {currentProject.status === 'submitted' && (
-                  <ShieldCheck className="w-4 h-4 text-blue-500 shrink-0" />
-                )}
-              </button>
+              {/* Add Part inline inside Parts Data on Mobile */}
+              {!isReadOnly && (
+                <button
+                  onClick={() => { handleAddPart(); setIsMobileMenuOpen(false); }}
+                  className="w-full mt-2 p-3.5 bg-blue-50/60 border border-blue-200/60 text-blue-700 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-blue-100/60 transition-colors shadow-2xs cursor-pointer active:scale-95"
+                >
+                  <PlusCircle className="w-4 h-4 text-blue-600" />
+                  <span>Add Another Part</span>
+                </button>
+              )}
 
               {/* Extended Analysis Sections for Mobile */}
-              <div className="mt-8 mb-4">
+              <div className="mt-6 mb-3">
                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2 px-3">Extended Analysis</h3>
               </div>
 
               {/* Business Case Card */}
               <button
-                onClick={() => { setIsReviewing(false); setActiveCustomSection('business-case'); setIsMobileMenuOpen(false); }}
-                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${activeCustomSection === 'business-case' ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
+                onClick={() => { navigateToSection({ customSection: 'business-case', isReviewing: false }); setIsMobileMenuOpen(false); }}
+                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${activeCustomSection === 'business-case' ? 'bg-blue-50/50 border-blue-200 text-blue-800 font-bold' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`p-2.5 rounded-xl ${activeCustomSection === 'business-case' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
@@ -2628,8 +2809,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
               {/* Additional Opportunities Card */}
               <button
-                onClick={() => { setIsReviewing(false); setActiveCustomSection('additional-opportunities'); setIsMobileMenuOpen(false); }}
-                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${activeCustomSection === 'additional-opportunities' ? 'bg-blue-50/50 border-blue-200 text-blue-800' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
+                onClick={() => { navigateToSection({ customSection: 'additional-opportunities', isReviewing: false }); setIsMobileMenuOpen(false); }}
+                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${activeCustomSection === 'additional-opportunities' ? 'bg-blue-50/50 border-blue-200 text-blue-800 font-bold' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`p-2.5 rounded-xl ${activeCustomSection === 'additional-opportunities' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
@@ -2641,18 +2822,169 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   </div>
                 </div>
               </button>
+
+              {/* Bottom Section Card: Submit or Review/approve */}
+              <button
+                onClick={() => { navigateToSection({ isReviewing: true, customSection: null }); setIsMobileMenuOpen(false); }}
+                className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all mt-2 ${isReviewing && !activeCustomSection ? 'bg-blue-50/50 border-blue-200 text-blue-800 font-bold' : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${isReviewing && !activeCustomSection ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    {profile?.isAdmin ? <CheckSquare className="w-5 h-5" /> : <Send className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold">{profile?.isAdmin ? 'Review/approve' : 'Submit'}</h4>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                      {profile?.isAdmin ? 'Evaluate project data & issue verdict' : 'Final submission & project status'}
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Scape Review Card - Placed as the VERY LAST item for User View on Mobile */}
+              {!profile?.isAdmin && (
+                <button
+                  onClick={() => { navigateToSection({ customSection: 'scape-review', isReviewing: false }); setIsMobileMenuOpen(false); }}
+                  className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all mt-2 ${activeCustomSection === 'scape-review'
+                      ? 'bg-rose-50 border-rose-200 text-rose-800 font-black shadow-xs'
+                      : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-rose-50/50'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl ${activeCustomSection === 'scape-review' ? 'bg-rose-600 text-white' : 'bg-rose-100/80 text-rose-700'}`}>
+                      <svg width="20" height="20" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="currentColor">
+                        <path d="M 22,90 L 50,15 L 62,15 L 34,90 Z" fill="currentColor" />
+                        <path d="M 50,15 L 68,55 L 56,55 L 42,23 Z" fill="currentColor" />
+                        <path d="M 61,62 L 70,62 L 78,82 L 69,82 Z" fill="#bf1e2e" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold">Scape Review</h4>
+                      <p className="text-[10px] text-slate-400 font-medium mt-0.5">Official Scape verdict & status</p>
+                    </div>
+                  </div>
+                  {(currentProject.status === 'approved' || currentProject.status === 'rejected' || currentProject.isVerdictVisible) ? (
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" title="Official Verdict Available" />
+                  ) : (
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-rose-600 bg-rose-100/80 px-2 py-0.5 rounded">Official</span>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Slide-over AI Advice Drawer */}
+      {isAdviceDrawerOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex justify-end bg-slate-950/60 backdrop-blur-xs transition-all animate-fadeIn"
+          onClick={() => setIsAdviceDrawerOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-slideLeft border-l border-slate-200"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between shrink-0 shadow-md">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl">
+                  <Zap className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight">Project Information Advice</h3>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">AI Feasibility & Guidance Report</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {currentProject.report && (
+                  <>
+                    <button
+                      onClick={() => downloadMarkdownFile(currentProject.report!, `${currentProject.projectName || 'project'}-ai-advice.md`)}
+                      className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-bold"
+                      title="Download Markdown Report (.md)"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="hidden sm:inline">.MD</span>
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        try {
+                          const full = await fetchProjectImages(currentProject);
+                          generateProjectPdf(full, profile);
+                        } catch (err) {
+                          console.error("PDF Export failed:", err);
+                        }
+                      }}
+                      className="p-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-bold shadow-xs"
+                      title="Download PDF Report (.pdf)"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span className="hidden sm:inline">.PDF</span>
+                    </button>
+                  </>
+                )}
+
+                <button
+                  onClick={() => setIsAdviceDrawerOpen(false)}
+                  className="p-2 bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
+                  title="Close Drawer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            {/* Quick Actions at Bottom of Sheet */}
-            {!isReadOnly && (
-              <button
-                onClick={() => { handleAddPart(); setIsMobileMenuOpen(false); }}
-                className="mt-6 w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors shrink-0 shadow-lg shadow-slate-900/10 active:scale-[0.99]"
-              >
-                <PlusCircle className="w-5 h-5" />
-                <span>Add Another Part</span>
-              </button>
-            )}
+            {/* Drawer Content */}
+            <div className="flex-1 p-6 md:p-8 overflow-y-auto bg-slate-50 space-y-6">
+              {isGeneratingAdvice ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+                  <Loader2 className="w-10 h-10 animate-spin text-amber-600" />
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm">Analyzing Project Parameters...</p>
+                    <p className="text-xs text-slate-500 mt-1">Generating AI Feasibility Advice and detecting data changes.</p>
+                  </div>
+                </div>
+              ) : currentProject.report ? (
+                <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
+                  <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed text-sm [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-4 [&>h1]:mt-6 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-3 [&>h2]:mt-5 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-4 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-4 [&>li]:mb-1 [&>strong]:text-slate-900">
+                    <ReactMarkdown>
+                      {cleanMarkdownWrapper(currentProject.report)}
+                    </ReactMarkdown>
+                  </div>
+
+                  {!isReadOnly && !profile?.isAdmin && (
+                    <div className="pt-4 border-t border-slate-100 flex justify-end">
+                      <button
+                        onClick={generateExternalAdvice}
+                        disabled={isGeneratingAdvice}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-slate-900 text-white hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer shadow-md"
+                      >
+                        <RotateCcw className="w-4 h-4 text-amber-400" /> Re-generate Advice
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4 border border-slate-200/80 shadow-xs max-w-md mx-auto my-8">
+                  <Bot className="w-12 h-12 text-amber-500 animate-bounce" />
+                  <h4 className="font-bold text-slate-900 text-base">No Advice Generated Yet</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Click below to analyze your project data, physical cell dimensions, and part parameters using AI.
+                  </p>
+                  {!isReadOnly && !profile?.isAdmin && (
+                    <button
+                      onClick={generateExternalAdvice}
+                      className="px-6 py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-600/20 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
+                    >
+                      <Sparkles className="w-4 h-4" /> Get Advice Data
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -2812,9 +3144,9 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
       {!isSplitScreenMode && (
         <button
           onClick={() => setIsAIAssistantOpen(!isAIAssistantOpen)}
-          className={`fixed bottom-6 z-40 p-4 rounded-full shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 items-center justify-center cursor-pointer ${isAIAssistantOpen
-            ? 'bg-slate-900 text-white hover:bg-slate-800 right-6 md:right-[408px] hidden md:flex'
-            : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-600/20 right-6 flex'
+          className={`fixed bottom-6 right-6 z-40 p-4 rounded-full shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 items-center justify-center cursor-pointer hidden md:flex ${isAIAssistantOpen
+              ? 'bg-slate-900 text-white hover:bg-slate-800 md:right-[408px]'
+              : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-600/20'
             }`}
           title={
             isAIAssistantOpen
@@ -2863,7 +3195,18 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               <AIAssistantTab
                 currentProject={currentProject}
                 setCurrentProject={setCurrentProject}
-                sendMessageToAssistant={sendMessageToAssistant}
+                sendMessageToAssistant={async (msg, images) => {
+                  const normalized = msg.trim().toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "");
+                  const closeKeywords = ['done', 'finished', 'jeg er færdig', 'jeg er ferdig', 'færdig', 'ferdig', 'afslut', 'luk'];
+                  const isCloseTrigger = closeKeywords.some(phrase =>
+                    normalized === phrase || normalized.startsWith(phrase + ' ') || normalized.endsWith(' ' + phrase)
+                  );
+
+                  if (isCloseTrigger) {
+                    setIsAIAssistantOpen(false); // Close drawer
+                  }
+                  await sendMessageToAssistant(msg, images);
+                }}
                 isGeneratingReport={isAssistantThinking}
                 updateProjectField={updateProjectField}
                 saveProject={saveProject}
@@ -2963,6 +3306,6 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

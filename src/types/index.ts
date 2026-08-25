@@ -46,6 +46,14 @@ export interface ProjectState {
    *  Keys are questionnaire field IDs (e.g. "1.03", "2.04").
    *  Populated automatically after advice is generated. */
   fieldObservations?: Record<string, { severity: 'warning' | 'critical'; text: string }> | null;
+  /** Snapshot of responses taken when AI advice was last generated */
+  lastAdviceResponsesSnapshot?: { general: Record<string, any>; parts: Record<string, any>[] } | null;
+  lastAdviceTimestamp?: string | null;
+  userSubmissionNotes?: string;
+  lastActiveStep?: number;
+  lastActivePartIndex?: number;
+  lastActiveCustomSection?: 'business-case' | 'additional-opportunities' | 'scape-review' | null;
+  lastIsReviewing?: boolean;
   // 'status' kan KUN være en af disse præcise strenge. Det kaldes en "Union Type".
   status: 'draft' | 'submitted' | 'cancelled' | 'approved' | 'rejected';
   userId: string;

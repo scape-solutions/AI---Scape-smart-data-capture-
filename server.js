@@ -582,13 +582,27 @@ app.post('/api/ai/chat', verifyFirebaseToken, async (req, res) => {
       }
     });
 
+    const systemInstruction = `${activePrompts.autoFillPrompt.trim()}
+
+QUESTIONNAIRE SCHEMA:
+${JSON.stringify(schema, null, 2)}
+
+VERIFIED CURRENT PROJECT STATE (ABSOLUTE GROUND TRUTH):
+${JSON.stringify(cleanProject, null, 2)}
+
+ACTIVE PART INDEX (0-based): ${activePartIndex}
+
+DATA DISCREPANCY RULE FOR CHAT HISTORY:
+The chat history transcript below contains past conversation messages. If any user or assistant message in history mentions values that contradict VERIFIED CURRENT PROJECT STATE (for example, history mentions "CCC" but VERIFIED CURRENT PROJECT STATE has "AAA"), VERIFIED CURRENT PROJECT STATE is the final result of manual user edits and SUPERSEDES all historical chat messages. Treat conflicting history values as obsolete and NEVER propose overwriting VERIFIED CURRENT PROJECT STATE with obsolete values from history.`;
+
     // Construct history for Gemini
     const contents = history.map((msg, i) => {
       let text = msg.text;
-      if (i === history.length - 1 && msg.role === 'user') {
-         text = `${activePrompts.autoFillPrompt.trim()}\n\nQUESTIONNAIRE SCHEMA:\n${JSON.stringify(schema, null, 2)}\n\nCURRENT PROJECT STATE:\n${JSON.stringify(cleanProject, null, 2)}\n\nACTIVE PART INDEX (0-based): ${activePartIndex}\n\nUSER MESSAGE:\n${text}`;
+      // Strip raw JSON proposal blocks from past assistant turns in history so obsolete JSON proposals don't pollute Gemini context
+      if (msg.role === 'model' || msg.role === 'assistant') {
+        text = text.replace(/```(?:json)?\s*[\s\S]*?\s*```/ig, '').trim();
       }
-      
+
       const parts = [{ text }];
       
       // Pass images/PDFs from the chat history only for the current (very last) user message.
@@ -617,6 +631,9 @@ app.post('/api/ai/chat', verifyFirebaseToken, async (req, res) => {
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
+      config: {
+        systemInstruction,
+      },
       contents: contents,
     });
 

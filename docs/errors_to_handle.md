@@ -95,5 +95,107 @@ const sanitizeFirestorePayload = (data: any) => {
   });
   return sanitized;
 };
+
+---
+
+## 2. AI Assistant Access Forbidden for External/New Customers (Status: IDENTIFIED)
+
+### Error Message
 ```
-And apply it in `saveProject` and `updateProjectField` right before passing the object to `updateDoc` or `addDoc`.
+AI error: Forbidden: You do not have access to this application.
+```
+
+### Root Cause
+1. **Global Access Verification:** The server protects all AI-related endpoints in [server.js](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/server.js) (`/api/ai/chat`, `/api/ai/extract-observations`, `/api/ai/advice`, and `/api/ai/draft`) with the same token verification middleware `verifyFirebaseToken`.
+2. **Strict Domain/Email Filter:** The `verifyFirebaseToken` middleware restricts access strictly to emails matching allowed domains (`@scapesolutions.eu` or `@scapesolutions.com`) or explicit whitelisted emails in the Firestore `/config/access` document.
+3. **Design Conflict:** While new external users (e.g., `user@gmail.com`) are allowed to register/sign up and create projects, they are completely blocked from using the AI Chat Assistant or extraction tools to help them populate their questionnaire.
+
+### Recommended Fix
+
+#### Step 1: Split Middleware Logic in [server.js](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/server.js)
+Split `verifyFirebaseToken` into a general authentication middleware and a specialized evaluator/admin authorization middleware:
+
+1. **`verifyFirebaseToken` (General Auth):** Only verifies the Firebase token signature and validity, populating `req.user`. This allows any successfully registered customer to use basic client-side helper APIs.
+2. **`verifyEvaluatorToken` (Evaluator-only Auth):** Calls `verifyFirebaseToken` first, then enforces the email domain and whitelist filter.
+
+```javascript
+// Middleware to verify Firebase ID Token (Open to all signed-in users)
+async function verifyFirebaseToken(req, res, next) {
+  if (process.env.NODE_ENV !== 'production') {
+    req.user = { email: 'dev@scapesolutions.eu', uid: 'dev-local' };
+    return next();
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await getAuth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error('Error verifying Firebase ID token:', error);
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+}
+
+// Middleware to verify Evaluator/Admin access (Restricted to internal staff/whitelists)
+async function verifyEvaluatorToken(req, res, next) {
+  // First run the general token validation
+  await verifyFirebaseToken(req, res, () => {
+    const email = req.user.email;
+    if (!email) {
+      return res.status(403).json({ error: 'Forbidden: Token contains no email address.' });
+    }
+
+    const emailLower = email.toLowerCase();
+    const domain = emailLower.split('@')[1];
+
+    const isAllowedEmail = allowedConfig.allowedEmails.some(e => e.toLowerCase() === emailLower);
+    const isAllowedDomain = allowedConfig.allowedDomains.some(d => d.toLowerCase() === domain);
+
+    if (!isAllowedEmail && !isAllowedDomain) {
+      console.warn(`Unauthorized access attempt from email: ${email}`);
+      return res.status(403).json({ error: 'Forbidden: You do not have access to this resource.' });
+    }
+    next();
+  });
+}
+```
+
+#### Step 2: Update Endpoints Guard
+Apply the general and restricted middleware blocks to the appropriate route handlers:
+
+* **Customer Helper APIs (General Auth):**
+  * `app.post('/api/ai/chat', verifyFirebaseToken, ...)`
+  * `app.post('/api/ai/extract-observations', verifyFirebaseToken, ...)`
+  * `app.post('/api/ai/advice', verifyFirebaseToken, ...)`
+* **Internal Evaluator APIs (Restricted Auth):**
+  * `app.post('/api/ai/draft', verifyEvaluatorToken, ...)`
+
+---
+
+## 3. AI Assistant State Sync Conflict (Status: IDENTIFIED)
+
+### Error Message / Behavior
+* When a user inputs data using the AI Chat Assistant (e.g., setting the project name to *"Project Kolding"*), the chat history records the conversation.
+* If the user later edits the questionnaire form manually (e.g., renaming the project field to *"Project Kolding V2"*), the form updates correctly.
+* However, when the user resumes chatting with the AI, the AI looks at the chat history, notices the discrepancy between the text history (*"Project Kolding"*) and the active form state (*"Project Kolding V2"*), and mistakenly tries to force-revert the form field back to the original name (*"Project Kolding"*).
+
+### Root Cause
+1. **Chat History Recency Bias:** The prompt instructs the AI to use the conversation history as context. When it sees a contradiction between user statements in the chat history and the current JSON state, it assumes the JSON state is out-of-sync or incorrect, rather than recognizing that the user made a deliberate manual edit in the UI.
+2. **Lack of Manual Override Indicators:** The AI prompt has no instruction explaining that the `CURRENT PROJECT STATE` represents the ultimate source of truth, and that manual edits made by the user in the UI override historical chat mentions.
+
+### Recommended Fix
+
+#### Step 1: Update [src/docs/autoFillPrompt.md](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/src/docs/autoFillPrompt.md)
+Add a rule under the **IMPORTANT RULES** section in the prompt:
+* *"The `CURRENT PROJECT STATE` represents the user's latest manual choices. If a field in the current project state differs from what was previously discussed in the chat history, you MUST treat the current project state as the absolute source of truth. Do NOT try to overwrite manual changes back to historical values. Only update a field if the user explicitly requests a new change in their latest message."*
+
+#### Step 2: Clear/Invalidate Discrepant History (Alternative approach)
+When a user manually modifies a field in the form:
+* We could append a system notification to the chat history: `{"role": "system", "text": "System: User manually updated Project Name to 'Project Kolding V2'"}`.
+* This explicitly tells the AI that a manual edit occurred, aligning the history context.
