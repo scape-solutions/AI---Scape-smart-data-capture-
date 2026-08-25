@@ -12,6 +12,11 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test": "node ./tests/renameChecks.test.js",
+    "test:unit": "vitest run --dir .testing/UnitTesting",
+    "test:unit:watch": "vitest --dir .testing/UnitTesting",
+    "test:integration": "vitest run --dir .testing/IntegrationTesting",
+    "test:integration:watch": "vitest --dir .testing/IntegrationTesting",
+    "test:all": "vitest run --dir .testing",
     "prompts:push": "node update_prompts.js",
     "prompts:pull": "node pull_prompts.js"
   },
@@ -23,14 +28,23 @@
     "firebase-admin": "^14.0.0"
   },
   "devDependencies": {
+    "@babel/preset-env": "^7.29.7",
     "@tailwindcss/vite": "^4.1.14",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
     "browser-image-compression": "^2.0.2",
     "firebase": "^12.13.0",
+    "happy-dom": "^20.11.6",
+    "jest-environment-jsdom": "^30.4.1",
+    "jsdom": "^30.0.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
@@ -41,6 +55,7 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vitest": "^4.1.11"
   }
 }
