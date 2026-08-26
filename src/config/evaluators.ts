@@ -1,13 +1,7 @@
-// NOTE: This access list is now dynamically loaded from Firestore (config/access document)
-// and synced in real-time. The lists below are only used as local offline fallbacks.
+// Dynamically loaded from Firestore (config/access document) in real-time.
+export const ALLOWED_EVALUATORS: string[] = [];
 
-export const ALLOWED_EVALUATORS = [
-  'rune.k.larsen@scapesolutions.eu'
-];
-
-export const SUPERUSERS = [
-  'rune.k.larsen@scapesolutions.eu'
-];
+export const SUPERUSERS: string[] = [];
 
 export const isAllowedEvaluator = (email: string | null | undefined, allowedList?: string[]) => {
   if (!email) return false;

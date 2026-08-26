@@ -8,8 +8,8 @@ This document tracks actionable tasks and fixes derived from recent testing feed
   - UI element renamed to "Project Information Advice".
   - Ensure references to "Data Capture" in user-facing text are updated to "Scape Bin-Picker Projects" where appropriate.
 
-- [ ] **Cycle Time Clarification:**
-  - Update the "Average Cycle Time Based On" field (2.05) or add a selector to allow the user to explicitly define if their requirement is an "Absolute maximum cycle time" or an "Average cycle time".
+- [x] **Cycle Time Clarification:**
+  - **Løsning:** Opdateret felt `2.05` ("Average Cycle Time Based On") i `questionnaire.ts` med en dropdown, hvor brugeren eksplicit kan vælge mellem *"Average Cycle Time (Across full bin)"*, *"Absolute Maximum Cycle Time (Line sync limit)"*, *"1 shift target"*, m.fl.
 
 - [x] **Placement Requirements (Image Upload):**
   - Add functionality to allow users to upload images for "Short description of place requirements" (field 2.12). It is often easier to provide a photo of the destination fixture/machine than to describe it in words.
@@ -22,11 +22,11 @@ This document tracks actionable tasks and fixes derived from recent testing feed
   - **Drag and Drop**: Fix the drag-and-drop area for image files so that dropping a file properly attaches it to the form instead of useing a file browser. *(Husk JS-validering i onDrop)*
 - [x] **Delete Image Safeguard:** Add a confirmation modal when deleting any uploaded image (project‑level or part‑level). Require explicit user confirmation (e.g., type “delete” or click a second confirm button) to avoid accidental deletions.
 
-- [ ] **Bin Dimensions "Best Guess":**
-  - Add a "Best guess" or "Approximate" checkbox next to the bin dimension fields for cases where the customer does not have exact measurements.
+- [x] **Bin Dimensions "Best Guess":**
+  - **Løsning:** Tilføjet et "Approximate / Best guess measurement" afkrydsningsfelt ud for kassedimensionerne (`1.04_w`, `1.04_l`, `1.04_h`).
 
-- [ ] **Clean Up Hardcoded Whitelists:**
-  - Remove the hardcoded fallback arrays (`ALLOWED_EVALUATORS` and `SUPERUSERS`) in `src/config/evaluators.ts`. Now that Firestore dynamic configuration is fully functional, these local fallbacks pose a minor privacy leak and are obsolete.
+- [x] **Clean Up Hardcoded Whitelists:**
+  - **Løsning:** Fjernet de forældede `ALLOWED_EVALUATORS` og `SUPERUSERS` e-mail arrays fra `src/config/evaluators.ts`, da Firestore dynamic config nu styrer tilladelser 100%.
 
 - [x] **Delete Project Safeguard:**
   - Update the delete project confirmation modal to require the user to explicitly type the project name (or a specific confirmation phrase) before the delete action can succeed, to prevent accidental deletions.
@@ -88,14 +88,14 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 ### BUNDLE 2: Split-Screen & AI UI Layout Optimizations (Brugerflade & Chat)
 *Opgaver vedrørende layout, synlighed og fleksibilitet, når man arbejder i split-screen AI-visningen.*
 
-- [ ] **Justerbar bredde i split-screen visning (UX forbedring):**
-  - **Løsning:** Tilføj en lodret skillelinje/træk-håndtag (drag-handle) imellem de to paneler i split-screen, så brugeren frit kan trække for at gøre skemaet bredere og chatten smallere (eller omvendt).
-- [ ] **Større indtastningsfelt til AI-assistent (UX forbedring):**
-  - **Løsning:** Lav et auto-ekspanderende tekstfelt (Textarea) i chatten, som starter som en mindre boks (f.eks. 3 linjer) og automatisk udvider sig i højden op til max 8-10 linjer, hvorefter der vises en scrollbar.
-- [ ] **Synlighed af aktivt projektnavn i AI-mode (UX forbedring):**
-  - **Løsning:** Sørg for at vise det aktive projekts navn tydeligt i toppen af AI-panelet eller i Headeren, så det altid er synligt uanset skærmbredde og visningstilstand (især på små/smalle skærme).
-- [ ] **Ensrettet skift mellem AI-mode og Manuel-mode (UX forbedring):**
-  - **Løsning:** Lav en fast toggle-knap i øverste venstre hjørne af spørgeskema-visningen som den eneste manuelle måde at skifte visning. AI'en skal desuden automatisk lukke AI-panelet/skifte til manuel tilstand, hvis brugeren skriver "jeg er færdig", "done" eller lignende.
+- [x] **Justerbar bredde i split-screen visning (UX forbedring):**
+  - **Løsning:** Tilføjet et lodret træk-håndtag (drag-handle med `GripVertical` ikon) mellem AI-panelet og skema-panelet i `QuestionnaireView.tsx`, så brugeren frit kan trække og tilpasse panelbredden.
+- [x] **Større indtastningsfelt til AI-assistent (UX forbedring):**
+  - **Løsning:** Implementeret auto-ekspanderende `textarea` i `AIAssistantTab.tsx` med understøttelse af `Enter` til afsendelse og `Shift+Enter` til skiftelinjer.
+- [x] **Synlighed af aktivt projektnavn i AI-mode (UX forbedring):**
+  - **Løsning:** Tilføjet et fremtrædende projektnavn-badge (`📁 Project Name`) øverst i AI Assistant panelet.
+- [x] **Ensrettet skift mellem AI-mode og Manuel-mode (UX forbedring):**
+  - **Løsning:** Tilføjet automatisk lukning af AI-panelet ved udløserord som "done", "finished", "jeg er færdig", samt fast toggle-knap.
 - [ ] **Visning af Project Information Advice / AI Review (UX undersøgelse):**
   - **Udfordring:** AI-evalueringsrapporten (Advice) optager i dag hele skærmen, så man ikke kan se form-felterne samtidigt. Vi skal undersøge, om rapporten i stedet kan integreres direkte i AI-panelet/sidepanelet, eller om der kan laves et side-by-side split layout.
 - [ ] **Fejlfinding af app-crash ved oprettelse af +6 emner via AI (Bug):**
@@ -106,16 +106,20 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 ### BUNDLE 3: Questionnaire UI & Field Label Improvements (Spørgeskema UX)
 *Forbedringer af spørgeskemaets felter, infobokse og generelle UI-adfærd.*
 
-- [ ] **Vis/skjul og placering af felt-numre (UX forbedring):**
-  - **Løsning:** Flyt feltnumrene til slutningen af label-teksten (f.eks. "Projektnavn [1.01]") og tilføj en valgfri toggle-knap (nice-to-have) i Headeren eller under indstillinger til dynamisk at vise/skjule dem i UI.
-- [ ] **Forklarende hjælpe-noter på felter (UX forbedring):**
-  - **Løsning:** Tilføj et lille info-ikon (cirkulært "i") ud for alle indtastningsfelter. Ved klik eller hover vises en infonote/popup, som forklarer meningen og formålet med det pågældende felt.
-- [ ] **Bedre lukning af "CRITICAL" og "NOTE" popups (UX forbedring):**
-  - **Løsning:** Implementer en "click outside"-håndtering, så advarsels- og infobobler lukker automatisk, så snart brugeren klikker et vilkårligt andet sted på skærmen.
-- [ ] **Fast placering af Dashboard-knap (UX forbedring):**
-  - **Løsning:** Dashboard-knappen (genvejen tilbage til projektoversigten) skal altid være placeret i den øverste række (i Headeren) på præcis samme position, uanset brugertype eller rolle.
-- [ ] **Cardboard box i dropdown:**
-  - Tilføj "Cardboard box" som en valgmulighed i "Bin type" dropdown-menuen.
+- [x] **Vis/skjul og placering af felt-numre (UX forbedring):**
+  - **Løsning:** Feltnumre er nu placeret efter label-teksten (f.eks. "Project Name [1.01]"), og der er tilføjet en `Show Field IDs` / `Hide Field IDs` toggle-knap øverst i formularen.
+- [x] **Forklarende hjælpe-noter på felter (UX forbedring):**
+  - **Løsning:** Oprettet central `src/docs/fieldExplanations.ts` fil med **Kort** og **Lang** teknisk forklaring for alle felter. Tilføjet et cirkulært info-ikon `(i)` ud for **ALLE felter**, som åbner en popup med mulighed for at skifte mellem kort opsummering og dybdegående teknisk vejledning (`Read Detailed Guidance →`).
+- [x] **Bedre lukning af "CRITICAL" og "NOTE" popups (UX forbedring):**
+  - **Løsning:** Implementeret "click outside"-håndtering, så både infobobler og advarselspopups lukker automatisk ved klik et vilkårligt andet sted på skærmen.
+- [x] **Fast placering af Dashboard-knap (UX forbedring):**
+  - **Løsning:** Dashboard-knappen har en fast, fremtrædende placering lige ved siden af Scape Info-logoet i Headeren på tværs af alle brugertyper.
+- [x] **Cardboard box i dropdown:**
+  - **Løsning:** Tilføjet `"Cardboard Box"` som en tilgængelig kassetype under felt `1.03` i `questionnaire.ts` og `autoFillPrompt.md`.
+- [x] **Høj-synlig sektions-velger & Horisontal scroll-liste i smal/split-screen tilstand:**
+  - **Løsning:** Opgraderet sektions-velgeren i smal/split-screen tilstand med en Indigo Accent Pill, fremskridts-badges (`2/9`) og en 1-tap horisontal scrollbar indeholdende alle sektioner (*Project Info*, *Parts*, *Business Case*, *Additional Opportunities*, *Submit*, *Scape Review*).
+- [x] **Nyt design til "+ Add Another Part" knap:**
+  - **Løsning:** Omdesignet knappen til at matche `Part #X` sektions-overskrifterne (f.eks. `Part #3: + Add New Part`) med stiplet kasselayout.
 
 ---
 

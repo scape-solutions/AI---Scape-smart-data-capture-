@@ -24,7 +24,10 @@ import {
   Clock,
   FileText,
   Send,
-  CheckSquare
+  CheckSquare,
+  Hash,
+  HelpCircle,
+  GripVertical
 } from 'lucide-react';
 import { downloadMarkdownFile } from '../utils/markdownExport';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
@@ -33,6 +36,7 @@ import imageCompression from 'browser-image-compression';
 import { Header } from '../components/Header';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import ReactMarkdown from 'react-markdown';
+import { getFieldExplanation } from '../docs/fieldExplanations';
 import { AIAssistantTab, isProposalAlreadyApplied } from '../components/AIAssistantTab';
 import { generateProjectPdf } from '../utils/pdfGenerator';
 
@@ -213,6 +217,53 @@ export function QuestionnaireView({
     };
   }, [isResizing]);
 
+  const [isResizingDrawer, setIsResizingDrawer] = useState(false);
+
+  const startResizingDrawer = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    setIsResizingDrawer(true);
+  };
+
+  useEffect(() => {
+    if (!isResizingDrawer) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const minW = 320;
+      const maxW = Math.min(850, window.innerWidth - 80);
+      let newWidth = window.innerWidth - e.clientX;
+      if (newWidth < minW) newWidth = minW;
+      if (newWidth > maxW) newWidth = maxW;
+      setAiPaneWidth(newWidth);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      const touch = e.touches[0];
+      const minW = 320;
+      const maxW = Math.min(850, window.innerWidth - 80);
+      let newWidth = window.innerWidth - touch.clientX;
+      if (newWidth < minW) newWidth = minW;
+      if (newWidth > maxW) newWidth = maxW;
+      setAiPaneWidth(newWidth);
+    };
+
+    const stopResizing = () => {
+      setIsResizingDrawer(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', stopResizing);
+    window.addEventListener('touchmove', handleTouchMove);
+    window.addEventListener('touchend', stopResizing);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', stopResizing);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', stopResizing);
+    };
+  }, [isResizingDrawer]);
+
   // Luk automatisk AI-panelet hvis AI'en foreslår 'close_chat'
   useEffect(() => {
     const history = currentProject.chatHistory ?? [];
@@ -292,6 +343,25 @@ export function QuestionnaireView({
   const [openObservationId, setOpenObservationId] = useState<string | null>(null);
   const [isAdviceDrawerOpen, setIsAdviceDrawerOpen] = useState(false);
   const [isEvaluatorAdviceExpanded, setIsEvaluatorAdviceExpanded] = useState(false);
+  const [showFieldIds, setShowFieldIds] = useState(true);
+  const [openInfoModalId, setOpenInfoModalId] = useState<string | null>(null);
+  const [infoModalMode, setInfoModalMode] = useState<'short' | 'long'>('short');
+  const infoPopupRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (infoPopupRef.current && !infoPopupRef.current.contains(e.target as Node)) {
+        setOpenInfoModalId(null);
+        setOpenObservationId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
 
   // Helper to extract JSON from model message
   const extractJSONFromText = (text: string) => {
@@ -859,14 +929,16 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               />
             </aside>
             {/* Draggable Vertical Divider Resizer Handle */}
-            {mobileSplitView !== 'chat' && (
-              <div
-                onMouseDown={startResizing}
-                onTouchStart={startResizing}
-                className="hidden md:block w-1.5 hover:w-2 bg-slate-200/50 hover:bg-indigo-400 active:bg-indigo-500 cursor-col-resize z-50 transition-all select-none shrink-0"
-                title="Resize assistant pane"
-              />
-            )}
+            <div
+              onMouseDown={startResizing}
+              onTouchStart={startResizing}
+              className="hidden md:flex flex-col items-center justify-center w-3 hover:w-4 bg-slate-200 hover:bg-indigo-500 active:bg-indigo-600 cursor-col-resize z-40 transition-all select-none shrink-0 group relative border-x border-slate-300/60"
+              title="Drag to resize AI Assistant pane"
+            >
+              <div className="absolute top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white border-2 border-indigo-500 shadow-lg group-hover:scale-125 text-indigo-600 transition-all">
+                <GripVertical className="w-4 h-4 text-indigo-600" />
+              </div>
+            </div>
           </>
         )}
 
@@ -927,8 +999,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${isExpanded ? '' : '-rotate-90'}`}
                       />
                       <span className={`text-xs truncate transition-all ${activePartIndex === partIdx && !isReviewing
-                          ? 'font-black text-slate-900'
-                          : 'font-bold text-slate-500 group-hover:text-slate-800'
+                        ? 'font-black text-slate-900'
+                        : 'font-bold text-slate-500 group-hover:text-slate-800'
                         }`}>
                         Part #{partIdx + 1}: {partName}
                       </span>
@@ -986,13 +1058,23 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               );
             })}
 
-            {/* Add Part Button inline inside parts list */}
+            {/* Add Part Button resembling a Part Header item */}
             {!isReadOnly && (
               <button
                 onClick={handleAddPart}
-                className="w-full mt-2 flex items-center gap-2 text-xs font-bold px-3 py-2.5 rounded-xl transition-all select-none text-blue-600 hover:text-blue-800 bg-blue-50/50 hover:bg-blue-50 cursor-pointer"
+                className="w-full flex items-center justify-between p-2.5 mt-3 rounded-2xl border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/40 hover:bg-blue-50 text-blue-700 transition-all group select-none cursor-pointer shadow-2xs active:scale-[0.99]"
               >
-                <PlusCircle className="w-4 h-4" /> Add Another Part
+                <div className="flex items-center gap-2 truncate">
+                  <div className="p-1 bg-blue-600 text-white rounded-lg group-hover:scale-110 transition-transform shrink-0">
+                    <PlusCircle className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-extrabold tracking-tight text-blue-900 group-hover:text-blue-950">
+                    Part #{currentProject.parts.length + 1}: + Add New Part
+                  </span>
+                </div>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-100/80 text-blue-800 shrink-0">
+                  Add
+                </span>
               </button>
             )}
 
@@ -1039,8 +1121,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 <button
                   onClick={() => navigateToSection({ customSection: 'scape-review', isReviewing: false })}
                   className={`w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-all mt-2 ${activeCustomSection === 'scape-review'
-                      ? 'bg-rose-50 text-rose-800 font-black border border-rose-200 shadow-3xs'
-                      : 'text-slate-700 hover:bg-rose-50/50 hover:text-rose-800'
+                    ? 'bg-rose-50 text-rose-800 font-black border border-rose-200 shadow-3xs'
+                    : 'text-slate-700 hover:bg-rose-50/50 hover:text-rose-800'
                     }`}
                 >
                   <div className="flex items-center gap-3">
@@ -1064,41 +1146,185 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
           </aside>
 
           {/* Main Content Area */}
-          <div className="flex-1 min-w-0 w-full px-4 sm:px-6 md:px-8 lg:px-12 pb-6 pt-4 overflow-y-auto overflow-x-hidden bg-slate-50">
-            <div className="max-w-3xl w-full min-w-0">
+          <div className="flex-1 min-w-0 w-full px-4 sm:px-6 md:px-8 lg:px-12 pb-6 pt-0 overflow-y-auto overflow-x-hidden bg-slate-50">
+            <div className="max-w-3xl w-full min-w-0 pt-3">
 
 
-              {/* Sticky Mobile Header Bar (Only visible on screens < md) */}
-              <div className="md:hidden sticky top-0 z-30 -mx-4 sm:-mx-6 -mt-4 mb-6 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs select-none min-w-0">
+              {/* Sticky Section Navigation Bar (Visible on mobile OR inside Split-Screen Mode) */}
+              <div className={`${isSplitScreenMode ? 'flex' : 'md:hidden flex'} flex-col sticky top-0 z-30 -mx-4 sm:-mx-6 md:-mx-8 lg:-mx-12 -mt-3 pt-3 pb-1 mb-6 bg-white border-b border-slate-200/90 shadow-sm select-none min-w-0 transition-all`}>
+                {/* Top Row: Active Section Accent Pill & Menu Drawer Button */}
+                <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 min-w-0">
+                  <div
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="flex items-center gap-2 cursor-pointer bg-indigo-50/90 border border-indigo-200/80 rounded-2xl px-3.5 py-2 transition-all hover:bg-indigo-100/80 active:scale-[0.98] shadow-2xs min-w-0 group"
+                    title="Click to open section menu"
+                  >
+                    <div className="p-1.5 bg-indigo-600 text-white rounded-xl shadow-2xs shrink-0">
+                      {isReviewing ? (
+                        <Send className="w-3.5 h-3.5" />
+                      ) : activeCustomSection === 'business-case' ? (
+                        <Briefcase className="w-3.5 h-3.5" />
+                      ) : activeCustomSection === 'additional-opportunities' ? (
+                        <Factory className="w-3.5 h-3.5" />
+                      ) : activeCustomSection === 'scape-review' ? (
+                        <FileText className="w-3.5 h-3.5" />
+                      ) : currentStep === 0 ? (
+                        <Settings2 className="w-3.5 h-3.5" />
+                      ) : currentStep === 1 ? (
+                        <Box className="w-3.5 h-3.5" />
+                      ) : currentStep === 2 ? (
+                        <Zap className="w-3.5 h-3.5" />
+                      ) : (
+                        <Camera className="w-3.5 h-3.5" />
+                      )}
+                    </div>
 
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs md:text-sm font-extrabold text-indigo-950 truncate">
+                        {isReviewing
+                          ? (profile?.isAdmin ? 'Review / Approve' : 'Submit Evaluation')
+                          : activeCustomSection === 'business-case'
+                            ? 'Business Case'
+                            : activeCustomSection === 'additional-opportunities'
+                              ? 'Additional Opportunities'
+                              : activeCustomSection === 'scape-review'
+                                ? 'Scape Evaluation Review'
+                                : currentStep === 0
+                                  ? 'Project & Cell Info'
+                                  : `Part #${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
+                      </span>
 
-                <div
-                  onClick={() => setIsMobileMenuOpen(true)}
-                  className="flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 border border-slate-100 rounded-xl px-3 py-1.5 transition-all active:scale-[0.98] shadow-xs"
-                >
-                  <span className="text-xs font-black text-slate-700">
-                    {isReviewing
-                      ? (profile?.isAdmin ? 'Review/approve' : 'Submit')
-                      : activeCustomSection === 'business-case'
-                        ? 'Business Case'
-                        : activeCustomSection === 'additional-opportunities'
-                          ? 'Additional Opportunities'
-                          : activeCustomSection === 'scape-review'
-                            ? 'Scape Review'
-                            : currentStep === 0
-                              ? 'Project & Cell Info'
-                              : `Part #${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      {/* Mini Step Progress Badge */}
+                      {currentStep === 0 && !activeCustomSection && !isReviewing && (() => {
+                        const { filled, total } = getStepProgress(GENERAL_STEPS[0], currentProject.generalResponses);
+                        return (
+                          <span className="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 shrink-0">
+                            {filled}/{total}
+                          </span>
+                        );
+                      })()}
+
+                      {currentStep > 0 && !activeCustomSection && !isReviewing && (() => {
+                        const step = PART_STEPS[currentStep - 1];
+                        const part = currentProject.parts[activePartIndex];
+                        const { filled, total } = getStepProgress(step, part?.responses, part);
+                        return (
+                          <span className="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 shrink-0">
+                            {filled}/{total}
+                          </span>
+                        );
+                      })()}
+
+                      {/* Read-only / status indicator */}
+                      {isReadOnly && (
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                          {currentProject.status === 'submitted' ? 'Submitted' : 'Locked'}
+                        </span>
+                      )}
+                    </div>
+
+                    <ChevronDown className="w-4 h-4 text-indigo-600 group-hover:translate-y-0.5 transition-transform shrink-0 ml-1" />
+                  </div>
+
+                  <button
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="p-2 hover:bg-slate-100 border border-slate-200 rounded-2xl text-slate-600 hover:text-slate-900 transition-all active:scale-95 shrink-0 shadow-2xs cursor-pointer"
+                    title="Open Section Drawer"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => setIsMobileMenuOpen(true)}
-                  className="p-1.5 hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-xl text-slate-500 transition-all active:scale-95"
-                  title="Sektioner"
-                >
-                  <Menu className="w-5 h-5" />
-                </button>
+                {/* Bottom Row: Quick Horizontal Swipeable Section Pills */}
+                <div className="px-4 sm:px-6 pb-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth">
+                  {/* Project Info Pill */}
+                  <button
+                    type="button"
+                    onClick={() => navigateToSection({ step: 0, customSection: null, isReviewing: false })}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${currentStep === 0 && !activeCustomSection && !isReviewing
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 border border-slate-200/60'
+                      }`}
+                  >
+                    <Settings2 className="w-3.5 h-3.5" />
+                    <span>Project Info</span>
+                  </button>
+
+                  {/* Part Steps Pills */}
+                  {currentProject.parts.map((_, partIdx) => {
+                    return PART_STEPS.map((step, stepIdx) => {
+                      const isCurrent = currentStep === stepIdx + 1 && activePartIndex === partIdx && !activeCustomSection && !isReviewing;
+                      return (
+                        <button
+                          key={`part-${partIdx}-step-${stepIdx}`}
+                          type="button"
+                          onClick={() => navigateToSection({ step: stepIdx + 1, partIndex: partIdx, customSection: null, isReviewing: false })}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${isCurrent
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 border border-slate-200/60'
+                            }`}
+                        >
+                          <span className="opacity-75">P#{partIdx + 1}:</span>
+                          <span>{step.title}</span>
+                        </button>
+                      );
+                    });
+                  })}
+
+                  {/* Business Case Pill */}
+                  <button
+                    type="button"
+                    onClick={() => navigateToSection({ customSection: 'business-case', isReviewing: false })}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeCustomSection === 'business-case'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 border border-slate-200/60'
+                      }`}
+                  >
+                    <Briefcase className="w-3.5 h-3.5" />
+                    <span>Business Case</span>
+                  </button>
+
+                  {/* Additional Opportunities Pill */}
+                  <button
+                    type="button"
+                    onClick={() => navigateToSection({ customSection: 'additional-opportunities', isReviewing: false })}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeCustomSection === 'additional-opportunities'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 border border-slate-200/60'
+                      }`}
+                  >
+                    <Factory className="w-3.5 h-3.5" />
+                    <span>Additional Opportunities</span>
+                  </button>
+
+                  {/* Submit Pill */}
+                  <button
+                    type="button"
+                    onClick={() => navigateToSection({ isReviewing: true, customSection: null })}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${isReviewing
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 border border-slate-200/60'
+                      }`}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{profile?.isAdmin ? 'Review' : 'Submit'}</span>
+                  </button>
+
+                  {/* Scape Review Card (For Admins / Evaluators) */}
+                  {profile?.isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => navigateToSection({ customSection: 'scape-review', isReviewing: false })}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${activeCustomSection === 'scape-review'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 border border-slate-200/60'
+                        }`}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Scape Review</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
 
@@ -2010,9 +2236,21 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               ) : (
                 /* Questionnaire Step Form Editing */
                 <div className="space-y-6 animate-fadeIn">
-                  <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">
-                    {currentStep === 0 ? 'Project & Cell Info' : `Part #${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
-                  </h1>
+                  <div className="flex items-center justify-between gap-4 flex-wrap mb-2">
+                    <h1 className={`${isSplitScreenMode ? 'hidden md:block' : ''} text-2xl font-black text-slate-900 tracking-tight`}>
+                      {currentStep === 0 ? 'Project & Cell Info' : `Part #${activePartIndex + 1}: ${PART_STEPS[currentStep - 1].title}`}
+                    </h1>
+                    <button
+                      type="button"
+                      onClick={() => setShowFieldIds(prev => !prev)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:border-slate-300 text-xs font-bold transition-all shadow-2xs cursor-pointer ml-auto"
+                      title="Toggle field ID tags ([1.01], [2.01]) in UI"
+                    >
+                      <Hash className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{showFieldIds ? 'Hide Field IDs' : 'Show Field IDs'}</span>
+                    </button>
+                  </div>
+
                   <div className="space-y-6">
                     {(currentStep === 0 ? GENERAL_STEPS[0] : PART_STEPS[currentStep - 1]).questions.map(q => {
                       const responses = currentStep === 0 ? currentProject.generalResponses : currentProject.parts[activePartIndex].responses;
@@ -2044,7 +2282,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       return (
                         <div
                           key={q.id}
-                          className={`space-y-2.5 animate-fadeIn border-l-3 px-4 py-3 rounded-2xl transition-all duration-300 ${isReadOnly
+                          className={`p-5 rounded-3xl border transition-all space-y-3 ${isReadOnly
                               ? 'border-transparent px-0'
                               : filled
                                 ? 'border-slate-200/50 bg-transparent'
@@ -2053,8 +2291,16 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                   : 'border-slate-300 bg-slate-500/2'
                             }`}
                         >
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <label className="block text-sm font-bold text-slate-700">[{q.id}] {q.label}</label>
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <label className="block text-sm md:text-base font-bold text-slate-800 flex items-center gap-2">
+                              <span>{q.label}</span>
+                              {showFieldIds && (
+                                <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
+                                  [{q.id}]
+                                </span>
+                              )}
+                            </label>
+
                             {!isReadOnly && !filled && (
                               <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md select-none shrink-0 ${q.important
                                   ? 'bg-amber-100 text-amber-800 animate-pulse'
@@ -2063,6 +2309,81 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                 {q.important ? 'Important' : 'Optional'}
                               </span>
                             )}
+
+                            {/* Circular Help Info Icon (i) - Rendered for EVERY field */}
+                            {(() => {
+                              const explanation = getFieldExplanation(q.id, q.label, q.description);
+                              const isInfoOpen = openInfoModalId === q.id;
+
+                              return (
+                                <div className="relative inline-flex items-center">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setInfoModalMode('short');
+                                      setOpenInfoModalId(prev => prev === q.id ? null : q.id);
+                                    }}
+                                    title={`Field guidance for ${q.label}`}
+                                    className="p-1 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                                  >
+                                    <Info className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {isInfoOpen && (
+                                    <div
+                                      ref={infoPopupRef}
+                                      className="absolute z-50 bottom-full mb-2 right-0 sm:right-auto sm:left-0 max-w-[calc(100vw-3rem)] w-72 sm:w-80 md:w-96 p-4 bg-white border border-slate-200 rounded-2xl shadow-2xl text-xs text-slate-600 animate-fadeIn"
+                                    >
+                                      <div className="flex justify-between items-center pb-2.5 mb-2.5 border-b border-slate-100">
+                                        <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs md:text-sm">
+                                          <Info className="w-4 h-4 text-blue-600 shrink-0" />
+                                          <span>{q.label}</span>
+                                        </span>
+                                        <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                                          [{q.id}]
+                                        </span>
+                                      </div>
+
+                                      <div className="space-y-3">
+                                        {infoModalMode === 'short' ? (
+                                          <p className="leading-relaxed text-slate-700 font-medium text-xs">
+                                            {explanation.short}
+                                          </p>
+                                        ) : (
+                                          <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-xl space-y-1.5 animate-fadeIn">
+                                            <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider block">
+                                              Detailed Technical Guidance
+                                            </span>
+                                            <p className="leading-relaxed text-slate-700 font-medium text-xs">
+                                              {explanation.long}
+                                            </p>
+                                          </div>
+                                        )}
+
+                                        <div className="flex items-center justify-between pt-1 text-[11px]">
+                                          <button
+                                            type="button"
+                                            onClick={() => setInfoModalMode(prev => prev === 'short' ? 'long' : 'short')}
+                                            className="font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
+                                          >
+                                            {infoModalMode === 'short' ? 'Read Detailed Guidance →' : '← Back to Short Summary'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setOpenInfoModalId(null)}
+                                            className="text-slate-400 hover:text-slate-600 font-semibold"
+                                          >
+                                            Close
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
                             {/* Observation indicator from Project Information Advice */}
                             {currentProject.fieldObservations?.[q.id] && (() => {
                               const obs = currentProject.fieldObservations![q.id];
@@ -2081,10 +2402,13 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                     {isCritical ? '🔴 Critical' : '⚠️ Note'}
                                   </button>
                                   {openObservationId === q.id && (
-                                    <div className={`absolute z-50 bottom-full mb-2 left-0 w-72 p-3 rounded-xl shadow-xl text-xs font-medium leading-relaxed border animate-fadeIn ${isCritical
-                                        ? 'bg-red-50 border-red-200 text-red-800'
-                                        : 'bg-amber-50 border-amber-200 text-amber-800'
-                                      }`}>
+                                    <div
+                                      ref={infoPopupRef}
+                                      className={`absolute z-50 bottom-full mb-2 right-0 sm:right-auto sm:left-0 max-w-[calc(100vw-3rem)] w-72 p-3 rounded-xl shadow-xl text-xs font-medium leading-relaxed border animate-fadeIn ${isCritical
+                                          ? 'bg-red-50 border-red-200 text-red-800'
+                                          : 'bg-amber-50 border-amber-200 text-amber-800'
+                                        }`}
+                                    >
                                       <p className="font-bold mb-1">{isCritical ? '🔴 Critical Observation' : '⚠️ Observation'}</p>
                                       <p>{obs.text}</p>
                                       <p className="text-[10px] mt-2 opacity-60">From: Project Information Advice</p>
@@ -2128,6 +2452,33 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                 }
                               }}
                             />
+                          )}
+
+                          {/* Approximate / Best Guess Checkbox for Bin Dimensions */}
+                          {['1.04_w', '1.04_l', '1.04_h'].includes(q.id) && (
+                            <label className="flex items-center gap-2 mt-2 text-xs font-bold text-slate-600 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                disabled={isReadOnly}
+                                checked={!!(currentProject.generalResponses[`${q.id}_approx`])}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  const updated = {
+                                    ...currentProject,
+                                    generalResponses: {
+                                      ...currentProject.generalResponses,
+                                      [`${q.id}_approx`]: checked
+                                    }
+                                  };
+                                  setCurrentProject(updated);
+                                  if (currentProject.id && !isReadOnly && (currentProject.status || 'draft') === 'draft' && saveProject) {
+                                    saveProject(currentProject.status || 'draft', updated);
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              />
+                              <span>Approximate / Best guess measurement</span>
+                            </label>
                           )}
 
                           {/* Select Dropdown */}
@@ -2236,10 +2587,10 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                           }
                                         }}
                                         className={`w-full h-32 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all ${isReadOnly
-                                            ? 'opacity-50 cursor-not-allowed border-slate-300 bg-white'
-                                            : isDraggingCad
-                                              ? 'border-blue-500 bg-blue-50/50 cursor-pointer scale-[1.01]'
-                                              : 'border-slate-300 bg-white hover:bg-slate-50 cursor-pointer'
+                                          ? 'opacity-50 cursor-not-allowed border-slate-300 bg-white'
+                                          : isDraggingCad
+                                            ? 'border-blue-500 bg-blue-50/50 cursor-pointer scale-[1.01]'
+                                            : 'border-slate-300 bg-white hover:bg-slate-50 cursor-pointer'
                                           }`}
                                       >
                                         <UploadCloud className={`w-8 h-8 ${isDraggingCad ? 'text-blue-500 scale-110' : 'text-slate-400'} transition-all animate-pulse`} />
@@ -2779,10 +3130,19 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
               {!isReadOnly && (
                 <button
                   onClick={() => { handleAddPart(); setIsMobileMenuOpen(false); }}
-                  className="w-full mt-2 p-3.5 bg-blue-50/60 border border-blue-200/60 text-blue-700 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-blue-100/60 transition-colors shadow-2xs cursor-pointer active:scale-95"
+                  className="w-full flex items-center justify-between p-3 mt-3 rounded-2xl border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/40 hover:bg-blue-50 text-blue-700 transition-all group select-none cursor-pointer shadow-2xs active:scale-[0.99]"
                 >
-                  <PlusCircle className="w-4 h-4 text-blue-600" />
-                  <span>Add Another Part</span>
+                  <div className="flex items-center gap-2.5 truncate">
+                    <div className="p-1.5 bg-blue-600 text-white rounded-xl group-hover:scale-110 transition-transform shrink-0">
+                      <PlusCircle className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-extrabold tracking-tight text-blue-900 group-hover:text-blue-950">
+                      Part #{currentProject.parts.length + 1}: + Add New Part
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-100/80 text-blue-800 shrink-0">
+                    Add
+                  </span>
                 </button>
               )}
 
@@ -2846,8 +3206,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                 <button
                   onClick={() => { navigateToSection({ customSection: 'scape-review', isReviewing: false }); setIsMobileMenuOpen(false); }}
                   className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all mt-2 ${activeCustomSection === 'scape-review'
-                      ? 'bg-rose-50 border-rose-200 text-rose-800 font-black shadow-xs'
-                      : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-rose-50/50'
+                    ? 'bg-rose-50 border-rose-200 text-rose-800 font-black shadow-xs'
+                    : 'bg-slate-50/50 border-slate-100 text-slate-700 hover:bg-rose-50/50'
                     }`}
                 >
                   <div className="flex items-center gap-3">
@@ -3145,8 +3505,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
         <button
           onClick={() => setIsAIAssistantOpen(!isAIAssistantOpen)}
           className={`fixed bottom-6 right-6 z-40 p-4 rounded-full shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 items-center justify-center cursor-pointer hidden md:flex ${isAIAssistantOpen
-              ? 'bg-slate-900 text-white hover:bg-slate-800 md:right-[408px]'
-              : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-600/20'
+            ? 'bg-slate-900 text-white hover:bg-slate-800 md:right-[408px]'
+            : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-600/20'
             }`}
           title={
             isAIAssistantOpen
@@ -3181,9 +3541,20 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             onClick={() => setIsAIAssistantOpen(false)}
           />
           <aside
-            className="fixed inset-y-0 right-0 z-35 w-full md:w-96 bg-white border-l border-slate-200 shadow-2xl flex flex-col h-full animate-slideIn select-text"
-            style={viewportStyle}
+            className="fixed inset-y-0 right-0 z-35 bg-white border-l border-slate-200 shadow-2xl flex flex-col h-full animate-slideIn select-text"
+            style={{ width: `${aiPaneWidth}px`, maxWidth: '90vw', ...viewportStyle }}
           >
+            {/* Draggable Vertical Divider Resizer Handle on Floating Drawer */}
+            <div
+              onMouseDown={startResizingDrawer}
+              onTouchStart={startResizingDrawer}
+              className="hidden md:flex absolute top-0 bottom-0 -left-3 w-6 flex-col items-center justify-center bg-transparent hover:bg-indigo-500/10 active:bg-indigo-500/20 cursor-col-resize z-50 transition-all select-none group"
+              title="Drag left/right to resize AI Assistant"
+            >
+              <div className="p-1.5 rounded-full bg-white border-2 border-indigo-500 shadow-xl group-hover:scale-125 text-indigo-600 transition-all">
+                <GripVertical className="w-4 h-4 text-indigo-600" />
+              </div>
+            </div>
             <div className="relative flex-1 flex flex-col h-full overflow-hidden">
               <button
                 onClick={() => setIsAIAssistantOpen(false)}
