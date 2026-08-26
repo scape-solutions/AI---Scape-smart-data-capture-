@@ -363,8 +363,8 @@ if (GEMINI_API_KEY) {
 let activePrompts = {
   externalAdvicePrompt: '',
   evaluatorDraftPrompt: '',
-  autoFillPrompt: '',
   observationsExtractionPrompt: '',
+  appSupportGuide: '',
   includeImagesForAdvice: true,
   includeImagesForDraft: true,
   includeImagesForChat: false
@@ -378,6 +378,7 @@ db.collection('config').doc('prompts').onSnapshot((docSnap) => {
     activePrompts.evaluatorDraftPrompt = data.evaluatorDraftPrompt || '';
     activePrompts.autoFillPrompt = data.autoFillPrompt || '';
     activePrompts.observationsExtractionPrompt = data.observationsExtractionPrompt || '';
+    activePrompts.appSupportGuide = data.appSupportGuide || data.appHelpGuide || '';
     activePrompts.includeImagesForAdvice = data.includeImagesForAdvice !== false;
     activePrompts.includeImagesForDraft = data.includeImagesForDraft !== false;
     activePrompts.includeImagesForChat = !!data.includeImagesForChat;
@@ -672,6 +673,79 @@ app.post('/api/ai/extract-observations', verifyFirebaseToken, async (req, res) =
     console.error("Gemini API Error in proxy server (Observations):", error);
     res.status(502).json({
       error: "Failed to extract observations from Gemini API.",
+      details: error.message || String(error)
+    });
+  }
+});
+
+/**
+ * Dedicated API Endpoint for Support AI (App Navigation & Technical Physics Guidance)
+ * Dynamically assembles system prompt from appSupportGuide.md + fieldExplanations
+ */
+app.post('/api/support-chat', verifyFirebaseToken, async (req, res) => {
+  if (!ai) {
+    return res.status(503).json({ error: "Gemini API key is not configured on this server." });
+  }
+
+  const { query, supportHistory = [] } = req.body;
+  if (!query) {
+    return res.status(400).json({ error: "Missing required support query." });
+  }
+
+  try {
+    let helpGuideText = activePrompts.appSupportGuide || "";
+    if (!helpGuideText) {
+      try {
+        const supportPath = path.join(__dirname, 'src', 'docs', 'appSupportGuide.md');
+        if (fs.existsSync(supportPath)) {
+          helpGuideText = fs.readFileSync(supportPath, 'utf-8');
+        }
+      } catch (e) {
+        console.warn("Could not read appSupportGuide.md:", e);
+      }
+    }
+
+    const systemInstruction = `You are Scape App Support & Technical AI.
+Your job is to answer user questions about using the Scape Bin-Picker Projects web application, understanding field definitions, or explaining robotics physics constraints (such as cycle time tradeoffs, part weight/gripper suction, or vision scanner selection).
+
+AUTHORITATIVE SCAPE APP DOCUMENTATION:
+${helpGuideText}
+
+STRICT RELEVANCE & GUARDRAILS:
+1. ONLY answer questions directly related to Scape Bin-Picker Projects, the Scape application, bin-picking robotics technology, vision scanners, grippers, part specifications, cycle time calculations, or cell requirements.
+2. If the user asks general non-relevant questions (e.g. tourist facts like "hvor højt er Rundetårn?", weather, cooking, sports, general trivia), you MUST politely refuse to answer. Reply in Danish:
+   "Jeg kan desværre kun svare på spørgsmål vedrørende Scape Bin-Picker Projects appen, spørgeskemaet og Scape bin-picking teknologi. Har du et spørgsmål til dit bin-picking projekt eller dine emner?"
+3. DOMAIN FACT - SCAPE BINS ARE NEVER MIXED: A bin container in Scape Bin-Picking ALWAYS contains items of ONE single part type (or single part family) at a time. Scape NEVER picks from mixed-contents bins containing completely unrelated items (e.g. gearboxes mixed with brake pads in one container is NEVER done).
+
+FORMATTING & CHAT RULES:
+1. Provide clear, direct, friendly natural language answers in markdown format. You may use markdown tables if helpful.
+2. For Scape app interface, buttons, PDF exporting, and questionnaire fields, strictly follow the provided Scape App Documentation.
+3. For general robotics or physics concepts, supplement with pre-trained engineering knowledge while adhering to Scape domain rules.
+4. DO NOT output JSON questionnaire field proposals or ---FACTS---/---QUESTIONS--- blocks. Provide conversational support ONLY.`;
+
+    const contents = (Array.isArray(supportHistory) ? supportHistory : []).map((msg) => ({
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.text }]
+    }));
+
+    contents.push({
+      role: 'user',
+      parts: [{ text: query }]
+    });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-pro',
+      contents,
+      config: {
+        systemInstruction
+      }
+    });
+
+    res.json({ text: response.text || "No response received from Support AI." });
+  } catch (error) {
+    console.error("Gemini API Error in proxy server (Support Chat):", error);
+    res.status(502).json({
+      error: "Failed to process support query with Gemini API.",
       details: error.message || String(error)
     });
   }

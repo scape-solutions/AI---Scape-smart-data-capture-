@@ -357,6 +357,32 @@ The chat history transcript below contains past conversation messages. If any us
   }
 }
 
+/**
+ * Dedicated helper for Support AI proxy calls (/api/support-chat)
+ */
+async function sendSupportChatAPI(
+  query: string,
+  supportHistory: { role: 'user' | 'model'; text: string }[] = []
+): Promise<string> {
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken() : '';
+  const response = await fetch('/api/support-chat', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ query, supportHistory }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.details || err.error || 'Failed to process support question.');
+  }
+  const data = await response.json();
+  return data.text || "";
+}
+
 // export default betyder, at når andre filer importerer denne fil, 
 // er 'App' den primære ting, de får.
 export default function App() {
@@ -766,6 +792,8 @@ export default function App() {
     }
   };
 
+  const [supportChatHistory, setSupportChatHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
+
   /**
    * ==========================================
    * AI AUTO-FILL ASSISTANT (CHAT)
@@ -789,7 +817,37 @@ export default function App() {
         })))
       };
       const aiText = await sendChatAPI(currentProject, activePartIndex, newHistory, questionnaireSchema);
-      const finalHistory = [...newHistory, { role: 'model' as const, text: aiText }];
+
+      const finalHistory: any[] = [...newHistory, { role: 'model' as const, text: aiText }];
+
+      // Check if Primary Evaluator delegated a support query to Support AI
+      try {
+        const jsonMatch = aiText.match(/```json\s*([\s\S]*?)\s*```/) || aiText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsedJson = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+          if (parsedJson?.suggestedAction === 'ask_support' && parsedJson?.query) {
+            const supportQuery = parsedJson.query;
+            const supportText = await sendSupportChatAPI(supportQuery, supportChatHistory);
+            
+            // Maintain supportChatHistory (keep last 3 turns)
+            setSupportChatHistory(prev => [
+              ...prev.slice(-6),
+              { role: 'user', text: supportQuery },
+              { role: 'model', text: supportText }
+            ]);
+
+            // Append styled support response bubble to chatHistory
+            finalHistory.push({
+              role: 'model' as const,
+              text: supportText,
+              isSupport: true
+            });
+          }
+        }
+      } catch (jsonErr) {
+        console.warn("Could not check ask_support action:", jsonErr);
+      }
+
       const updatedProject = { ...currentProject, chatHistory: finalHistory };
       setCurrentProject(updatedProject);
       if (updatedProject.id) {

@@ -2403,18 +2403,25 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           const isFieldModifiedSinceAdvice = (() => {
                             if (!currentProject.lastAdviceResponsesSnapshot) return false;
                             try {
-                              const snapshot = JSON.parse(currentProject.lastAdviceResponsesSnapshot);
+                              const raw = currentProject.lastAdviceResponsesSnapshot;
+                              const snapshot = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                              if (!snapshot) return false;
+
                               if (currentStep === 0) {
-                                const snapVal = snapshot.generalResponses?.[q.id];
+                                const snapGen = snapshot.general || snapshot.generalResponses || {};
+                                const snapVal = snapGen[q.id];
                                 const curVal = responses?.[q.id];
-                                return String(snapVal ?? '') !== String(curVal ?? '');
+                                return JSON.stringify(snapVal ?? '') !== JSON.stringify(curVal ?? '');
                               } else {
-                                const snapPart = snapshot.parts?.[activePartIndex];
-                                const snapVal = snapPart?.responses?.[q.id];
+                                const snapParts = snapshot.parts || [];
+                                const snapPart = snapParts[activePartIndex];
+                                const snapPartResp = snapPart?.responses || snapPart || {};
+                                const snapVal = snapPartResp[q.id];
                                 const curVal = responses?.[q.id];
-                                return String(snapVal ?? '') !== String(curVal ?? '');
+                                return JSON.stringify(snapVal ?? '') !== JSON.stringify(curVal ?? '');
                               }
-                            } catch {
+                            } catch (err) {
+                              console.warn("Could not check modified field snapshot:", err);
                               return false;
                             }
                           })();
@@ -2427,7 +2434,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                 title={isFieldModifiedSinceAdvice ? "Field modified since last AI evaluation" : obs.text}
                                 className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md select-none shrink-0 cursor-pointer transition-all ${
                                   isFieldModifiedSinceAdvice
-                                    ? 'bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200'
+                                    ? 'bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200 shadow-2xs'
                                     : isCritical
                                       ? 'bg-red-100 text-red-700 hover:bg-red-200'
                                       : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
@@ -2438,7 +2445,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                               {openObservationId === q.id && (
                                 <div 
                                   ref={infoPopupRef}
-                                  className={`absolute z-50 bottom-full mb-2 right-0 sm:right-auto sm:left-0 max-w-[calc(100vw-3rem)] w-72 p-3.5 rounded-xl shadow-xl text-xs font-medium leading-relaxed border animate-fadeIn ${
+                                  className={`absolute z-50 bottom-full mb-2 right-0 sm:right-auto sm:left-0 max-w-[calc(100vw-3rem)] w-80 p-4 rounded-2xl shadow-xl text-xs font-medium leading-relaxed border animate-fadeIn ${
                                     isFieldModifiedSinceAdvice
                                       ? 'bg-blue-50 border-blue-200 text-blue-900'
                                       : isCritical
@@ -2446,16 +2453,32 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                         : 'bg-amber-50 border-amber-200 text-amber-800'
                                   }`}
                                 >
-                                  <p className="font-bold mb-1 flex items-center gap-1.5">
-                                    {isFieldModifiedSinceAdvice ? '✏️ Value Modified' : isCritical ? '🔴 Critical Observation' : '⚠️ Observation'}
-                                  </p>
-                                  <p className="text-xs leading-normal">{obs.text}</p>
-                                  {isFieldModifiedSinceAdvice && (
-                                    <div className="mt-2 pt-2 border-t border-blue-200/80 text-[11px] font-semibold text-blue-800">
-                                      💡 You modified this field since the last evaluation. Re-generate Advice under Scape Review to update this observation.
-                                    </div>
+                                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-blue-200/60">
+                                    <p className="font-black text-xs flex items-center gap-1.5">
+                                      {isFieldModifiedSinceAdvice ? '✏️ Value Modified' : isCritical ? '🔴 Critical Observation' : '⚠️ Observation'}
+                                    </p>
+                                    <span className="text-[9px] font-semibold opacity-60">From AI Advice</span>
+                                  </div>
+
+                                  {isFieldModifiedSinceAdvice ? (
+                                    <>
+                                      <div className="bg-blue-100/70 border border-blue-200 rounded-xl p-2.5 mb-2.5 text-[11px] leading-relaxed text-blue-950 font-medium">
+                                        ⚠️ <strong>Value changed since last evaluation:</strong><br />
+                                        This field has been updated since Project Information Advice was generated. The observation text below was based on previous data and may be outdated.
+                                      </div>
+                                      <p className="text-xs leading-normal opacity-85 italic bg-white/60 p-2 rounded-lg border border-blue-100">
+                                        "{obs.text}"
+                                      </p>
+                                      <div className="mt-3 pt-2 border-t border-blue-200/80 text-[11px] font-bold text-blue-900 flex items-center gap-1.5">
+                                        <span>💡 Re-generate Advice under <strong>Scape Review</strong> tab to update.</span>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <p className="text-xs leading-normal">{obs.text}</p>
+                                      <p className="text-[10px] mt-2 opacity-60">From: Project Information Advice</p>
+                                    </>
                                   )}
-                                  <p className="text-[10px] mt-2 opacity-60">From: Project Information Advice</p>
                                 </div>
                               )}
                             </div>

@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, addDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { X, Save, FileText, Bot, Sparkles, Loader2, RefreshCw, Download, Upload, History } from 'lucide-react';
+import { X, Save, FileText, Bot, Sparkles, Loader2, RefreshCw, Download, Upload, History, BookOpen } from 'lucide-react';
 
 // Import local filesystem prompt files as defaults/fallbacks using Vite's ?raw import
 import defaultExternalAdvice from '../docs/externalAdvicePrompt.md?raw';
 import defaultEvaluatorDraft from '../docs/evaluatorDraftPrompt.md?raw';
 import defaultAutoFill from '../docs/autoFillPrompt.md?raw';
 import defaultObservationsExtraction from '../docs/observationsExtractionPrompt.md?raw';
+import defaultAppSupportGuide from '../docs/appSupportGuide.md?raw';
 
 interface PromptsEditorModalProps {
   show: boolean;
@@ -15,7 +16,7 @@ interface PromptsEditorModalProps {
   setGlobalSuccess: (msg: string | null) => void;
 }
 
-type PromptType = 'externalAdvice' | 'evaluatorDraft' | 'autoFill' | 'observationsExtraction';
+type PromptType = 'externalAdvice' | 'evaluatorDraft' | 'autoFill' | 'observationsExtraction' | 'appSupportGuide';
 
 export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsEditorModalProps) {
   const [activeTab, setActiveTab] = useState<PromptType>('externalAdvice');
@@ -23,13 +24,15 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
     externalAdvice: '',
     evaluatorDraft: '',
     autoFill: '',
-    observationsExtraction: ''
+    observationsExtraction: '',
+    appSupportGuide: ''
   });
   const [includeImages, setIncludeImages] = useState<Record<PromptType, boolean>>({
     externalAdvice: true,
     evaluatorDraft: true,
     autoFill: false,
-    observationsExtraction: false
+    observationsExtraction: false,
+    appSupportGuide: false
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -59,13 +62,15 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
           externalAdvice: data.externalAdvicePrompt || '',
           evaluatorDraft: data.evaluatorDraftPrompt || '',
           autoFill: data.autoFillPrompt || '',
-          observationsExtraction: data.observationsExtractionPrompt || ''
+          observationsExtraction: data.observationsExtractionPrompt || '',
+          appSupportGuide: data.appSupportGuide || data.appHelpGuide || ''
         });
         setIncludeImages({
           externalAdvice: data.includeImagesForAdvice !== false,
           evaluatorDraft: data.includeImagesForDraft !== false,
           autoFill: !!data.includeImagesForChat,
-          observationsExtraction: !!data.includeImagesForExtraction
+          observationsExtraction: !!data.includeImagesForExtraction,
+          appSupportGuide: false
         });
       } else {
         // Preload default local filesystem values if the database document does not exist yet
@@ -73,7 +78,8 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
           externalAdvice: defaultExternalAdvice.trim(),
           evaluatorDraft: defaultEvaluatorDraft.trim(),
           autoFill: defaultAutoFill.trim(),
-          observationsExtraction: defaultObservationsExtraction.trim()
+          observationsExtraction: defaultObservationsExtraction.trim(),
+          appSupportGuide: defaultAppSupportGuide.trim()
         });
       }
     } catch (e) {
@@ -116,6 +122,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
         evaluatorDraftPrompt: prompts.evaluatorDraft,
         autoFillPrompt: prompts.autoFill,
         observationsExtractionPrompt: prompts.observationsExtraction,
+        appSupportGuide: prompts.appSupportGuide,
         includeImagesForAdvice: includeImages.externalAdvice,
         includeImagesForDraft: includeImages.evaluatorDraft,
         includeImagesForChat: includeImages.autoFill,
@@ -131,6 +138,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
           evaluatorDraftPrompt: prompts.evaluatorDraft,
           autoFillPrompt: prompts.autoFill,
           observationsExtractionPrompt: prompts.observationsExtraction,
+          appSupportGuide: prompts.appSupportGuide,
           includeImagesForAdvice: includeImages.externalAdvice,
           includeImagesForDraft: includeImages.evaluatorDraft,
           includeImagesForChat: includeImages.autoFill,
@@ -142,7 +150,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
         console.error("Failed to save history snapshot:", e);
       }
 
-      setGlobalSuccess("AI Prompts updated successfully! The system will apply the updates in real-time.");
+      setGlobalSuccess("AI Prompts & Support Guide updated successfully! The system will apply updates in real-time.");
       setTimeout(() => setGlobalSuccess(null), 5000);
       onClose();
     } catch (e) {
@@ -159,7 +167,8 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
         activeTab === 'externalAdvice' ? defaultExternalAdvice.trim() :
         activeTab === 'evaluatorDraft' ? defaultEvaluatorDraft.trim() :
         activeTab === 'autoFill' ? defaultAutoFill.trim() :
-        defaultObservationsExtraction.trim();
+        activeTab === 'observationsExtraction' ? defaultObservationsExtraction.trim() :
+        defaultAppHelpGuide.trim();
 
       setPrompts(prev => ({
         ...prev,
@@ -203,13 +212,15 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
         externalAdvice: item.externalAdvicePrompt || '',
         evaluatorDraft: item.evaluatorDraftPrompt || '',
         autoFill: item.autoFillPrompt || '',
-        observationsExtraction: item.observationsExtractionPrompt || ''
+        observationsExtraction: item.observationsExtractionPrompt || '',
+        appSupportGuide: item.appSupportGuide || item.appHelpGuide || ''
       });
       setIncludeImages({
         externalAdvice: item.includeImagesForAdvice !== false,
         evaluatorDraft: item.includeImagesForDraft !== false,
         autoFill: !!item.includeImagesForChat,
-        observationsExtraction: !!item.includeImagesForExtraction
+        observationsExtraction: !!item.includeImagesForExtraction,
+        appSupportGuide: false
       });
     }
   };
@@ -281,96 +292,106 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 md:p-10 bg-slate-900/60 backdrop-blur-xs select-none">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-xs select-none">
       {/* Modal Box */}
-      <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 max-w-7xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-fadeIn">
+      <div className="bg-white rounded-3xl sm:rounded-[2.5rem] shadow-2xl border border-slate-100 max-w-7xl w-full max-h-[92vh] sm:max-h-[85vh] flex flex-col overflow-hidden animate-fadeIn">
         
         {/* Header */}
-        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="px-4 sm:px-8 py-4 sm:py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-500 rounded-2xl flex items-center justify-center text-white shadow-md shadow-amber-500/10">
-              <Bot className="w-5 h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-amber-500 rounded-2xl flex items-center justify-center text-white shadow-md shadow-amber-500/10 shrink-0">
+              <Bot className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="text-left">
-              <h2 className="text-lg font-black text-slate-800 leading-tight">AI System Prompts Editor</h2>
-              <p className="text-[11px] text-slate-400 font-semibold tracking-wider uppercase mt-0.5">Dynamically adjust Gemini system prompts</p>
+              <h2 className="text-base sm:text-lg font-black text-slate-800 leading-tight">AI System Prompts & Support Editor</h2>
+              <p className="text-[10px] sm:text-[11px] text-slate-400 font-semibold tracking-wider uppercase mt-0.5">Dynamically adjust Gemini prompts & support docs</p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 flex flex-col md:flex-row gap-8 min-h-0">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 flex flex-col md:flex-row gap-6 min-h-0">
           
           {/* Left Column: Editor */}
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Tabs header */}
-            <div className="flex flex-wrap gap-2 bg-slate-100 p-1.5 rounded-2xl mb-6 self-start w-full">
+            {/* Tabs header (Scrollable horizontal pill bar for narrow viewports) */}
+            <div className="flex overflow-x-auto gap-2 bg-slate-100 p-1.5 rounded-2xl mb-4 w-full shrink-0 no-scrollbar">
               <button
                 onClick={() => setActiveTab('externalAdvice')}
-                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${activeTab === 'externalAdvice' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`shrink-0 flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === 'externalAdvice' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Project Info Advice</span>
               </button>
               <button
                 onClick={() => setActiveTab('evaluatorDraft')}
-                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${activeTab === 'evaluatorDraft' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`shrink-0 flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === 'evaluatorDraft' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span>Technical Evaluation</span>
               </button>
               <button
                 onClick={() => setActiveTab('autoFill')}
-                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${activeTab === 'autoFill' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`shrink-0 flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === 'autoFill' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
                 <Bot className="w-3.5 h-3.5" />
                 <span>AI Chat Assistant</span>
               </button>
               <button
                 onClick={() => setActiveTab('observationsExtraction')}
-                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${activeTab === 'observationsExtraction' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`shrink-0 flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === 'observationsExtraction' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span>Observation Extraction</span>
               </button>
+              <button
+                onClick={() => setActiveTab('appSupportGuide')}
+                className={`shrink-0 flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === 'appSupportGuide' ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-700 bg-blue-50 hover:bg-blue-100'}`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>App Support Guide</span>
+              </button>
             </div>
 
             {/* Prompt Description */}
-            <p className="text-xs text-slate-500 mb-3 text-left leading-relaxed">
+            <p className="text-xs text-slate-500 mb-3 text-left leading-relaxed shrink-0">
               {activeTab === 'externalAdvice' && "Used to analyze project criteria and generate missing details & recommendations visible to external clients."}
               {activeTab === 'evaluatorDraft' && "Used by Scape Engineers to generate a comprehensive draft technical report in the administrative review page."}
               {activeTab === 'autoFill' && "Instructions for the interactive chat assistant that handles free-text inputs and proposes structured form edits."}
               {activeTab === 'observationsExtraction' && "Used to parse generated advice reports and extract structured, field-level warning tooltips."}
+              {activeTab === 'appSupportGuide' && "Authoritative Scape user manual and knowledge base used by the Support AI (/api/support-chat) to answer app navigation & physics questions."}
             </p>
 
-            {/* Include Images Toggle Switch */}
-            <div className="flex items-center gap-3 mb-4 select-none self-start">
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={includeImages[activeTab]} 
-                  onChange={(e) => setIncludeImages(prev => ({ ...prev, [activeTab]: e.target.checked }))}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
-                <span className="ml-3 text-xs font-bold text-slate-700">
-                  Include uploaded project & part images as visual attachments
-                </span>
-              </label>
-            </div>
+            {/* Include Images Toggle Switch (Only for prompts that accept images) */}
+            {activeTab !== 'appSupportGuide' && (
+              <div className="flex items-center gap-3 mb-4 select-none self-start shrink-0">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={includeImages[activeTab]} 
+                    onChange={(e) => setIncludeImages(prev => ({ ...prev, [activeTab]: e.target.checked }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  <span className="ml-3 text-xs font-bold text-slate-700">
+                    Include uploaded project & part images as visual attachments
+                  </span>
+                </label>
+              </div>
+            )}
 
             {/* Version & Datetime Manager Row */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-slate-50 border border-slate-200/60 p-4 rounded-2xl mb-4 text-left">
-              <div className="flex-1 flex flex-col gap-1 min-w-[150px]">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prompt Header Name</span>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-slate-50 border border-slate-200/60 p-3.5 sm:p-4 rounded-2xl mb-4 text-left shrink-0">
+              <div className="flex-1 flex flex-col gap-1 min-w-[140px]">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Document / Prompt Name</span>
                 <span className="text-xs font-bold text-slate-700 font-mono truncate">
-                  {parsedHeader?.name || `${activeTab}Prompt`}
+                  {parsedHeader?.name || `${activeTab}`}
                 </span>
               </div>
               
@@ -380,8 +401,8 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
                   type="text"
                   value={currentVersion}
                   onChange={(e) => handleVersionChange(e.target.value)}
-                  placeholder="e.g. 3.0"
-                  className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                  placeholder="e.g. 1.0"
+                  className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 w-full"
                 />
               </div>
 
@@ -393,14 +414,14 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
                     value={currentDatetime}
                     onChange={(e) => handleDatetimeChange(e.target.value)}
                     placeholder="YYYY-MM-DD HH:MM"
-                    className="flex-1 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                    className="flex-1 min-w-0 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
                   />
                   <button
                     onClick={() => {
                       const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
                       handleDatetimeChange(nowStr);
                     }}
-                    className="px-2.5 py-1.5 text-[10px] font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200/80 rounded-xl transition-all cursor-pointer"
+                    className="px-2.5 py-1.5 text-[10px] font-bold text-slate-600 hover:text-slate-800 bg-slate-200/70 hover:bg-slate-200 rounded-xl transition-all cursor-pointer shrink-0"
                     title="Set to current date and time"
                   >
                     Now
@@ -410,7 +431,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
             </div>
 
             {/* Main Textarea Editor */}
-            <div className="flex-1 relative flex flex-col min-h-[300px]">
+            <div className="flex-1 relative flex flex-col min-h-[260px] sm:min-h-[300px]">
               {isLoading ? (
                 <div className="absolute inset-0 bg-white/70 backdrop-blur-xs flex items-center justify-center z-10 rounded-2xl">
                   <div className="flex flex-col items-center gap-2">
@@ -423,23 +444,23 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
               <textarea
                 value={prompts[activeTab]}
                 onChange={(e) => setPrompts(prev => ({ ...prev, [activeTab]: e.target.value }))}
-                placeholder={`Write your system prompt instructions here in markdown...`}
+                placeholder={`Write your prompt or support document instructions here in markdown...`}
                 disabled={isLoading || isSaving}
-                className="flex-1 font-mono text-xs leading-relaxed bg-slate-50 border border-slate-200 rounded-2xl p-5 w-full outline-none focus:bg-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400 resize-none custom-scrollbar"
+                className="flex-1 font-mono text-xs leading-relaxed bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 w-full outline-none focus:bg-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400 resize-none custom-scrollbar min-h-[240px]"
               />
             </div>
             
             {/* Fallback & Import/Export/Reset row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-4 shrink-0">
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-left">
-                Stored in: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-bold select-all">/config/prompts</code>
+                Stored in: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-bold select-all">/config/prompts.{activeTab}</code>
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={handleDownload}
                   disabled={isLoading || isSaving}
                   className="text-xs font-bold text-slate-600 hover:text-slate-800 flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200/80 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
-                  title="Download the current prompt as a markdown file (.md)"
+                  title="Download as markdown file (.md)"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Export</span>
@@ -448,7 +469,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isLoading || isSaving}
                   className="text-xs font-bold text-slate-600 hover:text-slate-800 flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200/80 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
-                  title="Upload and load a prompt from a markdown file (.md)"
+                  title="Upload from markdown file (.md)"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>Import</span>
@@ -464,7 +485,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
                   onClick={handleResetToDefault}
                   disabled={isLoading || isSaving}
                   className="text-xs font-bold text-amber-600 hover:text-amber-800 flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100/60 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
-                  title="Reset prompt tab to filesystem markdown default values"
+                  title="Reset to local markdown default"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>Reset to Default</span>
@@ -474,7 +495,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
           </div>
 
           {/* Right Column: Revision History */}
-          <div className="w-full md:w-72 flex flex-col gap-4 border-t md:border-t-0 md:border-l border-slate-100 pt-6 md:pt-0 md:pl-6">
+          <div className="w-full md:w-64 flex flex-col gap-3 border-t md:border-t-0 md:border-l border-slate-100 pt-5 md:pt-0 md:pl-6 shrink-0">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-left">
               <History className="w-4 h-4 text-slate-400" />
               <div>
@@ -483,14 +504,14 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 max-h-[400px] pr-1">
+            <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 max-h-[220px] md:max-h-full pr-1">
               {historyLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-2">
+                <div className="flex flex-col items-center justify-center py-8 gap-2">
                   <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
                   <span className="text-[10px] text-slate-400 font-medium">Loading history...</span>
                 </div>
               ) : history.length === 0 ? (
-                <div className="text-center py-12 text-[11px] text-slate-400 italic bg-slate-50 border border-slate-100 border-dashed rounded-xl">
+                <div className="text-center py-8 text-[11px] text-slate-400 italic bg-slate-50 border border-slate-100 border-dashed rounded-xl">
                   No revisions found
                 </div>
               ) : (
@@ -500,7 +521,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
                     className="p-3 bg-slate-50 border border-slate-100 hover:border-slate-200 rounded-xl flex flex-col gap-2 transition-all text-left"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-600 truncate max-w-[150px]" title={item.createdBy}>
+                      <span className="text-[10px] font-bold text-slate-600 truncate max-w-[130px]" title={item.createdBy}>
                         {formatEmail(item.createdBy)}
                       </span>
                       <span className="text-[9px] font-semibold text-slate-400">
@@ -523,18 +544,18 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-5 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
+        <div className="px-4 sm:px-8 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3 shrink-0">
           <button
             onClick={onClose}
             disabled={isSaving}
-            className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold hover:bg-slate-100 text-slate-600 transition-all select-none cursor-pointer"
+            className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl border border-slate-200 text-xs font-bold hover:bg-slate-100 text-slate-600 transition-all select-none cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isLoading || isSaving}
-            className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-amber-500/10 flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all select-none cursor-pointer"
+            className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-amber-500/10 flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all select-none cursor-pointer"
           >
             {isSaving ? (
               <>
@@ -544,7 +565,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
             ) : (
               <>
                 <Save className="w-3.5 h-3.5" />
-                <span>Save Prompts</span>
+                <span>Save Prompts & Support Docs</span>
               </>
             )}
           </button>
@@ -554,3 +575,4 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
     </div>
   );
 }
+

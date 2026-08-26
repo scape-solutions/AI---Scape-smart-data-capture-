@@ -1,8 +1,97 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Check, Edit2, CheckCircle2, HelpCircle, Paperclip, X, FileText, MessageSquare } from 'lucide-react';
+import { Send, Bot, User, Check, Edit2, CheckCircle2, HelpCircle, Paperclip, X, FileText, MessageSquare, BookOpen } from 'lucide-react';
 import { ProjectState } from '../types';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 import ReactMarkdown from 'react-markdown';
+
+/**
+ * Renders Markdown text with built-in support for GFM markdown tables without external npm dependencies.
+ */
+function CustomMarkdownRenderer({ content }: { content: string }) {
+  if (!content) return null;
+
+  const lines = content.split('\n');
+  const blocks: Array<{ type: 'markdown' | 'table'; content: string | { headers: string[]; rows: string[][] } }> = [];
+
+  let currentMarkdownLines: string[] = [];
+  let currentTableLines: string[] = [];
+
+  const flushMarkdown = () => {
+    if (currentMarkdownLines.length > 0) {
+      blocks.push({ type: 'markdown', content: currentMarkdownLines.join('\n') });
+      currentMarkdownLines = [];
+    }
+  };
+
+  const flushTable = () => {
+    if (currentTableLines.length >= 2) {
+      const cleanLine = (line: string) => line.trim().replace(/^\|/, '').replace(/\|$/, '');
+      const parseRow = (line: string) => cleanLine(line).split('|').map(cell => cell.trim());
+
+      const headers = parseRow(currentTableLines[0]);
+      const isSeparator = (line: string) => /^[\s|:-]+$/.test(line);
+      const startIndex = isSeparator(currentTableLines[1]) ? 2 : 1;
+      const rows = currentTableLines.slice(startIndex).map(parseRow).filter(r => r.length > 0 && r.some(c => c !== ''));
+
+      blocks.push({ type: 'table', content: { headers, rows } });
+    } else if (currentTableLines.length > 0) {
+      currentMarkdownLines.push(...currentTableLines);
+    }
+    currentTableLines = [];
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isTableLine = line.trim().startsWith('|') && line.trim().endsWith('|');
+
+    if (isTableLine) {
+      flushMarkdown();
+      currentTableLines.push(line);
+    } else {
+      flushTable();
+      currentMarkdownLines.push(line);
+    }
+  }
+  flushMarkdown();
+  flushTable();
+
+  return (
+    <div className="space-y-2">
+      {blocks.map((block, bIdx) => {
+        if (block.type === 'markdown') {
+          return <ReactMarkdown key={bIdx}>{block.content as string}</ReactMarkdown>;
+        }
+        const { headers, rows } = block.content as { headers: string[]; rows: string[][] };
+        return (
+          <div key={bIdx} className="overflow-x-auto my-3 border border-slate-200/90 rounded-xl shadow-2xs bg-white">
+            <table className="min-w-full border-collapse text-xs text-left">
+              <thead className="bg-slate-100/90 font-bold text-slate-800 border-b border-slate-200">
+                <tr>
+                  {headers.map((h, hIdx) => (
+                    <th key={hIdx} className="px-3 py-2 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-r border-slate-200/60 last:border-r-0">
+                      <ReactMarkdown>{h}</ReactMarkdown>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white/80">
+                {rows.map((row, rIdx) => (
+                  <tr key={rIdx} className="hover:bg-slate-50/50 transition-colors">
+                    {row.map((cell, cIdx) => (
+                      <td key={cIdx} className="px-3 py-2 text-xs text-slate-600 border-r border-slate-100 last:border-r-0 leading-relaxed">
+                        <ReactMarkdown>{cell}</ReactMarkdown>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 // ─── FELT-LABEL OPSLAGSTABEL ───────────────────────────────────────────────────
 // Vi opbygger en ordbog (map) over alle felt-ID'er og deres tilhørende tekst-labels.
@@ -433,6 +522,24 @@ export function AIAssistantTab({
                 );
               }
 
+              // Hvis beskeden er fra Support-AI'en (isSupport)
+              if ((msg as any).isSupport) {
+                return (
+                  <div key={idx} className="flex flex-col items-start gap-2.5 animate-fadeIn">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-blue-100 border border-blue-300 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-3.5 h-3.5 text-blue-700" />
+                      </div>
+                      <span className="text-[10px] font-bold text-blue-800 uppercase tracking-widest">App & Technical Support</span>
+                    </div>
+
+                    <div className="ml-9 w-[90%] bg-blue-50/80 border border-blue-200/90 rounded-2xl p-4 text-sm text-slate-800 leading-relaxed shadow-2xs break-words">
+                      <CustomMarkdownRenderer content={msg.text} />
+                    </div>
+                  </div>
+                );
+              }
+
               // Hvis beskeden er fra AI-assistenten (Model) -> Split den op og vis kort
               const parsed = parseAIResponse(msg.text);
 
@@ -450,9 +557,7 @@ export function AIAssistantTab({
                     {/* 1. Vis AI'ens indledende tekst/prosa */}
                     {parsed.prose && (
                       <div className="bg-white border border-slate-200 rounded-2xl p-3 text-sm text-slate-700 leading-relaxed shadow-xs break-words">
-                        <ReactMarkdown>
-                          {parsed.prose}
-                        </ReactMarkdown>
+                        <CustomMarkdownRenderer content={parsed.prose} />
                       </div>
                     )}
 

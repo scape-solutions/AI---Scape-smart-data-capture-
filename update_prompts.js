@@ -30,7 +30,8 @@ async function run() {
     externalAdvicePrompt: fs.readFileSync(path.join(docsPath, 'externalAdvicePrompt.md'), 'utf-8'),
     evaluatorDraftPrompt: fs.readFileSync(path.join(docsPath, 'evaluatorDraftPrompt.md'), 'utf-8'),
     autoFillPrompt: fs.readFileSync(path.join(docsPath, 'autoFillPrompt.md'), 'utf-8'),
-    observationsExtractionPrompt: fs.readFileSync(path.join(docsPath, 'observationsExtractionPrompt.md'), 'utf-8')
+    observationsExtractionPrompt: fs.readFileSync(path.join(docsPath, 'observationsExtractionPrompt.md'), 'utf-8'),
+    appSupportGuide: fs.existsSync(path.join(docsPath, 'appSupportGuide.md')) ? fs.readFileSync(path.join(docsPath, 'appSupportGuide.md'), 'utf-8') : ''
   };
 
   const email = `temp-sync-bot-${Date.now()}@scapesolutions.eu`;
@@ -53,7 +54,8 @@ async function run() {
     externalAdvicePrompt: localPrompts.externalAdvicePrompt,
     evaluatorDraftPrompt: localPrompts.evaluatorDraftPrompt,
     autoFillPrompt: localPrompts.autoFillPrompt,
-    observationsExtractionPrompt: localPrompts.observationsExtractionPrompt
+    observationsExtractionPrompt: localPrompts.observationsExtractionPrompt,
+    appSupportGuide: localPrompts.appSupportGuide
   }, { merge: true });
 
   console.log("SUCCESS: Cloud prompts are now synchronized with local files!");
