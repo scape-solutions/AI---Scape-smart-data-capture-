@@ -309,6 +309,11 @@ export function AIAssistantTab({
             <Bot className="w-5 h-5 text-indigo-500" />
             AI Assistant
           </h2>
+          {currentProject.name && (
+            <span className="text-xs font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl truncate max-w-[200px]" title={currentProject.name}>
+              📁 {currentProject.name}
+            </span>
+          )}
         </div>
         
         {/* Double-Tab navigation */}
@@ -582,7 +587,7 @@ export function AIAssistantTab({
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {
-                      // Return gør nu bare ingenting (laver et linjeskift), da man skal bruge send-knappen.
+                      // Return/Enter creates a newline (use the arrow button to send)
                     }}
                     onFocus={() => {
                       // Scroll til bunden efter et kort stykke tid for at gøre plads til tastaturet

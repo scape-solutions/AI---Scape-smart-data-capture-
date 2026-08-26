@@ -60,9 +60,10 @@ export const GENERAL_STEPS: Step[] = [
         { value: 'metal-solid', label: 'Metal Solid', description: 'Solid metal container' },
         { value: 'metal-lattice', label: 'Metal Lattice', description: 'Mesh or lattice cage' },
         { value: 'plastic-box', label: 'Plastic Box', description: 'KLT or similar plastic box' },
+        { value: 'cardboard-box', label: 'Cardboard Box', description: 'Corrugated or solid cardboard container' },
         { value: 'table-magnet', label: 'Table (Magnet)', description: 'Picking from a table with magnets' },
         { value: 'other', label: 'Other', description: 'Custom solution' }
-      ], important: true },
+      ], important: true, description: 'The container format determines the camera setup, reach requirements, and collision avoidance zones.' },
       { id: '1.04_w', label: 'Bin Width (mm)', type: 'number', placeholder: 'e.g. 800' },
       { id: '1.04_l', label: 'Bin Length (mm)', type: 'number', placeholder: 'e.g. 1200' },
       { id: '1.04_h', label: 'Bin Height (mm)', type: 'number', placeholder: 'e.g. 600' },
@@ -92,7 +93,19 @@ export const PART_STEPS: Step[] = [
       { id: '2.03', label: 'Part Weight (kg)', type: 'number', placeholder: 'e.g. 1.5', important: true },
       { id: '2.03_material', label: 'Part Material', type: 'text', placeholder: 'e.g. Cast Iron, Plastic', important: true },
       { id: '2.04', label: 'Desired Average Cycle Time (sec)', type: 'number', placeholder: 'e.g. 15', important: true },
-      { id: '2.05', label: 'Average Cycle Time Based On', type: 'text', placeholder: 'e.g. 1 bin, 1 shift, or 50 cycles' },
+      { 
+        id: '2.05', 
+        label: 'Average Cycle Time Based On', 
+        type: 'select', 
+        options: [
+          { value: 'average-cycle-time', label: 'Average Cycle Time (Across full bin)', description: 'Average calculated time per part across a full container including rescans.' },
+          { value: 'absolute-maximum-time', label: 'Absolute Maximum Cycle Time (Line sync limit)', description: 'Hard mandatory limit per part for synchronized line pace.' },
+          { value: 'shift-basis', label: '1 shift target (8 hours)', description: 'Calculated over an 8-hour production shift.' },
+          { value: 'bin-basis', label: '1 bin container', description: 'Calculated for emptying one full bin container.' },
+          { value: 'other', label: 'Other requirement', description: 'Custom cycle time requirement basis.' }
+        ],
+        description: 'Specify whether cycle time is an average or an absolute maximum limit for line sync.'
+      },
       { id: '2.06', label: 'CAD file available for the part?', type: 'boolean', description: 'Preferred format is STL (~0.01 mm accuracy). Other formats (STP/STEP, IGS/IGES) can be converted (no DWG/DXF).' }
     ]
   },
