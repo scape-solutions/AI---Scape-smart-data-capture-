@@ -114,13 +114,8 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 ### BUNDLE 4: Dual-AI System & Technical Support Architecture (Support & Arkitektur)
 *Strukturering af kontekstuel hjælpe-AI til app-support og teknisk domæne-viden uden forurensning af Evaluator-prompten.*
 
-- [ ] **Dual-AI System (Context-Aware App Support & Technical Guidance):**
-  - **Mål:** Tilbyde dybere information om felternes betydning, tekniske afhængigheder (f.eks. hvordan en 5s cyklustid kræver 2 robotter) samt UI-hjælp, uden at forurene prompten for den primære bin-picking Evaluator-assistent.
-  - **Arkitektur & Løsningsmodel:**
-    1. **Hoved-AI ("The Evaluator"):** Fokuserer 100% på bin-picking evaluering og spørgeskema auto-fill.
-    2. **Interceptor-regel:** Hvis brugeren stiller et teknisk spørgsmål om appens brugerflade eller felter, returneres et JSON action-kald (`{"suggestedAction": "ask_support", "query": "..."}`).
-    3. **Support-AI ("The Support AI"):** Frontend opfanger handlingen og videresender spørgsmålet til en sekundær support-endpoint, som er udstyret med brugermanualen samt `src/docs/fieldExplanations.ts` videnbasen.
-  - **Fordele:** Forhindrer forvirring/hallucination hos hoved-AI'en, holder den primære Evaluator hurtig og billig, og tillader ubegrænset skalering af support-dokumentation.
+- [x] **Dual-AI System (Context-Aware App Support & Technical Guidance):**
+  - **Løsning:** Implementeret i `server.js` (`/api/support-chat`), `autoFillPrompt.md` (v8 `suggestedAction: ask_support`), `App.tsx` og `AIAssistantTab.tsx`. Support-AI'en samler dynamisk sin viden fra `appHelpGuide.md` og `fieldExplanations.ts` uden prompt-sprawl. Support-svar vises med et særskilt `💡 App & Technical Support` badge og opretholder en uafhængig `supportChatHistory`.
 
 ---
 
