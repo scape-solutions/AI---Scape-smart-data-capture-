@@ -2398,31 +2398,63 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                         {currentProject.fieldObservations?.[q.id] && (() => {
                           const obs = currentProject.fieldObservations![q.id];
                           const isCritical = obs.severity === 'critical';
+                          
+                          // Option B: Detect if field value was modified since last Advice evaluation
+                          const isFieldModifiedSinceAdvice = (() => {
+                            if (!currentProject.lastAdviceResponsesSnapshot) return false;
+                            try {
+                              const snapshot = JSON.parse(currentProject.lastAdviceResponsesSnapshot);
+                              if (currentStep === 0) {
+                                const snapVal = snapshot.generalResponses?.[q.id];
+                                const curVal = responses?.[q.id];
+                                return String(snapVal ?? '') !== String(curVal ?? '');
+                              } else {
+                                const snapPart = snapshot.parts?.[activePartIndex];
+                                const snapVal = snapPart?.responses?.[q.id];
+                                const curVal = responses?.[q.id];
+                                return String(snapVal ?? '') !== String(curVal ?? '');
+                              }
+                            } catch {
+                              return false;
+                            }
+                          })();
+
                           return (
                             <div className="relative inline-flex">
                               <button
                                 type="button"
                                 onClick={() => setOpenObservationId(prev => prev === q.id ? null : q.id)}
-                                title={obs.text}
+                                title={isFieldModifiedSinceAdvice ? "Field modified since last AI evaluation" : obs.text}
                                 className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md select-none shrink-0 cursor-pointer transition-all ${
-                                  isCritical
-                                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                                    : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                  isFieldModifiedSinceAdvice
+                                    ? 'bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200'
+                                    : isCritical
+                                      ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                      : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
                                 }`}
                               >
-                                {isCritical ? '🔴 Critical' : '⚠️ Note'}
+                                {isFieldModifiedSinceAdvice ? '✏️ Modified (Re-evaluate)' : isCritical ? '🔴 Critical' : '⚠️ Note'}
                               </button>
                               {openObservationId === q.id && (
                                 <div 
                                   ref={infoPopupRef}
-                                  className={`absolute z-50 bottom-full mb-2 right-0 sm:right-auto sm:left-0 max-w-[calc(100vw-3rem)] w-72 p-3 rounded-xl shadow-xl text-xs font-medium leading-relaxed border animate-fadeIn ${
-                                    isCritical
-                                      ? 'bg-red-50 border-red-200 text-red-800'
-                                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                                  className={`absolute z-50 bottom-full mb-2 right-0 sm:right-auto sm:left-0 max-w-[calc(100vw-3rem)] w-72 p-3.5 rounded-xl shadow-xl text-xs font-medium leading-relaxed border animate-fadeIn ${
+                                    isFieldModifiedSinceAdvice
+                                      ? 'bg-blue-50 border-blue-200 text-blue-900'
+                                      : isCritical
+                                        ? 'bg-red-50 border-red-200 text-red-800'
+                                        : 'bg-amber-50 border-amber-200 text-amber-800'
                                   }`}
                                 >
-                                  <p className="font-bold mb-1">{isCritical ? '🔴 Critical Observation' : '⚠️ Observation'}</p>
-                                  <p>{obs.text}</p>
+                                  <p className="font-bold mb-1 flex items-center gap-1.5">
+                                    {isFieldModifiedSinceAdvice ? '✏️ Value Modified' : isCritical ? '🔴 Critical Observation' : '⚠️ Observation'}
+                                  </p>
+                                  <p className="text-xs leading-normal">{obs.text}</p>
+                                  {isFieldModifiedSinceAdvice && (
+                                    <div className="mt-2 pt-2 border-t border-blue-200/80 text-[11px] font-semibold text-blue-800">
+                                      💡 You modified this field since the last evaluation. Re-generate Advice under Scape Review to update this observation.
+                                    </div>
+                                  )}
                                   <p className="text-[10px] mt-2 opacity-60">From: Project Information Advice</p>
                                 </div>
                               )}

@@ -39,18 +39,6 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 - [x] **Image Lightbox / Enlarge:**
   - Implement a feature where clicking on any uploaded image (both general cell images and part images) opens it in a larger popup/lightbox overlay, allowing users and evaluators to inspect image details easily.
 
-## Future / Architecture Ideas
-
-- [ ] **Dual-AI System (Context-Aware App Support)**
-  - **Concept:** Create a two-agent architecture to handle both Bin-Picking evaluation and App Support without polluting the main prompt.
-  - **Implementation Strategy:**
-    1. Keep the main AI ("The Evaluator") focused entirely on bin-picking.
-    2. Add a system prompt rule to The Evaluator: *"If the user asks a technical question about the app interface (e.g. 'how do I print', 'where is the submit button'), output the JSON action: `{"suggestedAction": "ask_support", "query": "..."}`"*.
-    3. When the React frontend intercepts this JSON action, it suppresses the message and instead forwards the `query` to a *second* Gemini endpoint ("The Support AI").
-    4. The Support AI is equipped with a large, detailed user manual containing all app documentation, troubleshooting steps, and UI explanations.
-    5. The response from the Support AI is displayed in the chat interface.
-  - **Benefits:** Prevents role-confusion (hallucination) in the main evaluator AI, keeps the core evaluator fast and cheap, and allows unlimited documentation scaling for app support.
-
 ## Nye Opgaver (Fra Møde / Input)
 
 ### Gennemførte Opgaver (Completed)
@@ -61,7 +49,7 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 - [x] **Infrastruktur & Cloud Run Optimering (Eliminer Cold Starts):**
   - Hold mindst 1 instans kørende med CPU throttling aktiveret (hybrid model) i `deploy.sh`.
 - [x] **CAD-filformater for felt [2.06]:**
-  - Opdater beskrivelsen af felt `2.06` i [src/questionnaire.ts](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/src/questionnaire.ts) og fil-validatoren i [src/views/QuestionnaireView.tsx](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/src/views/QuestionnaireView.tsx) til kun at tillade STL, STEP/STP og IGS/IGES (ekskluder DWG/DXF).
+  - Opdater beskrivelsen af felt `2.06` i `src/questionnaire.ts` og fil-validatoren i `src/views/QuestionnaireView.tsx` til kun at tillade STL, STEP/STP og IGS/IGES (ekskluder DWG/DXF).
 
 ---
 
@@ -70,18 +58,18 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 
 - [x] **Konflikthåndtering mellem manuelle input og AI-opdateringer:**
   - **Løsning:** Implementeret i systemInstruction (`DATA DISCREPANCY RULE FOR CHAT HISTORY`), stript af gamle JSON-blokke fra historik, samt visuel advarsels-badge (`⚠️ Overwrites manual value`) med rose-farve ved AI-forslag på manuelle felter.
-- [ ] **AI-markering af 'kritiske' felter og gen-evaluering (Undersøgelse):**
-  - **Udfordring:** AI'en kan markere et felt som "Critical" (kritisk), selvom det allerede er udfyldt manuelt, hvis den mener brugeren skal dobbelttjekke det. Vi skal afklare, om dette er en ønsket funktion, og *hvornår* felterne skal gen-evalueres, efter der er indtastet nye oplysninger.
-- [ ] **AI-forsøg på uventet at nulstille felt [2.11] (Bug):**
-  - **Udfordring:** Ved indtastning i felt `[2.11]` (observeret på et specifikt projekt) dukker der en besked op i AI-chatten, som foreslår at ændre feltets værdi fra "true" til "null" – på trods af at AI'en ikke oprindeligt havde foreslået dette. (Skal undersøges på et senere tidspunkt).
-- [ ] **AI-degradering ved stor mængde information / mange emner (Bug / Undersøgelse):**
-  - **Udfordring:** AI'en præsterer dårligere (eller overser data), når der indføres meget information eller mange emner (parts) i et projekt (f.eks. ved ikke at udfylde felter, den har bekræftet, eller rydde manuelle data). Kræver fejlfinding med et reproducerbart eksempel.
-- [ ] **Afklaring af AI-forvirring omkring cyklustider [2.04]/[2.05] (Undersøgelse):**
-  - **Udfordring:** AI'en bliver af og til forvirret omkring felt `[2.04]` (Required Cycle Time) og `[2.05]` (Desired Cycle Time) og beder brugeren præcisere cyklustypen, selvom det fremgår direkte af feltnavnene. Tilpasses i AI-prompterne, når de endelige spørgsmål er fastlagt.
+- [x] **AI-markering af 'kritiske' felter og gen-evaluering:**
+  - **Løsning (Option B):** Implementeret i `QuestionnaireView.tsx`. Når brugeren retter et felt med et felt-badge, skifter badget automatisk status fra `🔴 Critical` / `⚠️ Note` til et blåt `✏️ Modified (Re-evaluate)` badge med forklaring om at gen-generere rapporten under *Scape Review* for opdateret vurdering.
+- [x] **AI-forsøg på uventet at nulstille felt [2.11] (Bug):**
+  - **Løsning:** Løst i `autoFillPrompt.md` (v7) ved at tilføje eksplicitte regler om, at AI'en **kun** må returnere felter, der er omtalt eller opdateret i **seneste tur**, og aldrig må foreslå nulstilling/`null` på uomtalte felter.
+- [x] **AI-degradering ved stor mængde information / mange emner (Bug / Undersøgelse):**
+  - **Løsning:** Håndteret via single-turn JSON extraction i v7 prompten samt i `AIAssistantTab.tsx` ved automatisk fallback-mapping af emne-opdateringer til den aktive part-fane (`activePartIndex`).
+- [x] **Afklaring af AI-forvirring omkring cyklustider [2.04]/[2.05]:**
+  - **Løsning:** Felt `2.05` er ombygget til en eksplcit `select` dropdown med valgmuligheder (*Average Cycle Time*, *Absolute Maximum Cycle Time*, *1 Shift*, *1 Bin*) i `questionnaire.ts` og `autoFillPrompt.md`, så numerisk cyklustid (`2.04`) og beregningsgrundlag (`2.05`) er helt adskilt.
 - [x] **Automatisk oprettelse af emner ud fra felt [1.02]:**
   - **Løsning:** Implementeret real-time registrering af felt `1.02` samt en Prompt Banner i UI med knappen `+ Add X Parts` til hurtigt at udvide emne-fanerne.
-- [ ] **Historik og visualisering af AI-bekræftelser (Undersøgelse & Design):**
-  - **Udfordring:** Når AI-ændringer i de gule kort (Apply Changes) godkendes, kan man bagefter ikke se præcist, hvad der blev bekræftet i dialogen. De lysegrønne felter i skemaet virker ikke koblet direkte sammen med det godkendte.
+- [x] **Historik og visualisering af AI-bekræftelser:**
+  - **Løsning:** Implementeret feltnummerering (`[1.05]`) i FACTS/QUESTIONS i chatten, samt gule forslagskort i `AIAssistantTab.tsx` med direkte felt-sammenligning (Før vs. Efter) og redigerbare felter inden godkendelse.
 
 ---
 
@@ -91,15 +79,15 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 - [x] **Justerbar bredde i split-screen visning (UX forbedring):**
   - **Løsning:** Tilføjet et lodret træk-håndtag (drag-handle med `GripVertical` ikon) mellem AI-panelet og skema-panelet i `QuestionnaireView.tsx`, så brugeren frit kan trække og tilpasse panelbredden.
 - [x] **Større indtastningsfelt til AI-assistent (UX forbedring):**
-  - **Løsning:** Implementeret auto-ekspanderende `textarea` i `AIAssistantTab.tsx` med understøttelse af `Enter` til afsendelse og `Shift+Enter` til skiftelinjer.
+  - **Løsning:** Implementeret auto-ekspanderende `textarea` i `AIAssistantTab.tsx` med understøttelse af `Enter` til skiftelinje.
 - [x] **Synlighed af aktivt projektnavn i AI-mode (UX forbedring):**
   - **Løsning:** Tilføjet et fremtrædende projektnavn-badge (`📁 Project Name`) øverst i AI Assistant panelet.
 - [x] **Ensrettet skift mellem AI-mode og Manuel-mode (UX forbedring):**
   - **Løsning:** Tilføjet automatisk lukning af AI-panelet ved udløserord som "done", "finished", "jeg er færdig", samt fast toggle-knap.
-- [ ] **Visning af Project Information Advice / AI Review (UX undersøgelse):**
-  - **Udfordring:** AI-evalueringsrapporten (Advice) optager i dag hele skærmen, så man ikke kan se form-felterne samtidigt. Vi skal undersøge, om rapporten i stedet kan integreres direkte i AI-panelet/sidepanelet, eller om der kan laves et side-by-side split layout.
+- [x] **Visning af Project Information Advice / AI Review (UX undersøgelse):**
+  - **Løsning:** AI-evalueringsrapporten (Advice) kan tilgås og gennemgås direkte via `Scape Review` sektionsvelgeren i spørgeskemaet.
 - [ ] **Fejlfinding af app-crash ved oprettelse af +6 emner via AI (Bug):**
-  - **Udfordring:** Hjemmesiden crasher/fryser af og til, når man forsøger at oprette mere end 6 emner på én gang via AI-assistenten (en refresh afhjælper fejlen). Skal undersøges for uendelige render-loops eller Firestore batch-begrænsninger.
+  - **Udfordring:** Hjemmesiden crasher/fryser af og til, når man forsøger at oprette mere end 6 emner på én gang via AI-assistenten. Skal undersøges for uendelige render-loops eller Firestore batch-begrænsninger.
 
 ---
 
@@ -123,12 +111,16 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 
 ---
 
-### BUNDLE 4: Help AI & Technical Knowledge Architecture (Arkitektur & Support)
-*Opgaver vedrørende strukturering og afgrænsning af teknisk hjælpe-AI.*
+### BUNDLE 4: Dual-AI System & Technical Support Architecture (Support & Arkitektur)
+*Strukturering af kontekstuel hjælpe-AI til app-support og teknisk domæne-viden uden forurensning af Evaluator-prompten.*
 
-- [ ] **Kontekstuel hjælpe-AI til spørgeskemaet (Undersøgelse & Design):**
-  - **Mål:** Undersøg, hvordan vi bedst kan tilbyde dybere information om felternes betydning og deres indbyrdes tekniske afhængigheder (f.eks. hvordan cyklustid på 5s tvinger et krav om 2 robotter) uden at forurene prompten for den eksisterende auto-fill chat-assistent.
-  - **Overvej:** Dual-AI systemet (se detaljer under "Future / Architecture Ideas" ovenfor), hvor en separat Support-AI med eget system-prompt og manual tager sig af de tekniske UI/hjælpe-spørgsmål.
+- [ ] **Dual-AI System (Context-Aware App Support & Technical Guidance):**
+  - **Mål:** Tilbyde dybere information om felternes betydning, tekniske afhængigheder (f.eks. hvordan en 5s cyklustid kræver 2 robotter) samt UI-hjælp, uden at forurene prompten for den primære bin-picking Evaluator-assistent.
+  - **Arkitektur & Løsningsmodel:**
+    1. **Hoved-AI ("The Evaluator"):** Fokuserer 100% på bin-picking evaluering og spørgeskema auto-fill.
+    2. **Interceptor-regel:** Hvis brugeren stiller et teknisk spørgsmål om appens brugerflade eller felter, returneres et JSON action-kald (`{"suggestedAction": "ask_support", "query": "..."}`).
+    3. **Support-AI ("The Support AI"):** Frontend opfanger handlingen og videresender spørgsmålet til en sekundær support-endpoint, som er udstyret med brugermanualen samt `src/docs/fieldExplanations.ts` videnbasen.
+  - **Fordele:** Forhindrer forvirring/hallucination hos hoved-AI'en, holder den primære Evaluator hurtig og billig, og tillader ubegrænset skalering af support-dokumentation.
 
 ---
 

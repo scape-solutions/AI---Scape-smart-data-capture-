@@ -57,6 +57,7 @@ async function run() {
   }, { merge: true });
 
   console.log("SUCCESS: Cloud prompts are now synchronized with local files!");
+  process.exit(0);
 }
 
 run().catch(error => {
