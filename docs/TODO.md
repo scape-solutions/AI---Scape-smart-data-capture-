@@ -53,103 +53,100 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 
 ## Nye Opgaver (Fra Møde / Input)
 
+### Gennemførte Opgaver (Completed)
 - [x] **Navneændring:**
   - Omdøb appens navn og alle relevante steder i teksten til: **Scape Bin-Picker Projects**.
+- [x] **Terms of Service (ToS) / Onboarding:**
+  - Opret en ToS, der vises ved første login og kan genfindes under INFO-teksten.
+- [x] **Infrastruktur & Cloud Run Optimering (Eliminer Cold Starts):**
+  - Hold mindst 1 instans kørende med CPU throttling aktiveret (hybrid model) i `deploy.sh`.
+- [x] **CAD-filformater for felt [2.06]:**
+  - Opdater beskrivelsen af felt `2.06` i [src/questionnaire.ts](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/src/questionnaire.ts) og fil-validatoren i [src/views/QuestionnaireView.tsx](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/src/views/QuestionnaireView.tsx) til kun at tillade STL, STEP/STP og IGS/IGES (ekskluder DWG/DXF).
 
+---
+
+### BUNDLE 1: AI Auto-fill State & Conflict Management (AI Logik & Data)
+*Opgaver vedrørende AI-assistentens dataudtrækning, prioritering af manuelle valg fremfor historik, samt fejlfinding af forudindtagede svar og data-degradering.*
+
+- [ ] **Konflikthåndtering mellem manuelle input og AI-opdateringer (Undersøgelse & Design):**
+  - **Udfordring:** Når en bruger manuelt har udfyldt eller rettet et felt, må AI'en ikke efterfølgende overskrive dette felt lydløst med informationer udledt fra chatten.
+  - **Udestående diskussion:** Vi skal diskutere og afklare dette grundigt, da der ikke er én entydig rigtig løsning (f.eks. skal manuelle ændringer låse feltet for AI'en, eller skal AI'en bede om bekræftelse før en overskrivning?).
+- [ ] **AI-markering af 'kritiske' felter og gen-evaluering (Undersøgelse):**
+  - **Udfordring:** AI'en kan markere et felt som "Critical" (kritisk), selvom det allerede er udfyldt manuelt, hvis den mener brugeren skal dobbelttjekke det. Vi skal afklare, om dette er en ønsket funktion, og *hvornår* felterne skal gen-evalueres, efter der er indtastet nye oplysninger.
+- [ ] **AI-forsøg på uventet at nulstille felt [2.11] (Bug):**
+  - **Udfordring:** Ved indtastning i felt `[2.11]` (observeret på et specifikt projekt) dukker der en besked op i AI-chatten, som foreslår at ændre feltets værdi fra "true" til "null" – på trods af at AI'en ikke oprindeligt havde foreslået dette. (Skal undersøges på et senere tidspunkt).
+- [ ] **AI-degradering ved stor mængde information / mange emner (Bug / Undersøgelse):**
+  - **Udfordring:** AI'en præsterer dårligere (eller overser data), når der indføres meget information eller mange emner (parts) i et projekt (f.eks. ved ikke at udfylde felter, den har bekræftet, eller rydde manuelle data). Kræver fejlfinding med et reproducerbart eksempel.
+- [ ] **Afklaring af AI-forvirring omkring cyklustider [2.04]/[2.05] (Undersøgelse):**
+  - **Udfordring:** AI'en bliver af og til forvirret omkring felt `[2.04]` (Required Cycle Time) og `[2.05]` (Desired Cycle Time) og beder brugeren præcisere cyklustypen, selvom det fremgår direkte af feltnavnene. Tilpasses i AI-prompterne, når de endelige spørgsmål er fastlagt.
+- [ ] **Automatisk oprettelse af emner ud fra felt [1.02] (Undersøgelse & Design):**
+  - **Nuværende adfærd:** Hvis en bruger ændrer felt `1.02` (Total of different parts) til f.eks. 3, sker der intet automatisk i UI. Men hvis AI'en foreslår svar for 3 emner, og brugeren trykker "Apply", oprettes de nye emner automatisk.
+  - **Overvejelse:** Skal manuel indtastning i felt `1.02` i fremtiden automatisk oprette/slette emne-faner i UI for at matche tallet?
+- [ ] **Historik og visualisering af AI-bekræftelser (Undersøgelse & Design):**
+  - **Udfordring:** Når AI-ændringer i de gule kort (Apply Changes) godkendes, kan man bagefter ikke se præcist, hvad der blev bekræftet i dialogen. De lysegrønne felter i skemaet virker ikke koblet direkte sammen med det godkendte.
+
+---
+
+### BUNDLE 2: Split-Screen & AI UI Layout Optimizations (Brugerflade & Chat)
+*Opgaver vedrørende layout, synlighed og fleksibilitet, når man arbejder i split-screen AI-visningen.*
+
+- [ ] **Justerbar bredde i split-screen visning (UX forbedring):**
+  - **Løsning:** Tilføj en lodret skillelinje/træk-håndtag (drag-handle) imellem de to paneler i split-screen, så brugeren frit kan trække for at gøre skemaet bredere og chatten smallere (eller omvendt).
+- [ ] **Større indtastningsfelt til AI-assistent (UX forbedring):**
+  - **Løsning:** Lav et auto-ekspanderende tekstfelt (Textarea) i chatten, som starter som en mindre boks (f.eks. 3 linjer) og automatisk udvider sig i højden op til max 8-10 linjer, hvorefter der vises en scrollbar.
+- [ ] **Synlighed af aktivt projektnavn i AI-mode (UX forbedring):**
+  - **Løsning:** Sørg for at vise det aktive projekts navn tydeligt i toppen af AI-panelet eller i Headeren, så det altid er synligt uanset skærmbredde og visningstilstand (især på små/smalle skærme).
+- [ ] **Ensrettet skift mellem AI-mode og Manuel-mode (UX forbedring):**
+  - **Løsning:** Lav en fast toggle-knap i øverste venstre hjørne af spørgeskema-visningen som den eneste manuelle måde at skifte visning. AI'en skal desuden automatisk lukke AI-panelet/skifte til manuel tilstand, hvis brugeren skriver "jeg er færdig", "done" eller lignende.
+- [ ] **Visning af Project Information Advice / AI Review (UX undersøgelse):**
+  - **Udfordring:** AI-evalueringsrapporten (Advice) optager i dag hele skærmen, så man ikke kan se form-felterne samtidigt. Vi skal undersøge, om rapporten i stedet kan integreres direkte i AI-panelet/sidepanelet, eller om der kan laves et side-by-side split layout.
+- [ ] **Fejlfinding af app-crash ved oprettelse af +6 emner via AI (Bug):**
+  - **Udfordring:** Hjemmesiden crasher/fryser af og til, når man forsøger at oprette mere end 6 emner på én gang via AI-assistenten (en refresh afhjælper fejlen). Skal undersøges for uendelige render-loops eller Firestore batch-begrænsninger.
+
+---
+
+### BUNDLE 3: Questionnaire UI & Field Label Improvements (Spørgeskema UX)
+*Forbedringer af spørgeskemaets felter, infobokse og generelle UI-adfærd.*
+
+- [ ] **Vis/skjul og placering af felt-numre (UX forbedring):**
+  - **Løsning:** Flyt feltnumrene til slutningen af label-teksten (f.eks. "Projektnavn [1.01]") og tilføj en valgfri toggle-knap (nice-to-have) i Headeren eller under indstillinger til dynamisk at vise/skjule dem i UI.
+- [ ] **Forklarende hjælpe-noter på felter (UX forbedring):**
+  - **Løsning:** Tilføj et lille info-ikon (cirkulært "i") ud for alle indtastningsfelter. Ved klik eller hover vises en infonote/popup, som forklarer meningen og formålet med det pågældende felt.
+- [ ] **Bedre lukning af "CRITICAL" og "NOTE" popups (UX forbedring):**
+  - **Løsning:** Implementer en "click outside"-håndtering, så advarsels- og infobobler lukker automatisk, så snart brugeren klikker et vilkårligt andet sted på skærmen.
+- [ ] **Fast placering af Dashboard-knap (UX forbedring):**
+  - **Løsning:** Dashboard-knappen (genvejen tilbage til projektoversigten) skal altid være placeret i den øverste række (i Headeren) på præcis samme position, uanset brugertype eller rolle.
 - [ ] **Cardboard box i dropdown:**
   - Tilføj "Cardboard box" som en valgmulighed i "Bin type" dropdown-menuen.
 
+---
+
+### BUNDLE 4: Help AI & Technical Knowledge Architecture (Arkitektur & Support)
+*Opgaver vedrørende strukturering og afgrænsning af teknisk hjælpe-AI.*
+
+- [ ] **Kontekstuel hjælpe-AI til spørgeskemaet (Undersøgelse & Design):**
+  - **Mål:** Undersøg, hvordan vi bedst kan tilbyde dybere information om felternes betydning og deres indbyrdes tekniske afhængigheder (f.eks. hvordan cyklustid på 5s tvinger et krav om 2 robotter) uden at forurene prompten for den eksisterende auto-fill chat-assistent.
+  - **Overvej:** Dual-AI systemet (se detaljer under "Future / Architecture Ideas" ovenfor), hvor en separat Support-AI med eget system-prompt og manual tager sig af de tekniske UI/hjælpe-spørgsmål.
+
+---
+
+### Øvrige Opgaver
+
 - [ ] **Multi-language app:**
   - Gør applikationen multi-language (understøttelse af flere sprog i UI og prompts).
-
+- [ ] **Opsamling af ustruktureret AI-data:**
+  - Opsaml ustrukturerede chat-oplysninger, der ikke passer direkte i form-felterne, i et separat generelt notefelt i databasen.
+- [ ] **Håndtering af udløbet session (UX fejlbesked):**
+  - Ryd error states ved login/logout, og fang udløbne tokens (auth/id-token-expired) for at redirecte pænt med en klar besked ("Session udløbet") i stedet for en rå databasefejl.
 - [ ] **Budget & Alarmer:**
   - Sæt et loft på Gemini og Firebase på 5.000 DKK, hvorefter der skal udløses en alarm. *(Dette skal opsættes direkte i Google Cloud Console).*
-
-- [x] **Terms of Service (ToS) / Onboarding:**
-  - Opret en ToS, der vises ved første login og kan genfindes under INFO-teksten.
-  - **Indhold:**
-    - Data bruges udelukkende af parterne (end-user, integrator og Scape Solutions).
-    - Data bruges til træning, men anonymiseres, så det aldrig kan spores tilbage til et specifikt projekt.
-    - Giv kun den lovpligtige information, som gør kunderne trygge.
-    - Appen stilles til rådighed uden forpligtelser fra Scape Solutions' side.
-    - Ansvarsfraskrivelse (Disclaimer) ift. AI "run aways" (at AI'en kan love noget forkert). Det skal stå soleklart, at AI'en *kun* bruges til dataindsamling. Feasibility-svar og løfter gives *altid* af en Scape Solutions-medarbejder.
-
 - [ ] **Udvidede Brugertyper (Roller):**
-  - Udvid systemet til at håndtere 4 distinkte roller:
-    1. Slutbruger (End-user)
-    2. Integrator
-    3. Evaluator
-    4. Scape Sælger (Sales)
-
+  - Udvid til 4 roller: Slutbruger, Integrator, Evaluator, Scape Sælger.
 - [ ] **Oprydning af Rolletildeling & Brugeradministration (Option B):**
-  - **Mål:** Fjern domæne-baseret og e-mail-baseret automatisk tildeling (`allowedDomains` og `allowedEmails`). Gør alle brugere til standard-kunder (`user`) ved oprettelse, og lad en Super User administrere roller direkte i appen.
-  - **Ændringer i Datamodel & Firestore:**
-    * Brugerens rolle gemmes som `requestedRole: 'user' | 'evaluator' | 'superuser'` (og eventuelt `'sales'`) i `/users/{uid}`.
-    * Rollen gemmes synkront i `config/access` (i `allowedEvaluators` og `superusers` arrays), så man altid kan nød-redigere eller genskabe adgang manuelt i Firestore Console (GCP).
-    * Sikkerhed: Opdater `firestore.rules`, så almindelige brugere ikke selv kan rette i deres `requestedRole` eller `isAdmin` felter på `/users/{uid}`. Kun Super Users må opdatere andres roller.
-  - **Sikkerhedsregler (Firestore Rules):**
-    * Opdater `isScape()` og `isAdmin()` i reglerne til at slå rollen op på brugerens profildokument `/users/{userId}` i stedet for at tjekke `@scapesolutions.eu` e-mail-domænet.
-  - **Brugerflade (UI) - Brugeradministration:**
-    * Tilføj et nyt **"Brugeradministration" (User Management)** skærmbillede under Super User Tools.
-    * Panelet skal hente og vise en liste (tabel) over alle registrerede brugere fra `/users` med:
-      - Navn og E-mail.
-      - Nuværende rolle.
-      - En dropdown/select til at skifte brugerens rolle.
-      - Knap til at gemme ændringerne (skriver til `/users/{uid}` og opdaterer `config/access` synkront).
-    * Sikkerhed i UI: Forhindr at den aktive Super User kan nedgradere sin egen rolle (knappen deaktiveres for ens egen bruger) for at undgå lockout.
-
+  - Fjern allowedDomains/allowedEmails. Gem roller i `/users/{uid}`. Tilføj en brugeradministrationsside til Super Users.
 - [ ] **Notifikationssystem:**
-  - Opsæt et regelsæt/liste over, hvem der får notifikationer ved bestemte hændelser.
-  - Sælgere (bestemte eller alle) skal have besked, når et nyt projekt submittes.
-  - Sælgere skal have besked, når der sendes et svar/evaluering tilbage til integratoren (så evaluator og sælger kan tale sammen inden afsendelse).
-
+  - Send mails/notifikationer til sælgere ved oprettelse og afsendelse af evalueringer.
 - [ ] **Erfarings-referencer for Evaluators:**
-  - Giv Evaluator mulighed for at linke til (eller uploade filer) med tidligere erfaringer, der understøtter evalueringsresultatet.
-  - Implementér adgangskontrol, så det er tydeligt og styret, *hvem* der må se denne interne reference-information.
-
+  - Tillad evaluators at uploade/linke interne erfaringsdokumenter med begrænset adgangskontrol.
 - [ ] **Samarbejde & Projektdeling (Collaboration & Sharing):**
-  - **Reference:** Se detaljeret arkitektur og test-eksempler i [sharing_rules_analysis.md](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/docs/sharing_rules_analysis.md).
-  - **Mål:** Tillad at dele et projekt med andre brugere som "Viewers" (læseadgang) via Option B (separat `/joinRequests` samling for at holde sikkerhedsreglerne simple og fejlsikre). Ejeren har skriveadgang og kan overføre ejerskab.
-  - **Datamodel (Firestore):**
-    - Projekt-dokument:
-      * `sharedViewers: string[]` (liste over UIDs med godkendt læseadgang).
-      * `shareToken: string` (unik token til link-deling).
-    - Ny rod-samling `/joinRequests/{requestId}` (hvor ID f.eks. er `projectId_userId`):
-      * `projectId: string` (projektets ID).
-      * `userId: string` (UID på anmoderen).
-      * `userEmail: string` (anmoderens e-mail).
-      * `userName: string` (anmoderens navn).
-      * `status: string` (`'pending'`).
-  - **Invitationer & Adgangskontrol (Metode A & B):**
-    - **Metode A (E-mail):** Ejeren indtaster en e-mail. Hvis kontoen findes, tilføjes brugerens UID med det samme til `sharedViewers`.
-    - **Metode B (Link med godkendelses-lobby):** Ejeren kan generere et unikt delingslink (f.eks. `/join-project/123?token=abc`). Når en anden bruger klikker på linket og logger ind, opretter de et dokument i `/joinRequests` samlingen. Brugeren får først adgang, når ejeren godkender anmodningen.
-  - **Overførsel af ejerskab (Transfer):**
-    - Ejeren kan overføre sit ejerskab (`userId` ændres til den nye ejers UID) til en af de godkendte Viewers.
-    - Den gamle ejer flyttes automatisk over i `sharedViewers`-listen, så de bevarer deres læseadgang.
-    - Hver overførsel registreres og logges automatisk i projektets historik (`changelog`), så evaluatoren altid kan se det.
-  - **Sikkerhedsregler (Firestore Rules):**
-    - Projekt-regler: Læseadgang tillades for ejeren og brugere i `sharedViewers`. Skriveadgang tillades *kun* for ejeren (`userId == request.auth.uid`).
-    - JoinRequests-regler: Oprettelse tillades for den loggede bruger selv. Læsning og sletning tillades for anmoderen selv samt ejeren af det tilknyttede projekt.
-  - **Brugerflade (UI):**
-    - Tilføj en "Share Project" knap på projektkortet/dashboardet, der åbner dele-modalen.
-    - Modalen skal:
-      * Liste nuværende Viewers (med mulighed for at fjerne dem).
-      * Vise anmodninger fra `/joinRequests` (hvor `projectId == currentProject.id`), så ejeren kan Godkende (tilføjer UID til `sharedViewers` og sletter anmodnings-dokumentet) eller Afvise (sletter anmodnings-dokumentet).
-      * Generere/kopiere delingslinket.
-      * Have en "Make Owner" (Transfer) knap ud for hver Viewer.
-    - Delte projekter skal vises på dashboardet for Viewers med en tydelig "Shared" status eller i en separat fane, og åbnes i en tvungen read-only tilstand.
-
-- [x] **Infrastruktur & Cloud Run Optimering (Eliminer Cold Starts) - *Gennemført via Model C (Hybrid)*:**
-  - **Udfordring:** Cloud Run skalerer pt. ned til 0 instanser ved inaktivitet, hvilket medfører 5-10 sekunders ventetid ("cold start") ved det første besøg efter noget tid.
-  - **Valg:** Model C (Hybrid) med `--min-instances=1` og CPU throttling aktiveret. Dette fjerner cold starts helt for den første bruger, men CPU sættes i dvale ved inaktivitet, hvilket koster under 45 DKK/måned for 1 GB RAM i stedet for ~400 DKK/måned.
-  - **Løsning:**
-    * Opdateret `deploy.sh` til at holde mindst 1 instans kørende:
-      ```bash
-      gcloud run deploy scape-evaluator \
-        --image europe-west3-docker.pkg.dev/scape-data-capture/scape-evaluator/scape-evaluator:latest \
-        --platform managed \
-        --region europe-west3 \
-        --allow-unauthenticated \
-        --min-instances=1 \
-        --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest,GOOGLE_OAUTH_CLIENT_SECRET=GOOGLE_OAUTH_CLIENT_SECRET:latest"
-      ```
+  - Deling af projekter som Viewers, invitationer via e-mail eller link-lobby, og overførsel af ejerskab. (Se [sharing_rules_analysis.md](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/docs/sharing_rules_analysis.md)).
