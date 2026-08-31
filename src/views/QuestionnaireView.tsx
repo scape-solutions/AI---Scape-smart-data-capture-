@@ -891,7 +891,12 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
             await updateProjectField(updated, 'isSplitScreen', nextMode, `Toggled AI mode to ${nextMode}`);
           }
         }}
-        onOpenAIAdviceDrawer={() => setIsAdviceDrawerOpen(true)}
+        onOpenAIAdviceDrawer={() => {
+          setIsAdviceDrawerOpen(true);
+          if (!currentProject.report && !isGeneratingAdvice && !isReadOnly) {
+            generateExternalAdvice();
+          }
+        }}
       />
 
       {/* Main split-screen/sidebar layout area container */}
@@ -1436,9 +1441,24 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           <p>
                             Accurate cell dimensions, physical part parameters, cycle times, and real part photos are essential for Scape Solutions engineers to conduct a reliable bin-picking feasibility study.
                           </p>
-                          <p className="text-slate-600">
-                            💡 <strong>Important:</strong> Check the <span className="font-bold text-amber-800">⚡ AI Advice</span> drawer (in top header bar) to verify that no severe data gaps or critical warnings remain.
-                          </p>
+                          <div className="flex items-center justify-between gap-4 flex-wrap pt-1">
+                            <p className="text-slate-600">
+                              💡 <strong>Important:</strong> Check the <span className="font-bold text-amber-800">⚡ AI Advice</span> drawer to verify that no severe data gaps or critical warnings remain.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsAdviceDrawerOpen(true);
+                                if (!currentProject.report && !isGeneratingAdvice && !isReadOnly) {
+                                  generateExternalAdvice();
+                                }
+                              }}
+                              className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+                            >
+                              <Zap className="w-3.5 h-3.5" />
+                              {currentProject.report ? 'View AI Advice' : 'Get AI Advice'}
+                            </button>
+                          </div>
                         </div>
                       </div>
 
@@ -1470,9 +1490,16 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                             onClick={async () => {
                               setIsSaving(true);
                               try {
-                                const res = await saveProject('submitted', currentProject);
+                                const submittedSnapshotProject: ProjectState = {
+                                  ...currentProject,
+                                  status: 'submitted',
+                                  userSubmittedReport: currentProject.userSubmittedReport || currentProject.report || null,
+                                  userSubmittedObservations: currentProject.userSubmittedObservations || currentProject.fieldObservations || null,
+                                  userSubmittedAdviceTimestamp: currentProject.userSubmittedAdviceTimestamp || currentProject.lastAdviceTimestamp || new Date().toLocaleString()
+                                };
+                                const res = await saveProject('submitted', submittedSnapshotProject);
                                 if (res) {
-                                  setCurrentProject({ ...currentProject, status: 'submitted' });
+                                  setCurrentProject(res);
                                   setGlobalSuccess("Project successfully submitted for Scape evaluation!");
                                   setTimeout(() => setGlobalSuccess(null), 4000);
                                 }
@@ -1502,10 +1529,17 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   {/* Evaluator Unfoldable AI Advice Accordion */}
                   {profile?.isAdmin && (
                     <div className="bg-slate-900 text-white p-5 sm:p-8 rounded-2xl md:rounded-3xl shadow-lg relative overflow-hidden">
-                      <div className="flex justify-between items-center relative z-10">
-                        <h3 className="text-base font-bold flex items-center gap-2">
-                          <Zap className="text-amber-400" /> User AI Advice Report
-                        </h3>
+                      <div className="flex justify-between items-center relative z-10 flex-wrap gap-2">
+                        <div>
+                          <h3 className="text-base font-bold flex items-center gap-2">
+                            <Zap className="text-amber-400" /> User AI Advice Report (At Submission)
+                          </h3>
+                          {(currentProject.userSubmittedAdviceTimestamp || currentProject.lastAdviceTimestamp) && (
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              Snapshot taken: {currentProject.userSubmittedAdviceTimestamp || currentProject.lastAdviceTimestamp}
+                            </p>
+                          )}
+                        </div>
                         <button
                           onClick={() => setIsEvaluatorAdviceExpanded(!isEvaluatorAdviceExpanded)}
                           className="px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white transition-all border border-white/10 cursor-pointer"
@@ -1516,14 +1550,14 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
                       {isEvaluatorAdviceExpanded && (
                         <div className="relative z-10 mt-6 space-y-4 animate-fadeIn border-t border-slate-800 pt-6">
-                          {currentProject.report ? (
+                          {(currentProject.userSubmittedReport || currentProject.report) ? (
                             <div className="max-h-[50vh] overflow-y-auto pr-4 text-slate-300 text-xs leading-relaxed [&>h1]:text-xl [&>h1]:font-bold [&>h1]:mb-3 [&>h2]:text-lg [&>h2]:font-bold [&>h2]:mb-2 [&>h3]:text-base [&>h3]:font-bold [&>h3]:mb-2 [&>p]:mb-3 [&>ul]:list-disc [&>ul]:ml-5 [&>ul]:mb-3 [&>strong]:text-white custom-scrollbar">
                               <ReactMarkdown>
-                                {cleanMarkdownWrapper(currentProject.report)}
+                                {cleanMarkdownWrapper((currentProject.userSubmittedReport || currentProject.report)!)}
                               </ReactMarkdown>
                             </div>
                           ) : (
-                            <p className="text-xs text-slate-400 italic">No AI Advice report generated for this project yet.</p>
+                            <p className="text-xs text-slate-400 italic">No AI Advice report was generated by the user prior to submission.</p>
                           )}
                         </div>
                       )}
@@ -3370,7 +3404,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     </ReactMarkdown>
                   </div>
 
-                  {!isReadOnly && !profile?.isAdmin && (
+                  {!isReadOnly && (
                     <div className="pt-4 border-t border-slate-100 flex justify-end">
                       <button
                         onClick={generateExternalAdvice}
@@ -3389,10 +3423,11 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   <p className="text-xs text-slate-500 leading-relaxed">
                     Click below to analyze your project data, physical cell dimensions, and part parameters using AI.
                   </p>
-                  {!isReadOnly && !profile?.isAdmin && (
+                  {!isReadOnly && (
                     <button
                       onClick={generateExternalAdvice}
-                      className="px-6 py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-600/20 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
+                      disabled={isGeneratingAdvice}
+                      className="px-6 py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-600/20 transition-all active:scale-95 cursor-pointer flex items-center gap-2 disabled:opacity-50"
                     >
                       <Sparkles className="w-4 h-4" /> Get Advice Data
                     </button>

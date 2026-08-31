@@ -612,7 +612,8 @@ The chat history transcript below contains past conversation messages. If any us
       if (isLastMessage && msg.images && Array.isArray(msg.images)) {
         msg.images.forEach(imgBase64 => {
           if (imgBase64.startsWith('data:')) {
-            const mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
+            let mimeType = imgBase64.substring(5, imgBase64.indexOf(';'));
+            if (mimeType === 'audio/x-m4a' || mimeType === 'audio/m4a') mimeType = 'audio/mp4';
             const data = imgBase64.substring(imgBase64.indexOf(',') + 1);
             parts.push({ inlineData: { data, mimeType } });
           }

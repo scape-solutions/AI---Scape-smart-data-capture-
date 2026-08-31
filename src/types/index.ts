@@ -49,6 +49,12 @@ export interface ProjectState {
   /** Snapshot of responses taken when AI advice was last generated */
   lastAdviceResponsesSnapshot?: { general: Record<string, any>; parts: Record<string, any>[] } | null;
   lastAdviceTimestamp?: string | null;
+  /** Frozen snapshot of the user's Project Information Advice report at submission time */
+  userSubmittedReport?: string | null;
+  /** Frozen snapshot of the field observations at submission time */
+  userSubmittedObservations?: Record<string, { severity: 'warning' | 'critical'; text: string }> | null;
+  /** Timestamp when the submitted advice snapshot was generated */
+  userSubmittedAdviceTimestamp?: string | null;
   userSubmissionNotes?: string;
   lastActiveStep?: number;
   lastActivePartIndex?: number;
