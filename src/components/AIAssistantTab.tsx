@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Check, Edit2, CheckCircle2, HelpCircle, Paperclip, X, FileText, MessageSquare, BookOpen } from 'lucide-react';
+import { Send, Bot, User, Check, Edit2, CheckCircle2, HelpCircle, Paperclip, X, FileText, MessageSquare, BookOpen, Volume2, Mic } from 'lucide-react';
 import { ProjectState } from '../types';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 import ReactMarkdown from 'react-markdown';
@@ -310,7 +310,7 @@ export function AIAssistantTab({
           };
         };
         reader.readAsDataURL(file);
-      } else if (file.type === 'application/pdf') {
+      } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         if (file.size > 5 * 1024 * 1024) {
           alert("PDF-filen er for stor / PDF is too large. Max 5MB allowed to prevent API quota/timeout issues.");
           return;
@@ -318,6 +318,21 @@ export function AIAssistantTab({
         const reader = new FileReader();
         reader.onload = (ev) => {
           const result = ev.target?.result as string;
+          setPendingImages(prev => [...prev, result]);
+        };
+        reader.readAsDataURL(file);
+      } else if (file.type.startsWith('audio/') || file.name.match(/\.(m4a|mp3|wav|ogg|aac|webm|flac|m4v)$/i)) {
+        if (file.size > 25 * 1024 * 1024) {
+          alert("Lydfilen er for stor / Audio file is too large. Max 25MB allowed.");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          let result = ev.target?.result as string;
+          // Normalize m4a mime type if needed for Gemini
+          if (result.startsWith('data:;') || result.startsWith('data:audio/x-m4a;') || result.startsWith('data:application/octet-stream;')) {
+            result = result.replace(/^data:[^;]*;/, 'data:audio/mp4;');
+          }
           setPendingImages(prev => [...prev, result]);
         };
         reader.readAsDataURL(file);
@@ -385,8 +400,8 @@ export function AIAssistantTab({
         <div className="absolute inset-0 bg-indigo-600/10 backdrop-blur-xs border-2 border-dashed border-indigo-500 z-[100] flex flex-col items-center justify-center pointer-events-none animate-fadeIn">
           <div className="bg-white px-6 py-4 rounded-2xl shadow-xl flex flex-col items-center gap-2 text-indigo-600">
             <Paperclip className="w-8 h-8 animate-bounce" />
-            <span className="text-sm font-bold">Drop images or PDFs here to attach</span>
-            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Images and PDF files only</span>
+            <span className="text-sm font-bold">Drop images, PDFs, or audio recordings here to attach</span>
+            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Images, PDFs, and Audio files (.m4a, .mp3, .wav) supported</span>
           </div>
         </div>
       )}
@@ -504,10 +519,20 @@ export function AIAssistantTab({
                           <div className="flex flex-wrap gap-2 mb-2">
                             {msg.images.map((img, imgIdx) => {
                               const isPdf = img.startsWith('data:application/pdf');
+                              const isAudio = img.startsWith('data:audio/');
                               return isPdf ? (
                                 <div key={imgIdx} className="w-24 h-24 bg-white/10 rounded-lg border border-indigo-400 flex flex-col items-center justify-center text-white p-2">
+                                  <FileText className="w-6 h-6 mb-1 text-red-200" />
                                   <span className="text-[10px] font-black uppercase text-indigo-100">PDF</span>
                                   <span className="text-[8px] opacity-70 mt-1 truncate max-w-full text-center">Document</span>
+                                </div>
+                              ) : isAudio ? (
+                                <div key={imgIdx} className="p-2.5 bg-white/15 rounded-xl border border-indigo-300/40 flex flex-col gap-1.5 text-white max-w-xs">
+                                  <div className="flex items-center gap-1.5 text-xs font-bold">
+                                    <Volume2 className="w-4 h-4 text-amber-300 shrink-0" />
+                                    <span>Audio Recording</span>
+                                  </div>
+                                  <audio controls className="h-7 w-48 max-w-full rounded-md mt-1" src={img} />
                                 </div>
                               ) : (
                                 <img key={imgIdx} src={img} alt="User upload" className="w-24 h-24 object-cover rounded-lg border border-indigo-400" />
@@ -648,18 +673,27 @@ export function AIAssistantTab({
                   <div className="flex flex-wrap gap-2 px-1">
                     {pendingImages.map((img, i) => {
                       const isPdf = img.startsWith('data:application/pdf');
+                      const isAudio = img.startsWith('data:audio/');
                       return (
-                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center bg-slate-50">
+                        <div key={i} className="relative rounded-xl overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center bg-slate-50 p-2">
                           {isPdf ? (
-                            <div className="flex flex-col items-center justify-center text-red-600 font-bold p-1">
-                              <span className="text-[10px] uppercase font-black">PDF</span>
+                            <div className="w-14 h-14 flex flex-col items-center justify-center text-red-600 font-bold p-1">
+                              <FileText className="w-6 h-6 mb-1" />
+                              <span className="text-[9px] uppercase font-black">PDF</span>
+                            </div>
+                          ) : isAudio ? (
+                            <div className="w-28 h-14 flex flex-col items-center justify-center text-indigo-600 font-bold px-2 py-1">
+                              <Volume2 className="w-5 h-5 mb-0.5 text-indigo-600 animate-pulse" />
+                              <span className="text-[9px] uppercase font-black tracking-wider text-slate-700">Audio Track</span>
+                              <audio src={img} className="hidden" />
                             </div>
                           ) : (
-                            <img src={img} alt="upload" className="w-full h-full object-cover" />
+                            <img src={img} alt="upload" className="w-14 h-14 object-cover rounded-lg" />
                           )}
                           <button 
                             onClick={() => setPendingImages(prev => prev.filter((_, idx) => idx !== i))}
-                            className="absolute top-1 right-1 bg-slate-900/60 text-white rounded-full p-0.5 hover:bg-red-500 transition-colors"
+                            className="absolute top-1 right-1 bg-slate-900/60 text-white rounded-full p-0.5 hover:bg-red-500 transition-colors cursor-pointer"
+                            title="Remove attachment"
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -673,21 +707,21 @@ export function AIAssistantTab({
                     type="file" 
                     ref={fileInputRef}
                     multiple
-                    accept="image/*,application/pdf"
+                    accept="image/*,application/pdf,audio/*,.m4a,.mp3,.wav,.ogg,.aac,.webm,.flac,.m4v"
                     className="hidden"
                     onChange={handleImageUpload}
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-2.5 md:p-3 bg-slate-100 text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-colors shrink-0"
-                    title="Attach images"
+                    className="p-2.5 md:p-3 bg-slate-100 text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-colors shrink-0 cursor-pointer"
+                    title="Attach images, PDFs, or audio (.m4a, .mp3, .wav)"
                   >
                     <Paperclip className="w-5 h-5" />
                   </button>
                   <textarea
                     ref={textareaRef}
                     className="flex-1 border border-slate-300 rounded-xl p-2.5 md:p-3 text-base md:text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 resize-none leading-relaxed"
-                    placeholder="Describe your project…"
+                    placeholder="Describe your project, ask questions, or attach audio…"
                     rows={1}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}

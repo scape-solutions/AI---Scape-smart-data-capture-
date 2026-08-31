@@ -181,6 +181,9 @@ export function normalizeProject(p: any): ProjectState {
     parts: normalizedParts,
     generalImages: Array.isArray(p?.generalImages) ? p.generalImages : [],
     report: p?.report || null,
+    userSubmittedReport: p?.userSubmittedReport || null,
+    userSubmittedObservations: p?.userSubmittedObservations || null,
+    userSubmittedAdviceTimestamp: p?.userSubmittedAdviceTimestamp || null,
     evaluatorDraft: p?.evaluatorDraft || null,
     finalVerdict: p?.finalVerdict || null,
     fieldObservations: p?.fieldObservations || null,
@@ -1307,8 +1310,10 @@ export function useProjects(
 
     // Vi bygger det data-objekt, vi vil sende til databasen.
     // Vi trækker 'id' ud så vi ALDRIG gemmer et forældet 'id: null' eller database-ID som et felt i Firestore dokumentet!
-    const { id, generalImages, ...projectDataWithoutId } = project;
-    const nextLocked = status === 'draft' ? false : !!project.isLocked;
+    const userSubmittedReport = project.userSubmittedReport || (status === 'submitted' ? (project.report || null) : null);
+    const userSubmittedObservations = project.userSubmittedObservations || (status === 'submitted' ? (project.fieldObservations || null) : null);
+    const userSubmittedAdviceTimestamp = project.userSubmittedAdviceTimestamp || (status === 'submitted' ? (project.lastAdviceTimestamp || new Date().toLocaleString()) : null);
+
     const data = {
       ...projectDataWithoutId,
       parts: partsWithoutImages,
@@ -1316,6 +1321,9 @@ export function useProjects(
       generalImageCount: project.generalImages ? project.generalImages.length : 0,
       status,
       isLocked: nextLocked,
+      userSubmittedReport,
+      userSubmittedObservations,
+      userSubmittedAdviceTimestamp,
       updatedAt: serverTimestamp(),
       projectName: project.generalResponses['1.01'] || "Untitled Project",
       ownerName: project.ownerName && project.ownerName !== 'Unknown' ? project.ownerName : (profile?.name || user?.displayName || 'Unknown'),
@@ -1342,6 +1350,9 @@ export function useProjects(
           id: docRef.id,
           status,
           isLocked: nextLocked,
+          userSubmittedReport,
+          userSubmittedObservations,
+          userSubmittedAdviceTimestamp,
           generalImages: project.generalImages || [],
           projectName: data.projectName,
           ownerName: data.ownerName,
@@ -1380,6 +1391,9 @@ export function useProjects(
           ...project, 
           status, 
           isLocked: nextLocked,
+          userSubmittedReport,
+          userSubmittedObservations,
+          userSubmittedAdviceTimestamp,
           generalImages: project.generalImages || [],
           projectName: data.projectName,
           ownerName: data.ownerName,
