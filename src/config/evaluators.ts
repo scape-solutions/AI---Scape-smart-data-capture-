@@ -5,12 +5,24 @@ export const SUPERUSERS: string[] = [];
 
 export const isAllowedEvaluator = (email: string | null | undefined, allowedList?: string[]) => {
   if (!email) return false;
+
+  const normalizedEmail = email.trim().toLowerCase();
   const list = allowedList || ALLOWED_EVALUATORS;
-  return list.map(e => e.toLowerCase()).includes(email.toLowerCase());
+
+  return list.some(
+    evaluator => evaluator.trim().toLowerCase() === normalizedEmail
+  );
+  //  return list.map(e => e.toLowerCase()).includes(email.toLowerCase());
 };
 
 export const isSuperuser = (email: string | null | undefined, superuserList?: string[]) => {
   if (!email) return false;
+
+  const normalizedEmail = email.trim().toLowerCase();
   const list = superuserList || SUPERUSERS;
-  return list.map(e => e.toLowerCase()).includes(email.toLowerCase());
+
+  return list.some(
+    superuser => superuser.trim().toLowerCase() === normalizedEmail
+  );
+  //return list.map(e => e.toLowerCase()).includes(email.toLowerCase());
 };

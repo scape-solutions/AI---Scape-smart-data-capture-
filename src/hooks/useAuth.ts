@@ -6,13 +6,13 @@
  * Ved at trække login-logikken herud, bliver selve login-skærmen meget pænere at se på.
  */
 import { useState, useEffect } from 'react';
-import { 
-  signInWithPopup, 
+import {
+  signInWithPopup,
   signInWithRedirect,
   signInWithCustomToken,
   getRedirectResult,
-  GoogleAuthProvider, 
-  onAuthStateChanged, 
+  GoogleAuthProvider,
+  onAuthStateChanged,
   signOut,
   User,
   signInWithEmailAndPassword,
@@ -25,14 +25,16 @@ import { UserProfile, OperationType } from '../types';
 import { isAllowedEvaluator, isSuperuser, ALLOWED_EVALUATORS, SUPERUSERS } from '../config/evaluators';
 
 let globalAllowedConfig: any = null;
+//a small test-only configuration setter
+export const setGlobalAllowedConfigForTesting = (config: any) => {
+  globalAllowedConfig = config;
+};
 // Expose to window for debugging
 if (typeof window !== 'undefined') {
   Object.defineProperty(window, '__debugConfig', {
     get: () => globalAllowedConfig
   });
 }
-
-import { auth } from '../lib/firebase';
 
 // Hjælpefunktion til sikkerhed: Tjekker at brugeren enten er logget ind med Google (OAuth)
 // eller har en bekræftet e-mail. Blokerer "falske" Email/Password logins uden bekræftelse.
@@ -50,10 +52,10 @@ export const isScapeEmployee = (email: string | null | undefined, uid?: string |
 
   const e = email.toLowerCase().trim();
   const domain = e.split('@')[1];
-  
+
   const allowedDomains = globalAllowedConfig?.allowedDomains || ['scapesolutions.eu', 'scapesolutions.com'];
   const allowedEmails = globalAllowedConfig?.allowedEmails || [];
-  
+
   // Eksplicit tilladte emails behøver ikke være verificerede (tillader test/demo konti)
   if (allowedEmails.some((m: string) => m.toLowerCase().trim() === e)) return true;
 
@@ -66,13 +68,15 @@ export const isScapeEmployee = (email: string | null | undefined, uid?: string |
 };
 
 // Tjekker om en bruger er på den dynamiske evaluator-liste fra Firestore
-export const isDynamicAllowedEvaluator = (email: string | null | undefined) => {
+export const isDynamicAllowedEvaluator = (email: string | null | undefined
+) => {
   if (!email) return false;
-  const list = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+
+  const list =
+    globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
   // Bemærk: Vi kræver ikke verificering for eksplicit tilladte emails.
   return isAllowedEvaluator(email, list);
 };
-
 // Tjekker om en bruger er på den dynamiske superuser-liste fra Firestore
 export const isDynamicSuperuser = (email: string | null | undefined) => {
   if (!email) return false;
@@ -87,7 +91,7 @@ export const getEffectiveAdminStatus = (p: UserProfile | null, uid?: string | nu
   const email = p.email;
   const isEmployee = isScapeEmployee(email, uid);
   if (!isEmployee) return false;
-  
+
   const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
   return (p.requestedRole === 'evaluator' || p.requestedRole === 'superuser') && isAllowedEvaluator(email, allowedEvaluators);
 };
@@ -186,10 +190,10 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   useEffect(() => {
     // 1. ROBUST PWA LOGIN FIX: Tjekker om vi netop er returneret fra Google OAuth med en token i URL'en (eller localStorage).
     // Dette omgår 100% Safari/iOS problemer med at slette cookies på tværs af redirects.
-    
+
     const resolvePwaToken = async () => {
       let token: string | null = null;
-      
+
       const hash = window.location.hash;
       if (hash.startsWith('#token=')) {
         token = decodeURIComponent(hash.substring('#token='.length));
@@ -250,7 +254,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
           const profileDoc = await getDoc(doc(db, 'users', u.uid));
           if (profileDoc.exists()) {
             let pData = profileDoc.data() as UserProfile;
-            
+
             // Record last active time dynamically
             const lastActiveAt = new Date().toISOString();
             updateDoc(doc(db, 'users', u.uid), { lastActiveAt }).catch(console.error);
@@ -295,8 +299,8 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
               }
               const actualAdmin = getEffectiveAdminStatus(pData, u.uid);
               pData.isAdmin = actualAdmin;
-              updateDoc(doc(db, 'users', u.uid), { 
-                requestedRole: finalRole, 
+              updateDoc(doc(db, 'users', u.uid), {
+                requestedRole: finalRole,
                 isAdmin: actualAdmin,
                 ...(finalRole === 'evaluator' ? { userModePreferred: false } : {})
               })
@@ -362,7 +366,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.');
       const isStandalone = (window.navigator as any).standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-      
+
       if (isStandalone && isMobile && !isLocal) {
         // I iOS standalone PWA tilstand virker hverken popups eller redirect retur.
         // Derfor navigerer vi til vores server-side OAuth proxy, som bygger broen.
@@ -422,7 +426,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   const saveProfile = async (data: any) => {
     if (!user) return;
     const email = getEffectiveEmail();
-    
+
     const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
     const superusers = globalAllowedConfig?.superusers || SUPERUSERS;
     const isAllowed = email ? isAllowedEvaluator(email, allowedEvaluators) : false;
@@ -462,7 +466,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   const switchMode = async (newRole: 'evaluator' | 'user' | 'superuser', onStatusChanged: (isAdmin: boolean) => void) => {
     if (!user || !profile) return;
     const email = getEffectiveEmail();
-    
+
     // Safety check for superuser
     const superusers = globalAllowedConfig?.superusers || SUPERUSERS;
     if (newRole === 'superuser' && !isSuperuser(email?.trim(), superusers)) {

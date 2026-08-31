@@ -21,6 +21,7 @@ vi.mock('lucide-react', () => ({
   Bot: () => <div data-testid="bot-icon" />,
   Sparkles: () => <div data-testid="sparkles-icon" />,
   Loader2: () => <div data-testid="loader-icon" />,
+  BookOpen: () => <div data-testid="book-icon" />,
   RefreshCw: () => <div data-testid="refresh-icon" />,
   Download: () => <div data-testid="download-icon" />,
   Upload: () => <div data-testid="upload-icon" />,
@@ -60,7 +61,10 @@ describe('PromptsEditorModal', () => {
       <PromptsEditorModal show={true} onClose={mockClose} setGlobalSuccess={mockSuccess} />
     );
 
-    expect(screen.getByText('AI System Prompts Editor')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {
+      name: 'AI System Prompts & Support Editor',
+    })
+    ).toBeInTheDocument();
 
     // Switch tabs to autoFill
     const chatTab = screen.getByRole('button', { name: /AI Chat Assistant/i, });

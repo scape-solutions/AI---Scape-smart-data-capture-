@@ -11,8 +11,10 @@ describe('evaluators config', () => {
     });
 
     it('should return true for emails in the default allowed list case-insensitively', () => {
-      expect(isAllowedEvaluator('rune.k.larsen@scapesolutions.eu')).toBe(true);
-      expect(isAllowedEvaluator('RUNE.K.LARSEN@scapesolutions.eu')).toBe(true);
+      const allowedList = ['rune.k.larsen@scapesolutions.eu'];
+
+      expect(isAllowedEvaluator('rune.k.larsen@scapesolutions.eu', allowedList)).toBe(true);
+      expect(isAllowedEvaluator('RUNE.K.LARSEN@scapesolutions.eu', allowedList)).toBe(true);
     });
 
     it('should return true if email exists in custom allowed list', () => {
@@ -32,7 +34,10 @@ describe('evaluators config', () => {
     });
 
     it('should return true for emails in default superuser list', () => {
-      expect(isSuperuser('rune.k.larsen@scapesolutions.eu')).toBe(true);
+      const superuserList = ['rune.k.larsen@scapesolutions.eu'];
+
+      expect(isSuperuser('rune.k.larsen@scapesolutions.eu', superuserList)).toBe(true);
+      expect(isSuperuser('RUNE.K.LARSEN@scapesolutions.eu', superuserList)).toBe(true);
     });
 
     it('should return true if email exists in custom superuser list', () => {

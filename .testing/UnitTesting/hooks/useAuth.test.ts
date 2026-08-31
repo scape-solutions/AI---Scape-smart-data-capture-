@@ -1,10 +1,11 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { 
-  isScapeEmployee, 
-  isDynamicAllowedEvaluator, 
-  isDynamicSuperuser, 
+import {
+  isScapeEmployee,
+  isDynamicAllowedEvaluator,
+  isDynamicSuperuser,
   getEffectiveAdminStatus,
+  setGlobalAllowedConfigForTesting,
   useAuth
 } from '../../../src/hooks/useAuth';
 import { auth, db } from '../../../src/lib/firebase';
@@ -42,6 +43,7 @@ describe('useAuth utilities', () => {
     vi.clearAllMocks();
     // Reset currentUser mock state
     (auth as any).currentUser = null;
+    setGlobalAllowedConfigForTesting(null);
   });
 
   describe('isScapeEmployee', () => {
@@ -71,8 +73,18 @@ describe('useAuth utilities', () => {
   });
 
   describe('isDynamicAllowedEvaluator', () => {
-    it('returns true for default evaluator', () => {
-      expect(isDynamicAllowedEvaluator('rune.k.larsen@scapesolutions.eu')).toBe(true);
+    it('returns true for a dynamically allowed evaluator', () => {
+      setGlobalAllowedConfigForTesting({
+        allowedEvaluators: ['rune.k.larsen@scapesolutions.eu'],
+      });
+
+      expect(
+        isDynamicAllowedEvaluator('rune.k.larsen@scapesolutions.eu')
+      ).toBe(true);
+
+      expect(
+        isDynamicAllowedEvaluator('RUNE.K.LARSEN@scapesolutions.eu')
+      ).toBe(true);
     });
   });
 
@@ -86,13 +98,20 @@ describe('useAuth utilities', () => {
         providerData: [{ providerId: 'google.com' }],
         emailVerified: true,
       };
+
+      setGlobalAllowedConfigForTesting({
+        allowedEvaluators: ['rune.k.larsen@scapesolutions.eu'],
+      });
+
       const profile = {
         name: 'Evaluator User',
         company: 'Scape',
         role: 'enduser' as const,
         email: 'rune.k.larsen@scapesolutions.eu',
         requestedRole: 'evaluator' as const,
+        isAdmin: false,
       };
+
       expect(getEffectiveAdminStatus(profile)).toBe(true);
     });
   });

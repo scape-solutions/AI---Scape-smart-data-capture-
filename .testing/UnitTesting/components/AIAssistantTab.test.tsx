@@ -21,6 +21,8 @@ vi.mock('lucide-react', () => ({
   HelpCircle: () => <div data-testid="help-icon" />,
   Paperclip: () => <div data-testid="clip-icon" />,
   X: () => <div data-testid="x-icon" />,
+  MessageSquare: () => <div data-testid="messagesquare-icon" />,
+  FileText: () => <div data-testid="filetext-icon" />,
   Settings2: () => <div data-testid="settings-icon" />,
   Box: () => <div data-testid="box-icon" />,
   Maximize: () => <div data-testid="maximize-icon" />,
