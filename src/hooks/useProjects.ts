@@ -159,6 +159,29 @@ export function sanitizeParts(parts: any[]): any[] {
   }));
 }
 
+export function sanitizeChatHistory(history: any[]): any[] {
+  if (!Array.isArray(history)) return [];
+  return history.map(msg => {
+    if (!msg || typeof msg !== 'object') return msg;
+    const cleanMsg = { ...msg };
+    if (cleanMsg.images && Array.isArray(cleanMsg.images)) {
+      cleanMsg.images = cleanMsg.images.map((img: string) => {
+        if (typeof img === 'string' && img.length > 50000) {
+          if (img.startsWith('data:audio/')) {
+            return 'audio:placeholder';
+          }
+          if (img.startsWith('data:application/pdf')) {
+            return 'pdf:placeholder';
+          }
+          return 'image:placeholder';
+        }
+        return img;
+      });
+    }
+    return cleanMsg;
+  });
+}
+
 export function normalizeProject(p: any): ProjectState {
   const generalResponses = p?.generalResponses || {};
   
@@ -187,6 +210,7 @@ export function normalizeProject(p: any): ProjectState {
     evaluatorDraft: p?.evaluatorDraft || null,
     finalVerdict: p?.finalVerdict || null,
     fieldObservations: p?.fieldObservations || null,
+    chatHistory: sanitizeChatHistory(p?.chatHistory || []),
     status: p?.status || 'draft',
     userId: p?.userId || '',
     isLocked: !!p?.isLocked,
@@ -1317,6 +1341,7 @@ export function useProjects(
     const data = {
       ...projectDataWithoutId,
       parts: partsWithoutImages,
+      chatHistory: sanitizeChatHistory(project.chatHistory || []),
       generalImages: [], // Hoveddokumentet skal ikke have base64 data
       generalImageCount: project.generalImages ? project.generalImages.length : 0,
       status,
@@ -1615,6 +1640,8 @@ export function useProjects(
       let finalValue = value;
       if (field === 'parts' && Array.isArray(value)) {
         finalValue = sanitizeParts(value);
+      } else if (field === 'chatHistory' && Array.isArray(value)) {
+        finalValue = sanitizeChatHistory(value);
       }
       // Firkantede parenteser [field] betyder at vi bruger variabel-navnet som nøgle (key).
       await updateDoc(doc(db, 'projects', p.id), { [field]: finalValue });
