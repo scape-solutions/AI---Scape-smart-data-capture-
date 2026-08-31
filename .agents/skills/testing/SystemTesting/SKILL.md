@@ -2,134 +2,105 @@
 name: system-testing
 description: >-
   Use this skill to design, document, and execute system-level end-to-end tests
-  for the Scape Bin-Picker Projects application. It provides guidelines for verifying
-  multi-user workflows, Firestore data integrity, AI proxy integrations, and PDF exports.
+  for the Scape Bin-Picker Projects application. It outlines the manual testing
+  workflow across role-focused test matrices and separate use case document files.
 ---
 
 # System Testing Guidelines - Scape Bin-Picker Projects
 
 System testing verifies the fully integrated application—combining the React frontend, the Node.js Express server (`server.js`), Firestore database, and external APIs (like Google Gemini)—against the use case specifications.
 
-This skill provides the structure, procedures, and checklists to carry out system testing effectively and formulate high-quality test cases.
+This skill provides the structure and procedures to execute system testing effectively using role-focused test matrices.
 
 ---
 
 ## 1. System Testing Scope & Targets
 
-System tests must focus on end-to-end user journeys, data validation boundaries, and cross-component integration. Key verification targets include:
+System tests focus on complete multi-user workflows, role-based boundaries, and database side effects. Verification targets include:
 
-1. **State Transitions & Security Rules**:
-   - Verify Firestore database state changes (e.g., `status` changes from `draft` to `submitted` or `approved`).
-   - Enforce data mutability constraints (e.g., checking that `isLocked: true` prevents External Partners from modifying data).
-   - Ensure role-based access control (External Partners can only view/edit their own projects; Scape App Engineers can take, evaluate, and publish verdicts for all projects).
-2. **AI Proxy Integration**:
-   - Verify payloads sent to the backend endpoints: `/api/ai/chat`, `/api/ai/advice`, `/api/ai/extract-observations`, and `/api/ai/draft`.
-   - Ensure JSON proposed payloads from Gemini are correctly parsed and applied to the frontend form state.
-   - Validate field warning mappings in `fieldObservations` and correct rendering of warning badges (`⚠️` or `🔴`).
-3. **Data Exports**:
-   - Verify that PDF reports generated via `pdfGenerator.ts` include correct branded elements, factual questionnaire data tables with appropriate warning indicators `[!]` / `[⚠]`, advice narratives, and verdict details.
-4. **Edge Cases & Validation Failures**:
-   - Verify file upload size blocks (e.g., CAD files > 200 KB).
-   - Verify validation blocks on form submission (e.g., missing required fields like Project Name or Part Name).
+1. **Role-Based Workflows**:
+   - **External Partners**: Form creation, saving drafts, AI auto-filling chat, generating warnings, submitting cases, and requesting unlocks.
+   - **Scape App Engineers**: Self-assigning cases, generating AI evaluator reports, refining verdicts, publishing verdicts, and review approvals.
+2. **Firestore State Transitions**:
+   - Validation of `status`, `isLocked`, `takenBy`, `editRequestPending`, and audit logs in `changelog`.
+3. **API Integrations & PDF Exports**:
+   - Validation of `/api/ai/*` endpoints and branded PDF report compilation.
 
 ---
 
-## 2. Test Case Formulation Standard
+## 2. Test Case Structure & Matrix Format
 
-Every system test case must be defined using a structured format to ensure repeatability, clarity, and ease of automation.
+Test cases are organized into **7 separate document files** (one for each system use case) located in `docs/testing/`:
 
-### Test Case Format Template
+*   [uc1_test_cases.md](file:///docs/testing/uc1_test_cases.md) - Create and Save a Project Draft
+*   [uc2_test_cases.md](file:///docs/testing/uc2_test_cases.md) - Auto-fill Questionnaire using AI Assistant Chat
+*   [uc3_test_cases.md](file:///docs/testing/uc3_test_cases.md) - Request Advice & Observations
+*   [uc4_test_cases.md](file:///docs/testing/uc4_test_cases.md) - Submit Project for Evaluation
+*   [uc5_test_cases.md](file:///docs/testing/uc5_test_cases.md) - Request Project Unlock
+*   [uc6_test_cases.md](file:///docs/testing/uc6_test_cases.md) - Evaluate Project & Publish Verdict
+*   [uc7_test_cases.md](file:///docs/testing/uc7_test_cases.md) - Export Feasibility Report (PDF)
+
+Each file contains a **Test Case Allocation Matrix** mapping variables/steps to 8 comprehensive test cases (TC1 to TC8), followed by compact, precise manual checklist tables:
 
 ```markdown
-### ST-XX: [Test Case Title]
+### TCX: [Test Case Title]
+* **Actor**: [External Partner / Scape App Engineer / Unauthenticated User]
+* **Purpose**: [Brief explanation of what is being tested]
 
-- **Use Case Reference**: UC-X: [Use Case Name] (Base / Alternate Sequence)
-- **Actor(s)**: [e.g., External Partner, Scape App Engineer]
-- **Preconditions**:
-  - [Precondition 1]
-  - [Precondition 2]
-- **Test Steps**:
-  1. [Action 1]
-  2. [Action 2]
-  3. [Action 3]
-- **Expected UI Behavior**:
-  - [UI result 1]
-  - [UI result 2]
-- **Expected Database & Backend State**:
-  - **Firestore Path**: `projects/{projectId}`
-  - **Verification Fields**:
-    - `status`: `[value]`
-    - `isLocked`: `[boolean]`
-    - `[other important field]`: `[value]`
-  - **Changelog Entry**: [e.g., Action is logged with timestamp]
+| Step | Variable / Selection | Value | Expected Result | Actual Result | Pass/Fail | Comments |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **1** | [Variable] | [Value to enter] | [Expected UI & DB change] | | | |
 ```
 
 ---
 
-## 3. Database State Verification Guidelines
+## 3. Manual Testing Procedure
 
-Since Firestore is the source of truth, system tests must verify that database writes match expected schemas and values. Use the following schema mapping rules during verification:
+To execute the manual system tests and validate the system:
 
-| Field Name | Type | Expected Values & Lifecycle Context |
-| :--- | :--- | :--- |
-| `status` | string | `'draft'` (initial) $\rightarrow$ `'submitted'` (on submit) $\rightarrow$ `'approved'` or `'rejected'` (on verdict) |
-| `isLocked` | boolean | `false` when status is `draft`; `true` when status is `submitted`, `approved`, or `rejected` (unless unlocked) |
-| `takenBy` | string | Email of the Scape App Engineer who clicked "Take Case" |
-| `editRequestPending` | boolean | `true` when an External Partner has requested edit permission for a locked case |
-| `editRequestReason` | string | The text reason entered by the partner for requesting edit permission |
-| `fieldObservations` | array/map | Mappings of `{ fieldId: '1.04_w', level: 'warning', reason: '...' }` generated by the AI |
-| `report` | string | The narrative AI advice text generated during the review phase |
-| `isVerdictVisible` | boolean | `true` when verdict is visible to the customer, `false` for internal evaluator drafts |
-| `changelog` | array | Array of objects tracking actions (e.g., `[{ action: 'submit', timestamp: ..., user: ... }]`) |
-
----
-
-## 4. Verification Methods
-
-System testing can be executed manually or automated. The following workflow must be followed:
-
-### A. Manual System Testing (Interactive Execution)
-1. Start the local server and frontend:
+1. **Start the local environment**:
+   Ensure Firestore Emulator and Node Express server are running:
    ```powershell
    npm run dev
    ```
-2. Navigate to the local environment (typically `http://localhost:3000`).
-3. Follow the test steps step-by-step using separate browser sessions or incognito windows to represent different roles (External Partner vs. Scape App Engineer).
-4. Verify database changes in the Firebase Emulator Console (if running locally) or through custom dev tools/logs.
-
-### B. Automated E2E System Testing (Future Integration)
-When writing automated end-to-end tests:
-1. Ensure the Firebase Emulator is initialized with pre-seeded auth users and mock project data.
-2. Use a test runner (like Playwright or Vitest with browser automation) to simulate user actions (clicking buttons, filling forms, checking files).
-3. Query the Firestore Emulator API directly to verify the document state post-execution.
+2. **Open the target use case file**:
+   Select the use case test document (e.g. `uc1_test_cases.md`) you wish to validate.
+3. **Execute the steps**:
+   - Open your browser (and an incognito tab to represent secondary roles like the Scape Engineer).
+   - Follow the steps listed in the test case table exactly.
+4. **Log the results**:
+   - Fill in the **Actual Result**, **Pass/Fail** (use `🟢 Pass` or `🔴 Fail`), and **Comments** columns directly in the Markdown tables to document your run.
 
 ---
 
-## 5. Manual Test Logging Workflow
+## 4. Converting Test Cases to Word (.docx) Format
 
-Manual test execution and status reports are tracked in the [manual test log file](file:///docs/testing/manual_test_log.md).
+For official test documentation or report submission, you can convert the Markdown test files (`uc1_test_cases.md` to `uc7_test_cases.md`) into Microsoft Word (`.docx`) format using one of the following methods:
 
-### Step-by-Step Logging Procedure
+### Method A: Using Pandoc (Recommended CLI Method)
+Pandoc is a powerful document converter that converts Markdown directly to DOCX on the command line.
 
-1. **Initialize a New Test Run**:
-   Run the CLI initialization script using npm:
+1. **Install Pandoc** (if not already installed):
+   - On Windows (PowerShell):
+     ```powershell
+     winget install mdq.pandoc
+     ```
+2. **Convert a single file**:
    ```powershell
-   npm run test:manual:new
+   pandoc -s docs/testing/uc1_test_cases.md -o docs/testing/uc1_test_cases.docx
    ```
-   This will prompt you for:
-   - **Tester Name**: Defaults to your Git username.
-   - **Test Environment**: E.g., `Local`, `Staging`, `Production`.
-   
-   The script dynamically reads all defined test cases from `system_test_cases.md` and appends a pre-formatted test run section to `manual_test_log.md`.
+3. **Convert all 7 files in batch** (PowerShell command):
+   ```powershell
+   Get-ChildItem docs/testing/uc*_test_cases.md | ForEach-Object {
+       $docxPath = $_.FullName -replace '\.md$', '.docx'
+       pandoc -s $_.FullName -o $docxPath
+       Write-Host "Converted: $($_.Name) -> $(Split-Path $docxPath -Leaf)"
+   }
+   ```
 
-2. **Execute and Update Log**:
-   - Go through the steps defined in the [system test cases](file:///docs/testing/system_test_cases.md).
-   - As you complete each test, edit the table in [manual_test_log.md](file:///docs/testing/manual_test_log.md).
-   - Update the status column using these indicators:
-     - `🟢 Pass`: The test succeeded and all expected states matched.
-     - `🔴 Fail`: The test failed (include details/bug ID in the Notes column).
-     - `⚪ Blocked`: The test could not be executed due to prior blockages.
-     - `🟡 Pending`: The test has not been executed yet.
+### Method B: Using VS Code Extensions (GUI Method)
+1. Open VS Code Extensions (`Ctrl+Shift+X`).
+2. Search for and install the **vscode-markdown-docx** extension.
+3. Open the target Markdown test file (e.g., `uc1_test_cases.md`).
+4. Press `F1` (or right-click inside the document), search for `Export to DOCX`, and select it.
 
-3. **Update Summary Counts**:
-   At the end of the test run, update the summary matrix table with the final tallies of passed, failed, blocked, and pending cases.
