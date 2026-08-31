@@ -102,3 +102,34 @@ When writing automated end-to-end tests:
 1. Ensure the Firebase Emulator is initialized with pre-seeded auth users and mock project data.
 2. Use a test runner (like Playwright or Vitest with browser automation) to simulate user actions (clicking buttons, filling forms, checking files).
 3. Query the Firestore Emulator API directly to verify the document state post-execution.
+
+---
+
+## 5. Manual Test Logging Workflow
+
+Manual test execution and status reports are tracked in the [manual test log file](file:///docs/testing/manual_test_log.md).
+
+### Step-by-Step Logging Procedure
+
+1. **Initialize a New Test Run**:
+   Run the CLI initialization script using npm:
+   ```powershell
+   npm run test:manual:new
+   ```
+   This will prompt you for:
+   - **Tester Name**: Defaults to your Git username.
+   - **Test Environment**: E.g., `Local`, `Staging`, `Production`.
+   
+   The script dynamically reads all defined test cases from `system_test_cases.md` and appends a pre-formatted test run section to `manual_test_log.md`.
+
+2. **Execute and Update Log**:
+   - Go through the steps defined in the [system test cases](file:///docs/testing/system_test_cases.md).
+   - As you complete each test, edit the table in [manual_test_log.md](file:///docs/testing/manual_test_log.md).
+   - Update the status column using these indicators:
+     - `🟢 Pass`: The test succeeded and all expected states matched.
+     - `🔴 Fail`: The test failed (include details/bug ID in the Notes column).
+     - `⚪ Blocked`: The test could not be executed due to prior blockages.
+     - `🟡 Pending`: The test has not been executed yet.
+
+3. **Update Summary Counts**:
+   At the end of the test run, update the summary matrix table with the final tallies of passed, failed, blocked, and pending cases.
