@@ -17,7 +17,6 @@
     "test:integration": "vitest run --dir .testing/IntegrationTesting",
     "test:integration:watch": "vitest --dir .testing/IntegrationTesting",
     "test:all": "vitest run --dir .testing",
-    "test:manual:new": "node tests/init_manual_run.js",
     "prompts:push": "node update_prompts.js",
     "prompts:pull": "node pull_prompts.js"
   },
