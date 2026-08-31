@@ -1,0 +1,23 @@
+Rules for using remote GitHub repository:
+1. The remote(GitHub) or local(Git) main branch should not be used for any other feature or bug fix purpose by all members.
+2. Each member must used their own newly created branch for adding any new feature or bugfix purpose.
+3. Each and every commit must be done for one task with it's own unique and reasonable commit message.
+4. Every member must follows pull request rules before merging or working with the remote main branch.
+5. Every member must have their local git branch and feature/bug fix branch on their own device.
+6. Update should be done periodically to their local main branch since the remote main branch might get updated by any member at certain time.
+7. Every member must do rebase prior to merge on their local feature branch from their updated or latest local main branch(i.e. looks similar to remote main branch).
+8. The member could push their rebased local feature branch to the remote repository feature branch, then create a pull request for merging that remote feature branch with the remote main branch.
+9. Another member should review and approver the pull request.
+10. When other 1 to 2 member (for our case only one member) agree with that pull request, the pull requested member shall merge their remote feature branch to the remote main branch only after the required checks and approvals pass.
+11. Protect the remote main branch using GitHub Branch Protection Rules.
+
+Configure main so that developers cannot directly push to it. Require, for example:
+
+Pull Request required
+At least 1 reviewer approval
+CI/tests must pass
+No unresolved merge conflicts
+Branch must be up to date before merging
+Direct pushes to main disabled
+
+This turns your written rules into technical enforcement, rather than relying only on developers remembering the rules.
