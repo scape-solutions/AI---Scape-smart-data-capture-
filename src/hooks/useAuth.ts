@@ -85,6 +85,29 @@ export const isDynamicSuperuser = (email: string | null | undefined) => {
   return isSuperuser(email, list);
 };
 
+// Tjekker om en kampagne/event tag (f.eks. Automatik26) er aktiv og gyldig
+export const isCampaignTagActive = (tag: string | null | undefined, config?: any) => {
+  if (!tag) return false;
+  const cleanTag = tag.toLowerCase().trim();
+  const cfg = config || globalAllowedConfig;
+  const passcodes = cfg?.activeEventPasscodes;
+  if (!passcodes) {
+    return cleanTag === 'open' || cleanTag === 'automatik26' || cleanTag === 'autonatik26';
+  }
+  for (const key of Object.keys(passcodes)) {
+    const item = passcodes[key];
+    if (key.toLowerCase() === cleanTag || item?.code?.toLowerCase() === cleanTag) {
+      if (item.active === false) return false;
+      if (item.expiresAt) {
+        const today = new Date().toISOString().split('T')[0];
+        if (today > item.expiresAt) return false;
+      }
+      return true;
+    }
+  }
+  return false;
+};
+
 // Bestemmer om en bruger rent faktisk har 'Admin'/'Evaluator' rettigheder
 export const getEffectiveAdminStatus = (p: UserProfile | null, uid?: string | null) => {
   if (!p) return false;
@@ -107,21 +130,35 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true); // Starter som true mens vi venter på Firebase init
   const [allowedConfig, setAllowedConfig] = useState<any>(null);
+  const [activeCampaignTag, setActiveCampaignTag] = useState<string | null>(null);
+
+  // Extract event tag from URL query params on initial load
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tagFromUrl = params.get('event') || params.get('source') || params.get('tag');
+      if (tagFromUrl) {
+        localStorage.setItem('registered_event_tag', tagFromUrl.trim());
+        setActiveCampaignTag(tagFromUrl.trim());
+      } else {
+        const stored = localStorage.getItem('registered_event_tag');
+        if (stored) setActiveCampaignTag(stored);
+      }
+    }
+  }, []);
 
   // Sync the access config in real time
   useEffect(() => {
-    if (user) {
-      return onSnapshot(doc(db, 'config', 'access'), (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          globalAllowedConfig = data;
-          setAllowedConfig(data);
-        }
-      }, (error) => {
-        console.warn("Could not load dynamic config from Firestore (expected for external users). Using offline defaults.", error);
-      });
-    }
-  }, [user]);
+    return onSnapshot(doc(db, 'config', 'access'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        globalAllowedConfig = data;
+        setAllowedConfig(data);
+      }
+    }, (error) => {
+      console.warn("Could not load dynamic config from Firestore. Using offline defaults.", error);
+    });
+  }, []);
 
   // Auto-upgrade/downgrade role and sync isAdmin status dynamically when allowedConfig or user/profile updates
   useEffect(() => {
@@ -322,6 +359,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
             const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
             const isAllowed = email ? isAllowedEvaluator(email, allowedEvaluators) : false;
             const initialRole = isAllowed ? 'evaluator' : 'user';
+            const storedTag = typeof window !== 'undefined' ? localStorage.getItem('registered_event_tag') : null;
             const newProfile: UserProfile = {
               email,
               name: u.displayName || '',
@@ -329,6 +367,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
               companyType: 'other',
               phone: '',
               requestedRole: initialRole,
+              registeredViaCampaign: storedTag || undefined,
               isAdmin: getEffectiveAdminStatus({
                 email,
                 name: u.displayName || '',
@@ -502,6 +541,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     authError,
     setAuthError,
     authLoading,
+    activeCampaignTag,
     login,
     loginWithEmail,
     signupWithEmail,

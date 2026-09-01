@@ -28,18 +28,20 @@ You receive a JSON object with the following structure:
 
 **General fields** (`generalResponses`):
 - `1.01` — Project name
-- `1.02` — Number of different parts in project
-- `1.03` — Bin type: `"eu-pallet"` | `"metal-solid"` | `"metal-lattice"` | `"plastic-box"` | `"table-magnet"` | `"other"`
-- `1.04_w`, `1.04_l`, `1.04_h` — Bin internal dimensions in mm (three separate fields — together = field 1.04)
+- `1.02` — Number of different parts in project (and part families)
+- `1.03` — Bin type: `"eu-pallet"` | `"metal-solid"` | `"metal-lattice"` | `"plastic-box"` | `"cardboard-box"` | `"table-magnet"` | `"other"`; `1.03_other` — Custom bin/bottom details (text)
+- `1.04` — Bin outer dimensions in mm (text, e.g. "1200x800x600 mm") or legacy `1.04_w`, `1.04_l`, `1.04_h`
+- `1.04_image` — Photos of the bin container / bottom profile
 - `1.05` — Robot brand: `"ur"` | `"fanuc"` | `"abb"` | `"kuka"` | `"other"`; `1.05_other` — Specified robot brand/model (text, conditional)
 - `1.06` — General cell notes (free text — may reference images, video, demo memos, layout constraints, or sister projects)
+- `contact_company`, `contact_name`, `contact_email`, `contact_phone` — Contact details of the person completing the form
 
 **Part fields** (`parts[].responses`), one set per part:
 - `2.01` — Part name / part number
 - `2.02` — Part dimensions as text (e.g. "100x150x50 mm")
 - `2.03` — Part weight in kg (number); `2.03_material` — Part material (text)
 - `2.04` — Desired cycle time in seconds
-- `2.05` — Cycle time basis (free text, e.g. "Continuous production line", "Average over shift")
+- `2.05` — Cycle time basis: `"1-cycle-absolute"` | `"full-bin"` | `"full-shift"` | `"custom-cycles"` | `"other"`; `2.05_custom` — Details of custom cycles or buffer (text)
 - `2.06` — CAD file available (boolean)
 - `2.07` — Oil/soap/lubrication on part (boolean)
 - `2.08` — Slip sheets between layers (boolean)

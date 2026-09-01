@@ -86,12 +86,17 @@ export const generateProjectPdf = (project: ProjectState, profile?: UserProfile 
   doc.setFontSize(10);
   doc.setTextColor(71, 85, 105); // slate-600
 
+  const contactName = project.generalResponses?.['contact_name'] || project.ownerName || 'Unknown Owner';
+  const contactCompany = project.generalResponses?.['contact_company'] || project.ownerCompany || 'No Company';
+  const contactEmail = project.generalResponses?.['contact_email'] || project.ownerEmail || 'Unknown Email';
+  const contactPhone = project.generalResponses?.['contact_phone'] || project.ownerPhone || 'Unknown Phone';
+
   const metaData = [
     { label: 'Project Name:', value: project.projectName },
-    { label: 'Contact Name:', value: project.ownerName || 'Unknown Owner' },
-    { label: 'Company / Org:', value: project.ownerCompany || 'No Company' },
-    { label: 'Email Address:', value: project.ownerEmail || 'Unknown Email' },
-    { label: 'Phone Number:', value: project.ownerPhone || 'Unknown Phone' }
+    { label: 'Contact Name:', value: contactName },
+    { label: 'Company / Org:', value: contactCompany },
+    { label: 'Email Address:', value: contactEmail },
+    { label: 'Phone Number:', value: contactPhone }
   ];
 
   metaData.forEach(item => {
@@ -110,15 +115,19 @@ export const generateProjectPdf = (project: ProjectState, profile?: UserProfile 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
-  doc.text('Project & Cell Configuration', margin, y);
+  doc.text('General Project & Work Cell Data', margin, y);
   y += 7;
+  doc.setDrawColor(226, 232, 240);
   doc.line(margin, y, margin + contentWidth, y);
-  y += 5;
+  y += 6;
 
-  doc.setFontSize(10);
+  doc.setFontSize(9);
+
+  const contactKeys = new Set(['contact_name', 'contact_company', 'contact_email', 'contact_phone', '1.04_image']);
+
   Object.entries(project.generalResponses || {}).forEach(([key, value]) => {
-    // Skip formatting name/count if redundant
-    if (key === '1.01' || key === '1.02') return;
+    // Skip formatting name/count or contact keys if redundant
+    if (key === '1.01' || key === '1.02' || contactKeys.has(key)) return;
 
     let valueStr = String(value);
     if (value === true) valueStr = 'Yes';
@@ -321,6 +330,12 @@ export const generateProjectPdf = (project: ProjectState, profile?: UserProfile 
   // 7. Visual Attachments Appendix (if images exist)
   const allImages: { dataUrl: string; label: string }[] = [];
   
+  if (project.generalResponses && Array.isArray(project.generalResponses['1.04_image'])) {
+    project.generalResponses['1.04_image'].forEach((img: string, idx: number) => {
+      allImages.push({ dataUrl: img, label: `Bin / Container Photo ${idx + 1}` });
+    });
+  }
+
   if (project.generalImages && project.generalImages.length > 0) {
     project.generalImages.forEach((img, idx) => {
       allImages.push({ dataUrl: img, label: `Cell Env Photo ${idx + 1}` });

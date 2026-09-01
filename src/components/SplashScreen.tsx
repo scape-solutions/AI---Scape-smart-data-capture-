@@ -66,9 +66,9 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
             <div className="absolute inset-0 bg-indigo-600/20 rounded-[2rem] blur-2xl group-hover:bg-indigo-600/30 transition-all duration-500" />
 
             <div className="relative bg-white border border-slate-100 p-2 rounded-3xl shadow-2xl flex flex-col items-center justify-center w-[126px] h-[126px] shrink-0">
-              <QRCodeView url="https://scape-bin-picker-projects.web.app/" size={92} />
-              <span className="text-[8px] font-black uppercase tracking-wider text-slate-700 mt-1">
-                Scan Web App
+              <QRCodeView url={typeof window !== 'undefined' ? `${window.location.origin}/?event=Open` : "https://scape-bin-picker-projects.web.app/?event=Open"} size={90} />
+              <span className="text-[8px] font-black uppercase tracking-wider text-slate-800 mt-1">
+                Scan QR to Open
               </span>
             </div>
           </div>

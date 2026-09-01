@@ -443,6 +443,7 @@ export default function App() {
     authError,
     setAuthError,
     authLoading,
+    activeCampaignTag,
     login,
     loginWithEmail,
     signupWithEmail,
@@ -889,6 +890,7 @@ export default function App() {
         authPassword={authPassword} setAuthPassword={setAuthPassword}
         authDisplayName={authDisplayName} setAuthDisplayName={setAuthDisplayName}
         authError={authError}
+        activeCampaignTag={activeCampaignTag}
         loginWithEmail={() => loginWithEmail(authEmail, authPassword)}
         signupWithEmail={() => signupWithEmail(authEmail, authPassword, authDisplayName)}
         loginWithGoogle={login}

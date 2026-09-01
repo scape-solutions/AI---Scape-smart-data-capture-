@@ -31,32 +31,50 @@ export const FIELD_EXPLANATIONS: Record<string, FieldExplanation> = {
   '1.02': {
     fieldId: '1.02',
     fieldLabel: 'Total of different parts in project',
-    short: 'The number of distinct part variants that will be picked in this robotic cell.',
-    long: 'The total part count determines cell complexity and tool-changer requirements. Handling multiple part geometries in a single cell may require modular grippers, multi-recipe vision software, or automatic tool changers. Specifying this number allows the application to automatically generate dedicated specification tabs for each part variant.'
+    short: 'The number of distinct part variants in this cell. For similar part families, only describe smallest & largest parts + attach overview. Example: 2 unique parts + 1 family with 20 sizes = enter 4.',
+    long: 'The total part count determines cell complexity, recipe switching, and tool-changer requirements. If parts belong to the same part family and are very similar, you only need to provide full descriptions and 3D CAD files for the smallest and largest parts, accompanied by an overview document listing all variant dimensions. Example: If you have 2 unique parts plus 1 part family with 20 size variants, enter 4 in this field (Part 1, Part 2, Smallest Part 3, and Largest Part 3).'
   },
   '1.03': {
     fieldId: '1.03',
     fieldLabel: 'Bin type',
-    short: 'The format and material of the container holding the parts (e.g. EU-Pallet, Plastic Box, Cardboard Box).',
+    short: 'The format and material of the container holding the parts (e.g. EU-Pallet, Plastic Box, Cardboard Box). Describe bottom profile if wavy or mesh.',
     long: 'Container geometry directly influences vision sensor selection, camera mounting height, and robot collision avoidance. Deep or lattice bins require longer gripper extension tubes to reach bottom corners without hitting bin walls. Translucent or metallic bins may create reflections that affect optical 3D scanners.'
+  },
+  '1.03_other': {
+    fieldId: '1.03_other',
+    fieldLabel: 'Specify bin type and bottom details',
+    short: 'Custom container description including bottom geometry (flat, lattice, wavy).',
+    long: 'Provides engineering details for custom containers, such as corrugated bottoms, welded grid meshes, or custom pallet frames.'
+  },
+  '1.04': {
+    fieldId: '1.04',
+    fieldLabel: 'Bin Outer Dimensions (mm)',
+    short: 'Outer dimensions of the container (Length x Width x Height in mm, e.g. 1200x800x600).',
+    long: 'Outer dimensions define the scanning volume and maximum robot reach required to empty the container. Scape software automatically accounts for wall thickness and calculates corner collision clearance.'
+  },
+  '1.04_image': {
+    fieldId: '1.04_image',
+    fieldLabel: 'Upload Photo of Bin / Container (with parts if possible)',
+    short: 'Photo of the container showing rim height, wall profile, and bottom geometry with parts inside.',
+    long: 'Allows Scape engineers to inspect bin rim thickness, mesh spacing, corrugated bottom ribs, and part nesting depth before vision selection.'
   },
   '1.04_w': {
     fieldId: '1.04_w',
     fieldLabel: 'Bin Width (mm)',
-    short: 'Outer or inner width of the bin container in millimeters.',
-    long: 'Bin width defines the required Field of View (FOV) for the 3D vision scanner at the top of the bin, as well as the minimum robot arm reach needed to access outer edges without colliding with the surrounding cell structure.'
+    short: 'Outer width of the bin container in millimeters.',
+    long: 'Bin width defines the required Field of View (FOV) for the 3D vision scanner at the top of the bin, as well as the minimum robot arm reach needed to access outer edges.'
   },
   '1.04_l': {
     fieldId: '1.04_l',
     fieldLabel: 'Bin Length (mm)',
-    short: 'Outer or inner length of the bin container in millimeters.',
-    long: 'Together with width, bin length dictates the 3D vision scanning area. Larger bins (e.g. 1200mm Euro-pallets) require wider scanner coverage or slide-gantry mounting to maintain high 3D point cloud resolution across all corners.'
+    short: 'Outer length of the bin container in millimeters.',
+    long: 'Together with width, bin length dictates the 3D vision scanning area. Larger bins (e.g. 1200mm Euro-pallets) require wider scanner coverage or slide-gantry mounting.'
   },
   '1.04_h': {
     fieldId: '1.04_h',
     fieldLabel: 'Bin Height (mm)',
     short: 'Total depth/height of the bin container from top rim to bottom in millimeters.',
-    long: 'Bin height determines the vertical stroke requirement for the robot arm and gripper tooling. Deep bins (e.g. >600mm) increase the risk of collision between the robot wrist and the top bin edges when picking parts near the bottom floor, necessitating slim gripper shafts or collision-aware motion planning.'
+    long: 'Bin height determines the vertical stroke requirement for the robot arm and gripper tooling.'
   },
   '1.05': {
     fieldId: '1.05',
@@ -110,15 +128,21 @@ export const FIELD_EXPLANATIONS: Record<string, FieldExplanation> = {
   },
   '2.04': {
     fieldId: '2.04',
-    fieldLabel: 'Desired Average Cycle Time (sec)',
+    fieldLabel: 'Desired Cycle Time (sec)',
     short: 'Target picking cycle time per part in seconds.',
     long: 'Cycle time dictates required robot motion speed, vision processing speed, and potential need for dual-gripper tooling (picking two parts per bin entry) or multi-robot cell configurations.'
   },
   '2.05': {
     fieldId: '2.05',
-    fieldLabel: 'Average Cycle Time Based On',
-    short: 'Operating basis for the cycle time requirement (e.g. 1 bin, 1 shift, or peak line rate).',
-    long: 'Clarifies whether the cycle time is an absolute mandatory limit for production line synchronization or an average calculated across a full bin. Average cycle times account for occasional re-scanning when bins become nearly empty.'
+    fieldLabel: 'The above cycle time is an average measured over how many cycles (or 1 if it is every single cycle)?',
+    short: 'If every part must be delivered at a specific time with no buffer, enter 1 cycle. Otherwise, specify the number of cycles over which the average should be measured (e.g., a specific number of cycles, a full bin, or a full shift).',
+    long: 'Clarifies whether the cycle time is an absolute mandatory limit for line sync (1 cycle) or an average measured across multiple cycles, a full bin, or a full shift. In robotic bin-picking, bin-emptying speed varies slightly between top layers (fast) and bottom layers/corners (re-scans), so buffer capacity and cycle measurement basis determine feasibility.'
+  },
+  '2.05_custom': {
+    fieldId: '2.05_custom',
+    fieldLabel: 'Specify number of cycles or custom buffer requirement',
+    short: 'Custom cycle count or station buffer specification.',
+    long: 'Used by Scape engineers to calculate line pacing, buffer station size, and maximum allowed latency during bin corners.'
   },
   '2.06': {
     fieldId: '2.06',
@@ -164,9 +188,9 @@ export const FIELD_EXPLANATIONS: Record<string, FieldExplanation> = {
   },
   '2.13': {
     fieldId: '2.13',
-    fieldLabel: 'Determine which side is up?',
-    short: 'Requirement to identify orientation or specific face (top vs bottom) before placement.',
-    long: 'When parts must be placed in a machine in a specific orientation, Scape software uses 3D pose estimation or a secondary Scape Orientator station to re-orient parts mid-flight if picked upside down.'
+    fieldLabel: 'Determine part orientation / which side is up?',
+    short: 'Flat parts may have a small feature on one side that determines its correct orientation. Rotationally symmetric parts may have a small feature that breaks the apparent symmetry.',
+    long: 'Regarding orientation: Some parts appear identical on both sides (for instance, a flat part with a small inscription on only one side), but it is important that they are delivered with the correct side facing up. For rotationally symmetric parts (like a ring), there may be a small feature (such as a hole) that breaks the symmetry. In these cases, it is important to place the part so that this feature is in a well-defined position.'
   },
   '2.14': {
     fieldId: '2.14',

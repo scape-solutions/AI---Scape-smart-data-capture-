@@ -1334,6 +1334,8 @@ export function useProjects(
 
     // Vi bygger det data-objekt, vi vil sende til databasen.
     // Vi trækker 'id' ud så vi ALDRIG gemmer et forældet 'id: null' eller database-ID som et felt i Firestore dokumentet!
+    const { id: _, ...projectDataWithoutId } = project;
+    const nextLocked = project.isLocked ?? (status === 'submitted' || status === 'approved' || status === 'rejected');
     const userSubmittedReport = project.userSubmittedReport || (status === 'submitted' ? (project.report || null) : null);
     const userSubmittedObservations = project.userSubmittedObservations || (status === 'submitted' ? (project.fieldObservations || null) : null);
     const userSubmittedAdviceTimestamp = project.userSubmittedAdviceTimestamp || (status === 'submitted' ? (project.lastAdviceTimestamp || new Date().toLocaleString()) : null);

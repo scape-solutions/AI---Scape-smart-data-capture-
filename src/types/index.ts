@@ -81,6 +81,7 @@ export interface ProjectState {
   ownerCompany?: string;
   ownerEmail?: string;
   ownerPhone?: string;
+  leadSource?: string;
   
   // 'any' betyder, at vi slår type-kontrollen fra her. 
   // Her forventer vi et Firebase Timestamp objekt.
@@ -98,7 +99,16 @@ export interface UserProfile {
   isAdmin?: boolean;
   requestedRole?: 'evaluator' | 'user' | 'superuser';
   userModePreferred?: boolean;
+  registeredViaCampaign?: string;
   tosAcceptedAt?: any;
   lastActiveAt?: string;
+}
+
+export interface EventPasscode {
+  code: string;
+  name: string;
+  active: boolean;
+  expiresAt: string;
+  createdAt?: string;
 }
 
