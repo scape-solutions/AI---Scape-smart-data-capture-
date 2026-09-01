@@ -518,8 +518,8 @@ export function AIAssistantTab({
                         {msg.images && msg.images.length > 0 && (
                           <div className="flex flex-wrap gap-2 mb-2">
                             {msg.images.map((img, imgIdx) => {
-                              const isPdf = img.startsWith('data:application/pdf');
-                              const isAudio = img.startsWith('data:audio/');
+                              const isPdf = img.startsWith('data:application/pdf') || img === 'pdf:placeholder';
+                              const isAudio = img.startsWith('data:audio/') || img === 'audio:placeholder';
                               return isPdf ? (
                                 <div key={imgIdx} className="w-24 h-24 bg-white/10 rounded-lg border border-indigo-400 flex flex-col items-center justify-center text-white p-2">
                                   <FileText className="w-6 h-6 mb-1 text-red-200" />
@@ -532,7 +532,15 @@ export function AIAssistantTab({
                                     <Volume2 className="w-4 h-4 text-amber-300 shrink-0" />
                                     <span>Audio Recording</span>
                                   </div>
-                                  <audio controls className="h-7 w-48 max-w-full rounded-md mt-1" src={img} />
+                                  {img.startsWith('data:audio/') ? (
+                                    <audio controls className="h-7 w-48 max-w-full rounded-md mt-1" src={img} />
+                                  ) : (
+                                    <span className="text-[10px] text-indigo-100 italic">Analyzed voice memo</span>
+                                  )}
+                                </div>
+                              ) : img === 'image:placeholder' ? (
+                                <div key={imgIdx} className="w-24 h-24 bg-white/10 rounded-lg border border-indigo-400 flex flex-col items-center justify-center text-white p-2 text-center">
+                                  <span className="text-[10px] font-bold text-indigo-100">Image</span>
                                 </div>
                               ) : (
                                 <img key={imgIdx} src={img} alt="User upload" className="w-24 h-24 object-cover rounded-lg border border-indigo-400" />

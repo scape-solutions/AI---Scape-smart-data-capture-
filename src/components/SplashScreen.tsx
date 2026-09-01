@@ -1,5 +1,7 @@
-import { Bot, Sparkles, Fingerprint } from 'lucide-react';
+import { Bot, Sparkles, Fingerprint, QrCode, Play } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { QRCodeView } from './QRCodeView';
+import { IntroVideoModal } from './IntroVideoModal';
 
 interface SplashScreenProps {
   onClose: () => void;
@@ -7,6 +9,7 @@ interface SplashScreenProps {
 
 export function SplashScreen({ onClose }: SplashScreenProps) {
   const [isFading, setIsFading] = useState(false);
+  const [isIntroModalOpen, setIsIntroModalOpen] = useState(false);
 
   const handleDismiss = () => {
     setIsFading(true);
@@ -39,19 +42,35 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
       <div 
         onClick={handleDismiss}
         onTouchStart={handleDismiss}
-        className="relative z-10 flex flex-col items-center text-center px-10 py-14 max-w-xl bg-slate-900/50 border border-slate-800/80 rounded-[2.5rem] backdrop-blur-xl shadow-2xl hover:scale-[1.01] hover:border-slate-700/80 hover:bg-slate-900/60 transition-all duration-500 cursor-pointer mx-4"
+        className="relative z-10 flex flex-col items-center text-center px-8 sm:px-10 py-12 sm:py-14 max-w-xl bg-slate-900/50 border border-slate-800/80 rounded-[2.5rem] backdrop-blur-xl shadow-2xl hover:scale-[1.01] hover:border-slate-700/80 hover:bg-slate-900/60 transition-all duration-500 cursor-pointer mx-4"
       >
-        {/* Glowing Scape Logo Mark */}
-        <div className="relative mb-10 group">
-          {/* Backlight Glow */}
-          <div className="absolute inset-0 bg-red-600/20 rounded-[2rem] blur-2xl group-hover:bg-red-600/30 transition-all duration-500" />
-          
-          <div className="relative bg-white border border-slate-100 p-6 rounded-3xl shadow-2xl flex items-center justify-center max-w-[280px]">
-            <img 
-              src="/scape-logo.jpg" 
-              alt="Scape Logo" 
-              className="h-14 w-auto object-contain" 
-            />
+        {/* Scape Logo and QR Code side by side */}
+        <div className="flex flex-row items-center justify-center gap-3 sm:gap-5 mb-8 max-w-full">
+          {/* Glowing Scape Logo Mark */}
+          <div className="relative group">
+            {/* Backlight Glow */}
+            <div className="absolute inset-0 bg-red-600/20 rounded-[2rem] blur-2xl group-hover:bg-red-600/30 transition-all duration-500" />
+            
+            <div className="relative bg-white border border-slate-100 px-4 sm:px-6 py-4 rounded-3xl shadow-2xl flex items-center justify-center min-w-[160px] sm:min-w-[200px] h-[126px]">
+              <img 
+                src="/scape-logo.jpg" 
+                alt="Scape Logo" 
+                className="h-10 sm:h-12 w-auto object-contain" 
+              />
+            </div>
+          </div>
+
+          {/* QR Code Card */}
+          <div className="relative group">
+            {/* Backlight Glow */}
+            <div className="absolute inset-0 bg-indigo-600/20 rounded-[2rem] blur-2xl group-hover:bg-indigo-600/30 transition-all duration-500" />
+
+            <div className="relative bg-white border border-slate-100 p-2 rounded-3xl shadow-2xl flex flex-col items-center justify-center w-[126px] h-[126px] shrink-0">
+              <QRCodeView url="https://scape-bin-picker-projects.web.app/" size={92} />
+              <span className="text-[8px] font-black uppercase tracking-wider text-slate-700 mt-1">
+                Scan Web App
+              </span>
+            </div>
           </div>
         </div>
 
@@ -75,8 +94,23 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
           Optimizing robotic vision, part identification, and bin-picking feasibility assessments with AI intelligence.
         </p>
 
+        {/* Watch Intro & Guide Button */}
+        <div className="mt-8 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsIntroModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-red-600 to-indigo-600 hover:from-red-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-red-950/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/10"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>App Storyboard & Guide (6 Steps)</span>
+          </button>
+        </div>
+
         {/* Call to action */}
-        <div className="mt-12 flex flex-col items-center gap-3 text-slate-500 hover:text-slate-300 transition-colors">
+        <div className="mt-8 flex flex-col items-center gap-3 text-slate-500 hover:text-slate-300 transition-colors">
           <div className="w-10 h-10 rounded-full border border-slate-800 bg-slate-900/50 flex items-center justify-center animate-bounce duration-1000 shadow-lg">
             <Fingerprint className="w-5 h-5 text-red-500/80 animate-pulse" />
           </div>
@@ -86,6 +120,12 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
         </div>
       </div>
 
+      {/* Intro & Guide Modal */}
+      <IntroVideoModal 
+        isOpen={isIntroModalOpen} 
+        onClose={() => setIsIntroModalOpen(false)} 
+      />
+
       {/* Footer Info */}
       <div className="absolute bottom-6 left-6 right-6 flex justify-between items-center z-10 text-[10px] font-bold text-slate-600 font-mono">
         <span>SCAPE SOLUTIONS A/S</span>
@@ -93,3 +133,4 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
     </div>
   );
 }
+

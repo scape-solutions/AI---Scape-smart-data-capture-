@@ -139,3 +139,5 @@ This document tracks actionable tasks and fixes derived from recent testing feed
   - Tillad evaluators at uploade/linke interne erfaringsdokumenter med begrænset adgangskontrol.
 - [ ] **Samarbejde & Projektdeling (Collaboration & Sharing):**
   - Deling af projekter som Viewers, invitationer via e-mail eller link-lobby, og overførsel af ejerskab. (Se [sharing_rules_analysis.md](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/docs/sharing_rules_analysis.md)).
+- [ ] **Permanent lagring af uploadede lydfiler (Firebase Storage):**
+  - Gem uploadede lydoptagelser i Firebase Storage (i stedet for kun at overføre dem til Gemini under sessionen), og gem et afspilleligt URL-link i chat-historikken, så brugeren og evaluator altid kan genhøre lydoptagelsen direkte i chatten.

@@ -2,8 +2,9 @@
  * AuthView.tsx
  * Dette er den første skærm, brugeren ser. Den håndterer SignIn og SignUp.
  */
-import { Cpu, X } from 'lucide-react';
+import { Cpu, X, Play } from 'lucide-react';
 import { useState } from 'react';
+import { IntroVideoModal } from '../components/IntroVideoModal';
 
 // Props interfacen. Disse værdier "flyder" ned fra App.tsx
 interface AuthViewProps {
@@ -38,6 +39,7 @@ export function AuthView({
   authLoading
 }: AuthViewProps) {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [isIntroModalOpen, setIsIntroModalOpen] = useState(false);
   const emailValid = !authEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authEmail.trim());
 
   return (
@@ -53,7 +55,16 @@ export function AuthView({
           <span className="absolute -bottom-2 -right-2 bg-white text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-red-100">Info</span>
         </div>
         <h1 className="text-2xl font-bold text-slate-800 mb-2">Scape Evaluator</h1>
-        <p className="text-slate-500 mb-8 text-sm">Professional Bin-Picking Assessment</p>
+        <p className="text-slate-500 mb-4 text-sm">Professional Bin-Picking Assessment</p>
+        
+        <button
+          type="button"
+          onClick={() => setIsIntroModalOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold mb-6 transition-all border border-slate-200 cursor-pointer shadow-2xs"
+        >
+          <Sparkles className="w-3 h-3 text-indigo-600" />
+          <span>App Storyboard & Guide</span>
+        </button>
         
         {authLoading ? (
           <div className="py-12 flex flex-col items-center justify-center">
@@ -243,6 +254,12 @@ export function AuthView({
           </div>
         </div>
       )}
+
+      {/* Intro Video & Guide Modal */}
+      <IntroVideoModal 
+        isOpen={isIntroModalOpen} 
+        onClose={() => setIsIntroModalOpen(false)} 
+      />
     </div>
   );
 }
