@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, User as UserIcon, X, Settings, Mail, LayoutDashboard, Bot, Zap } from 'lucide-react';
+import { LogOut, User as UserIcon, X, Settings, Mail, LayoutDashboard, Bot, Zap, Play, Sparkles } from 'lucide-react';
 import { isDynamicSuperuser } from '../hooks/useAuth';
 import { UserProfile } from '../types';
+import { IntroVideoModal } from './IntroVideoModal';
 
 interface HeaderProps {
   user: any;
@@ -58,6 +59,7 @@ export function Header({
 }: HeaderProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [isIntroModalOpen, setIsIntroModalOpen] = useState(false);
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
   const [phone, setPhone] = useState('');
@@ -188,6 +190,17 @@ export function Header({
             <span className="sm:hidden">⚡</span>
           </button>
         )}
+
+        {/* Intro Video & Guide Launch Button */}
+        <button
+          type="button"
+          onClick={() => setIsIntroModalOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shrink-0 shadow-2xs active:scale-95"
+          title="App Storyboard & Step-by-Step Guide"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+          <span className="hidden sm:inline">App Guide</span>
+        </button>
       </div>
 
       {projectName && (
@@ -578,6 +591,12 @@ export function Header({
           </div>
         </div>
       )}
+
+      {/* INTRO VIDEO & GUIDE MODAL */}
+      <IntroVideoModal 
+        isOpen={isIntroModalOpen} 
+        onClose={() => setIsIntroModalOpen(false)} 
+      />
     </header>
   );
 }

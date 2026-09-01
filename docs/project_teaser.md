@@ -1,101 +1,89 @@
-# SCAPE Bin-Picking Evaluator - App Teaser & Testing Guide
+# Scape Bin-Picker Projects — App Teaser & Testing Guide
 
-**Live Web App & PWA Link:** <https://scape-bin-picker-projects.web.app/>
+**Live Web App & PWA Link:** <https://scape-bin-picker-projects.web.app/>  
+*(Scan the on-screen QR code from any smartphone to test instantly on mobile)*
 
-Welcome to the **SCAPE Bin-Picking Evaluator**, a premium, smart tool designed to streamline technical feasibility checks and hardware selection (vision systems & grippers) for bin-picking projects.
+Welcome to **Scape Bin-Picker Projects**, a modern, AI-powered tool designed to streamline technical feasibility evaluations, part specifications, and hardware selection (vision systems & grippers) for robotic bin-picking cells.
 
-Powered by the advanced **Gemini 2.5 Flash** model, the app uses state-of-the-art multimodal AI to automatically translate free-text descriptions and cell photos into structured project specifications.
-
----
-
-## Strategic Vision & Purpose of this Version
-
-To scale SCAPE's sales by **10x**, we need to evaluate **100x more projects** to identify the best, most feasible applications. Because human technical resources (SCAPE evaluators) are limited, this assessment process must be automated. 
-
-This first version serves two primary purposes:
-1. **Help to Integrators & End-Users:** The app guides users through the complex "Bin-Picking Project Information" process. It embeds SCAPE's specialized knowledge about bin-picking conditions to actively **nudge the user** toward optimal specifications (e.g., distinguishing between absolute vs. average cycle times, checking for entanglement, surface shininess, and handling multiple part variants individually by adding new parts).
-2. **Help to SCAPE Evaluators:** Ensure SCAPE receives complete, high-quality project data from day one, and generates an automated **AI Technical Evaluation Draft** that evaluators can use as a starting point to write their final review.
-
-### Image & Visual Consistency
-* **Current Version:** Uses uploaded cell and part images to run consistency checks, verifying that the text description matches the visual evidence. *Note: Due to file size limits, users are encouraged to upload screenshots of their CAD models rather than full heavy CAD files.*
-* **Future Upgrade Roadmap:** Future versions will include trained models on "good" vs. "bad" bin-picking parts/geometries to give even richer visual feedback to both the integrator and SCAPE evaluator.
-
-**The Ultimate Outcome:** Better, cleaner specifications and lightning-fast response times, enabling SCAPE to capture more customers without bottlenecking human evaluators.
+Powered by **Gemini 2.5 Flash**, the platform translates plain-text cell descriptions, smartphone voice dictation, CAD files, and cell photos into structured, production-ready project specifications.
 
 ---
 
-## Key Highlights
+## Strategic Vision & Purpose
 
-### 1. Multimodal AI Auto-fill Assistant (Gemini 2.5 Flash)
-* **Talk to your Project:** Describe your workspace, robot installation, or parts in plain text or voice.
-* **Auto-Extraction:** The AI extracts complex parameters in real-time, auto-fills questionnaire fields, and suggests updates.
-* **Smart Filtering & UX:** Displays only the modified fields in a clean accept-card with automatic text-wrapping (no clipped inputs).
+To scale SCAPE's sales by **10x**, we need to evaluate **100x more projects** to identify the best, most feasible automation opportunities. Because experienced bin-picking engineers are a limited resource, the initial data collection and technical pre-screening must be automated and frictionless.
 
-### 2. Auto-Feasibility & Warning Badges
-* When you request **Project Information Advice**, the system scans your draft data and highlights empty or concerning fields with colored warning markers (`🔴` eller `⚠️`) directly next to form labels.
-* Tooltips explain what is missing or suboptimal (e.g. cycle time ambitions or light interference risks).
+This platform serves two core purposes:
 
-### 3. Iterative Feedback Workflow
-* **Submit & Review:** Users submit their completed projects to Scape. Evaluators review them on their Dashboard and generate an AI Evaluator Draft.
-* **Direct Unsubmit (Before Evaluation):** The user can cancel their submission and unsubmit the project immediately to make changes, as long as an evaluator has not locked the case yet.
-* **Request Unlock / Edit Permission (During/After Evaluation):** If the project has been locked or already evaluated (Approved/Rejected), the user can click **"Request Edit Permission"**, specify a brief reason, and send it to Scape. Evaluators can review the request from their details screen to approve (reverts project to Draft and unlocks it) or reject it.
+1. **Guided Self-Service for Integrators & End-Users:**  
+   The app guides users through the technical specifications process, embedding SCAPE’s specialized robotics knowledge directly into the UI. It actively **nudges the user** toward optimal parameters (e.g., distinguishing between average vs. maximum cycle times, checking for part entanglement, surface reflections, gripper clearance, and managing multiple part variants individually).
 
-### 4. Seamless PWA & Mobile layout
-* Fully optimized as a **Progressive Web App (PWA)** on mobile devices.
-* Uses the **Visual Viewport API** to dynamically resize layouts above virtual keyboards, providing a clean chat interface with auto-scrolling questions.
+2. **Automated Technical Pre-Screening for SCAPE Evaluators:**  
+   Ensures SCAPE receives complete, high-quality technical data from day one. It generates an automated **AI Technical Evaluation & Advice Draft** with camera recommendations and cycle-time calculations, allowing evaluators to deliver verified feasibility assessments in record time.
 
 ---
 
-## Screenshots
+## Key Highlights & Latest Capabilities
 
-### 1. App Launch & Splash Screen
-Branded entry point showing system readiness.
-![App Splash Screen](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/app_home_1781075494417.png)
+### 1. Conversational AI Assistant (Text & Smartphone Dictation)
+* **Natural Language Input:** Users can type or use their smartphone's native **speech-to-text dictation** directly in the chat box to describe their robot cell (e.g., *"We need to pick 2.5 kg forged steel brackets from a 1200x800x600 mm pallet bin using a Kuka KR10 robot at 5.5 sec cycle time"*).
+* **Edit Before Sending:** Dictating directly into the text field allows users to review and adjust text before submitting, ensuring 100% accuracy.
+* **Editable Yellow Proposal Cards:** The AI parses the parameters and presents an editable before/after card. Nothing is applied to the project until the user clicks **"Apply Changes"**.
+* **Seamless AI Mode & Tab Navigation:** Switch easily between the AI Assistant chat and the questionnaire form.
 
-### 2. Customer Project Workspace & Questionnaire (Cell Info Step)
-Modular step-by-step questionnaire form with active fields, help notes, and file upload fields.
-![Customer Project Workspace - Cell Info](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/workspace_screenshot-1.png)
+### 2. Multi-Attachment Support (CAD & Cell Photos)
+* **CAD File Uploads:** Supports direct drag-and-drop of `.step`, `.stp`, and `.stl` files (up to 200 KB) or multi-angle 3D screenshots for large models.
+* **Placement & Cell Photos:** Dedicated upload areas for general cell layout and destination fixtures (field 2.12), ensuring vision and reach feasibility can be verified accurately.
+* **Image Compression & Lightbox:** Automatically compresses mobile photos for rapid cloud sync and includes a 1-click lightbox zoom to inspect part details.
 
-### 3. Questionnaire Active Warning Flags & Nudges (Part Dimensions Step)
-Colored warnings (`🔴 CRITICAL`, `⚠️ NOTE`) next to fields that do not fit specs or are missing data.
-![Customer Project Workspace - Warnings](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/workspace_screenshot-2.png)
+### 3. Automated "Project Information Advice" & Warning Badges
+* **Pre-Submission AI Audit:** Click **`⚡ AI Advice`** to run an automated check on bin dimensions, part weight, cycle times, and potential glare/entanglement challenges.
+* **Frozen Submission Snapshot:** When a user submits a project, the exact state of the advice and parameters is frozen into a permanent snapshot (`userSubmittedReport`), allowing SCAPE evaluators to see precisely what the customer submitted.
+* **Smart Nudges & Guidance Popups:** Every field includes a circular info icon `(i)` with both **Short Summaries** and **Detailed Technical Guidance**, plus a global `Show Field IDs` toggle.
 
-### 4. Interactive Multimodal AI Assistant Sidebar
-Real-time chat where users can describe their cell. The AI parses the parameters, extracts structured facts, and applies them to the form.
-![Customer Project Workspace - AI Assistant Sidebar](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/workspace_screenshot-3.png)
+### 4. Interactive Onboarding & Video Guide (Built-in)
+* **90-Second Walkthrough:** Click **"Guide & Video"** in the header or splash screen to access a full introduction video and a 3-step illustrated storyboard (*The Challenge, AI Capture, and Scape Verification*).
+* **QR Code Quick Access:** A crisp ISO-compliant QR code is displayed on the front screen for 1-second mobile camera launch.
 
-### 5. Automated Data Capture Advice & Project Summary
-AI feedback summarizing feasibility risks, checklist points, and details before submitting the project.
-![Customer Project Workspace - Data Capture Advice](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/workspace_screenshot-4.png)
-
-### 6. Evaluator Administrative Dashboard
-Shows the case overview page where SCAPE evaluators can take cases, manage locks, review AI evaluator drafts, and submit verdicts.
-![Evaluator Dashboard](/Users/runeklausenlarsen/.gemini/antigravity-ide/brain/a80de74c-987b-42d0-bbfe-dcf5a9ff9af8/dashboard_evaluator_1780995012188.png)
+### 5. Dual-AI Support Architecture
+* **Contextual Help AI:** A dedicated support assistant trained on the complete Scape bin-picking guide helps answer technical and app-related questions without polluting the evaluator prompt.
 
 ---
 
-## Easiest Way to Test It
-
-To ensure a successful demo, here is how to log in and what to expect based on roles. **Important Note:** Always use "User Mode" to input and document a project. "Evaluator Mode" is strictly for reviewing submitted projects.
+## Easiest Way to Test the Platform
 
 ### Option A: Pre-Registered Demo Account
 Use our pre-configured demo credentials which work instantly:
 
 * **Email:** `demo@scapesolutions.eu`
 * **Password:** `ScapeEvaluator2026`
-* **What to Expect:** This account has been whitelisted as an **Evaluator**. You can toggle between **User Mode** (to create projects) and **Evaluator Mode** (to review submitted projects). 
+* **What to Expect:** This account has been whitelisted with **Evaluator** privileges. You can freely toggle between **User Mode** (to create and edit projects) and **Evaluator Mode** (to review submitted projects, generate Scape reviews, and approve/reject cases).
 
-### Option B: Direct Google Sign-In for SCAPE Evaluators
-If you log in via Google, our system dynamically maps your identity. Even if you use an email alias (like `rde@scapesolutions.eu`), Google safely resolves it to your primary email, ensuring you get the correct access instantly. 
+---
 
-The following team accounts are pre-qualified as **Evaluators**:
+### Option B: Direct Google Sign-In (SCAPE Employees & Whitelist)
+Log in via Google using your Google Workspace account. Our system dynamically maps your identity and grants Evaluator rights:
+
 * **René Dencker Eriksen:** `rene.dencker.eriksen@scapesolutions.eu`
 * **John Erland Østergaard:** `john.erland.oestergaard@scapesolutions.eu`
 * **Per Juul Nielsen:** `per.juul.nielsen@scapesolutions.eu`
 * **Rune Klausen Larsen:** `rune.k.larsen@scapesolutions.eu`
 
-* **How to log in:** Click the **"Sign in with Google"** button and log in using your Google Workspace account. You will be authenticated immediately with full Evaluator rights.
+---
 
-### Option C: Registering a New Account (Customer Isolation View)
-* **Works on:** Sign up with email/password or Google Sign-In.
-* **What to Expect (Customer View):** Any new account not on the whitelist will log in as a **Customer / End User** by default. To show off multi-tenant security, this user will have a clean, blank dashboard and **cannot** see anyone else's projects or access admin tools.
+### Option C: Customer / New User View (Multi-Tenant Isolation)
+* Sign up with any external email/password or personal Google account.
+* **Customer Isolation:** The account will automatically default to **Customer / End-User mode**. It provides a clean, private workspace with full isolation from other users' projects and no access to internal administrative tools.
+
+---
+
+## Suggested 3-Minute Test Walkthrough
+
+1. **Open the App:** Open <https://scape-bin-picker-projects.web.app/> (or scan the QR code).
+2. **Check the Intro Guide:** Click **"Watch Intro & Instructions"** on the splash screen to view the 3-step visual storyboard.
+3. **Create a Project:** Click **"+ New Project"** from the Dashboard.
+4. **Talk to the AI:** Open the AI Assistant tab. Dictate or paste a cell description:
+   > *"We have forged iron connecting rods weighing 1.2 kg in a 1200x800x500 mm steel bin. We need an average cycle time of 4.5 seconds using a Fanuc CRX robot."*
+5. **Apply Proposed Changes:** Review the yellow proposal card and click **"Apply Changes"**.
+6. **Get AI Advice:** Click **"AI Advice"** in the top navigation to view the automated feasibility analysis.
+7. **Submit:** Click **"Submit Project"** to test the locked submission snapshot workflow.
