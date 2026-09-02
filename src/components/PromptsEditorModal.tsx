@@ -15,12 +15,13 @@ interface PromptsEditorModalProps {
   show: boolean;
   onClose: () => void;
   setGlobalSuccess: (msg: string | null) => void;
+  initialTab?: PromptType;
 }
 
 type PromptType = 'externalAdvice' | 'evaluatorDraft' | 'autoFill' | 'observationsExtraction' | 'appSupportGuide' | 'campaignTags';
 
-export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsEditorModalProps) {
-  const [activeTab, setActiveTab] = useState<PromptType>('externalAdvice');
+export function PromptsEditorModal({ show, onClose, setGlobalSuccess, initialTab }: PromptsEditorModalProps) {
+  const [activeTab, setActiveTab] = useState<PromptType>(initialTab || 'externalAdvice');
   const [prompts, setPrompts] = useState<Record<string, string>>({
     externalAdvice: '',
     evaluatorDraft: '',
@@ -54,11 +55,14 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
   // Load prompts and history on open
   useEffect(() => {
     if (show) {
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
       loadPrompts();
       loadHistory();
       loadAccessConfig();
     }
-  }, [show]);
+  }, [show, initialTab]);
 
   const loadAccessConfig = async () => {
     try {
