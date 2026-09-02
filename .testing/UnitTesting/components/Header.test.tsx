@@ -14,6 +14,7 @@ vi.mock('lucide-react', async (importOriginal) => {
   const actual = await importOriginal<Record<string, any>>();
   return new Proxy(actual, {
     get: (target, prop) => {
+      if (prop === 'then') return undefined;
       if (prop in target) return target[prop as string];
       return (props: any) => <div data-testid={`icon-${String(prop)}`} {...props} />;
     }
@@ -58,7 +59,7 @@ describe('Header', () => {
     render(<Header {...mockProps} />);
 
     expect(
-      screen.getByTitle('Om Scape Bin-Picker Projects')
+      screen.getByTitle('Om SCAPE PICK-PILOT')
     ).toBeInTheDocument();
 
     expect(screen.getByText(/SC/)).toBeInTheDocument();
