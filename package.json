@@ -18,7 +18,9 @@
     "test:integration:watch": "vitest --dir .testing/IntegrationTesting",
     "test:all": "vitest run --dir .testing",
     "prompts:push": "node update_prompts.js",
-    "prompts:pull": "node pull_prompts.js"
+    "prompts:pull": "node pull_prompts.js",
+    "deploy:cloud": "gcloud builds submit --tag europe-west3-docker.pkg.dev/scape-data-capture/scape-evaluator/scape-evaluator && gcloud run deploy scape-evaluator --image europe-west3-docker.pkg.dev/scape-data-capture/scape-evaluator/scape-evaluator:latest --platform managed --region europe-west3 --allow-unauthenticated --set-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest",
+    "deploy:hosting": "npm run build && npx -y firebase-tools deploy --only hosting:scape-pick-pilot"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
