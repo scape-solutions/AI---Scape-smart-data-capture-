@@ -18,6 +18,7 @@ vi.mock('lucide-react', async (importOriginal) => {
   const actual = await importOriginal<Record<string, any>>();
   return new Proxy(actual, {
     get: (target, prop) => {
+      if (prop === 'then') return undefined;
       if (prop in target) return target[prop as string];
       return (props: any) => <div data-testid={`icon-${String(prop)}`} {...props} />;
     }
