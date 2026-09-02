@@ -182,27 +182,38 @@ The exported PDF report is structured into clean, role-aware sections:
 
 ---
 
-## 8. Event Passcodes & Campaign Registration System
+## 8. Authentication, Access Control & Campaign System
 
-The **Campaign Passcode System** provides controlled, trackable public registration for trade shows, marketing campaigns, webinars, or open onboarding events (e.g. *Automatik 2026*).
+The application uses a multi-tiered authorization model configured dynamically in Firestore (`config/access`):
 
-### A. The "Entry Ticket" Model (Option A)
-* **Registration Gate:** Event codes (e.g. `?event=Automatik26` or `?event=open`) act as a registration entry pass.
-* **Once Registered, Always In:** When a user registers through an active campaign link, their account is permanently created in Firestore. Even if the campaign later expires or is paused, **existing registered users retain 100% full permanent access** to log in, view their projects, use the AI assistant, and review feasibility reports.
-* **Pause / Expiration:** If an event pass code is expired or marked as Paused in the Superuser panel, new visitors attempting to register with that link are blocked with a clear notification (*"Access restricted: The campaign pass code is paused, expired, or invalid"*).
+### A. Access Authorization Hierarchy (Who Can Sign Up & Log In)
 
-### B. Who Can Sign Up & Assigned Roles
-1. **Public Campaign Visitors (via `?event=CodeName`):**
-   * **Assigned Role:** **Standard User / Customer** (`role: 'enduser' | 'integrator'`).
-   * **Capabilities:** Create bin-picking projects, chat with the AI assistant, upload 3D CAD (`.stl`) and photos, request automated AI advice, and view final Scape technical feasibility verdicts.
-2. **Whitelisted Scape Evaluators & Employees:**
-   * Accounts with `@scapesolutions.eu`, `@scapesolutions.com`, or configured in `config/access` `allowedEvaluators`.
-   * **Assigned Role:** **Scape Evaluator & Staff**.
-   * **Capabilities:** Access the full Evaluator Dashboard, take cases, lock/unlock projects, generate AI Evaluator Drafts, and publish technical reviews and verdicts.
-3. **Superusers:**
-   * Specific administrator emails configured in `config/access` `superusers`.
-   * **Assigned Role:** **Super User Mode**.
-   * **Capabilities:** Full access to **AI System Prompts Editor**, **Campaign Passcode Manager**, **User Activity Dashboard**, and bulk data export/import tools.
+A user can register and access the application via any of the following paths:
+
+1. **Explicit Email Whitelist (`allowedEmails`):**
+   * Pre-approved individual email addresses added directly to `config/access` (e.g. external partners, VIP testers, or contractors).
+   * **Behavior:** Can register and log in directly at any time **without requiring any campaign passcode or event link**.
+2. **Domain Whitelist (`allowedDomains`):**
+   * Company email addresses matching approved domains (e.g. `@scapesolutions.eu`, `@scapesolutions.com`).
+   * **Behavior:** Can register and log in directly with Google or email password without an event passcode.
+3. **Campaign Event Passcodes (`activeEventPasscodes` / `?event=Tag`):**
+   * For **public visitors, trade show leads, and external clients** who do not have an internal company email and are not pre-listed in `allowedEmails`.
+   * **Behavior:** Can register by opening an active campaign link (e.g. `https://scape-bin-picker-projects.web.app/?event=Automatik26`).
+4. **Existing Registered Users (The "Once Registered, Always In" Rule):**
+   * Any user who successfully completed registration in the past possesses a verified profile in Firestore (`/users/{uid}`).
+   * **Behavior:** Retains full permanent access to log in and use their dashboard even if the original campaign pass code is paused or expires later (unless explicitly suspended by a Superuser).
+
+---
+
+### B. User Roles & Capability Levels
+
+| Role / Tier | Who Has It | Capabilities |
+| :--- | :--- | :--- |
+| **Standard User / Customer** | Public Campaign Visitors (`?event=Tag`), External Clients | Create projects, run AI Chat Assistant, upload 3D CAD (`.stl`) & photos, calculate ROI, request AI Advice, view published Scape Feasibility Verdicts. |
+| **Scape Evaluator & Staff** | Emails in `allowedEvaluators` or Scape employees | Access the full **Evaluator Dashboard**, take customer cases, lock/unlock projects, generate AI Evaluator Drafts, and publish technical reviews and verdicts. |
+| **Super User Mode** | Emails in `superusers` (`rune.k.larsen@...`) | Access **Super User Tools**: AI System Prompts Editor, Campaign Passcode Manager, User Activity Board, Test Account Manager, Bulk JSON Export/Import, and Demo Seeds. |
+
+---
 
 ### C. Managing Campaigns (Superuser Tools)
 1. Open the **Campaigns & Passcodes** tab inside the **Super User Tools** (`Edit AI Prompts` / `Campaign Tags`).
