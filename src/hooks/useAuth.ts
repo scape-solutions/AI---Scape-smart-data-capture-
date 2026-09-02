@@ -423,7 +423,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
             setView('profile_setup');
           }
         } catch (e) {
-          handleAppError(e, OperationType.READ, `users/${u.uid}`);
+          handleAppError(e, OperationType.GET, `users/${u.uid}`);
         }
       } else {
         setProfile(null);

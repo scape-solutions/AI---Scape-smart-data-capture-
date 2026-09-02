@@ -20,7 +20,8 @@ function glog(n) {
 }
 
 class Poly {
-  constructor(num, shift = 0) {
+  num: Uint8Array;
+  constructor(num: any, shift = 0) {
     let offset = 0;
     while (offset < num.length && num[offset] === 0) offset++;
     this.num = new Uint8Array(num.length - offset + shift);

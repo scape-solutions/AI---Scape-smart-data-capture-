@@ -127,7 +127,7 @@ export function Header({
         <div 
           className="flex items-center gap-2 cursor-pointer shrink-0 select-none hover:opacity-90 active:scale-[0.98] transition-all" 
           onClick={() => setIsAboutModalOpen(true)}
-          title="Om Scape Bin-Picker Projects"
+          title="Om SCAPE PICK-PILOT"
         >
           <span className="font-extrabold text-2xl tracking-[0.04em] text-slate-900 flex items-center select-none">
             SC
@@ -500,7 +500,7 @@ export function Header({
                 </span>
                 PE
               </span>
-              <span className="text-xs font-bold text-slate-400">Bin-Picker Projects</span>
+              <span className="text-xs font-black tracking-wider text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-lg select-none">PICK-PILOT</span>
             </div>
 
             {/* Content Sections */}

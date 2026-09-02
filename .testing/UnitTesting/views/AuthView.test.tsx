@@ -4,10 +4,15 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { AuthView } from '../../../src/views/AuthView';
 
 // Mock Lucide icons
-vi.mock('lucide-react', () => ({
-  Cpu: () => <div data-testid="cpu-icon" />,
-  X: () => <div data-testid="x-icon" />,
-}));
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return new Proxy(actual, {
+    get: (target, prop) => {
+      if (prop in target) return target[prop as string];
+      return (props: any) => <div data-testid={`icon-${String(prop)}`} {...props} />;
+    }
+  });
+});
 
 describe('AuthView', () => {
   const mockSetAuthStep = vi.fn();
@@ -36,7 +41,7 @@ describe('AuthView', () => {
 
   it('renders sign in fields correctly', () => {
     render(<AuthView {...baseProps} />);
-    expect(screen.getByText('Scape Evaluator')).toBeInTheDocument();
+    expect(screen.getByText('SCAPE PICK-PILOT')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Email')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
   });

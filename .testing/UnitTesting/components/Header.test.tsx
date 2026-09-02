@@ -10,13 +10,15 @@ vi.mock('../../../src/hooks/useAuth', () => ({
   isDynamicSuperuser: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('lucide-react', () => ({
-  LogOut: () => <div data-testid="logout-icon" />,
-  User: () => <div data-testid="user-icon" />,
-  X: () => <div data-testid="x-icon" />,
-  Settings: () => <div data-testid="settings-icon" />,
-  Mail: () => <div data-testid="mail-icon" />,
-}));
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return new Proxy(actual, {
+    get: (target, prop) => {
+      if (prop in target) return target[prop as string];
+      return (props: any) => <div data-testid={`icon-${String(prop)}`} {...props} />;
+    }
+  });
+});
 
 describe('Header', () => {
   const mockLogout = vi.fn();

@@ -3173,7 +3173,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                                   type: 'single',
                                                   imageType: isGeneralImages ? 'general' : 'part',
                                                   partIndex: isGeneralImages ? -1 : activePartIndex,
-                                                  imageIndex: imgIdx
+                                                  imgIdx: imgIdx
                                                 });
                                               }
                                             }}

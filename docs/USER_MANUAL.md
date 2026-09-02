@@ -1,12 +1,12 @@
-# SCAPE Bin-Picking Evaluator - User Manual
+# SCAPE PICK-PILOT - User Manual
 
-This manual is designed to help new users get started with the **SCAPE Bin-Picking Evaluator** and to provide experienced users with a quick lookup reference for project states, role modes, and dashboard controls.
+This manual is designed to help new users get started with **SCAPE PICK-PILOT** and to provide experienced users with a quick lookup reference for project states, role modes, and dashboard controls.
 
 ---
 
 ## 1. Getting Started (For New Users)
 
-The **SCAPE Bin-Picking Evaluator** is a smart data capture tool designed to collect bin-picking application parameters, evaluate feasibility, and recommend vision systems and grippers.
+The **SCAPE PICK-PILOT** is a smart data capture tool designed to collect bin-picking application parameters, evaluate feasibility, and recommend vision systems and grippers.
 
 ### Step 1: Authentication & Profile Setup
 1. Open the application in your browser: [https://scape-bin-picker-projects.web.app/](https://scape-bin-picker-projects.web.app/) (or [http://localhost:8080/](http://localhost:8080/) for local testing).
@@ -55,7 +55,7 @@ The interface adjusts dynamically based on the active role of the logged-in user
 * **Who can use it**: Restricted exclusively to `rune.k.larsen@scapesolutions.eu` (configured dynamically in Firestore `config/access`).
 * **Interface**: Adds the **Super User Tools** dashboard toolbar. Grants access to bulk JSON data exports/imports, bulk staging acceptance, and superuser demo data seeds.
 * **AI System Prompts Editor**: Superusers can edit system prompt templates dynamically in the app (clicking **Edit AI Prompts**). It hosts three tabs:
-  1. *Data Capture Advice* (for client feedback)
+  1. *Project Information Advice* (for client feedback)
   2. *Technical Evaluation* (for evaluator drafts)
   3. *AI Chat Assistant* (for auto-fill helper)
 * **LLM Image Toggles**: The prompt editor contains a toggle switch for each prompt tab: **"Include uploaded project & part images as visual attachments"**. Toggling this ON sends image attachments to Gemini (multimodal), while toggling it OFF strips them to save token usage and improve speed.
@@ -122,7 +122,7 @@ Each project card displays its status badge on the dashboard. Use this table to 
 
 ## 5. Questionnaire Field Observations & Warnings
 
-When the user requests **Data Capture Advice**, the system runs an automated evaluation:
+When the user requests **Project Information Advice**, the system runs an automated evaluation:
 1. **Extraction:** A secondary structured AI call extracts observations and maps them to specific questionnaire field IDs (e.g. `1.03` or `2.04`).
 2. **Form Highlights:** In the questionnaire form, fields with concerns show inline colored warning badges (`⚠️` or `🔴`) next to their labels. Hovering or clicking these badges reveals a tooltip with the specific concern.
 3. **Factual Verification:** This lets users quickly identify which input value needs correction or refinement.
@@ -173,7 +173,7 @@ When the user requests **Data Capture Advice**, the system runs an automated eva
 ### Branded PDF Feasibility Report Layout
 The exported PDF report is structured into clean, role-aware sections:
 * **Section A (Factual Data):** Lists all questionnaire parameters in tables. If a field has an observation warning associated with it, it gets a colored marker `[!]` (critical) or `[⚠]` (warning) next to its value.
-* **Section B (Data Capture Advice):** Displays a compact list of all flagged fields with their explanations, followed by the full narrative advice report.
+* **Section B (Project Information Advice):** Displays a compact list of all flagged fields with their explanations, followed by the full narrative advice report.
 * **Section C:** Contains uploaded part and cell photos as an appendix.
 * **Section D (Review & Verdict):** Shows the most authoritative technical review text available:
   * For *Users (Customers)*, it displays the published **Project Review from Scape Solutions** verdict.

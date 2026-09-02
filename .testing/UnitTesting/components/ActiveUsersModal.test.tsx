@@ -7,22 +7,29 @@ import { getDocsFromServer } from 'firebase/firestore';
 import '@testing-library/jest-dom/vitest';
 
 // Mock Lucide icons
-vi.mock('lucide-react', () => ({
-  X: () => <div data-testid="x-icon" />,
-  RefreshCw: () => <div data-testid="refresh-icon" />,
-  Users: () => <div data-testid="users-icon" />,
-  Shield: () => <div data-testid="shield-icon" />,
-  Clock: () => <div data-testid="clock-icon" />,
-  Landmark: () => <div data-testid="landmark-icon" />,
-  Loader2: () => <div data-testid="loader-icon" />,
-}));
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return new Proxy(actual, {
+    get: (target, prop) => {
+      if (prop in target) return target[prop as string];
+      return (props: any) => <div data-testid={`icon-${String(prop)}`} {...props} />;
+    }
+  });
+});
+
+let snapshotCallback: ((snap: any) => void) | null = null;
 
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(),
+  onSnapshot: vi.fn((col: any, cb: any) => {
+    snapshotCallback = cb;
+    return vi.fn(); // unsubscribe
+  }),
   getDocsFromServer: vi.fn(),
   getDocs: vi.fn(),
   getFirestore: vi.fn().mockReturnValue({}),
   doc: vi.fn(),
+  updateDoc: vi.fn().mockResolvedValue(undefined),
   getDocFromServer: vi.fn().mockResolvedValue({}),
 }));
 
@@ -57,12 +64,15 @@ describe('ActiveUsersModal', () => {
   it('fetches and displays users when show is true', async () => {
     const mockSnap = {
       forEach: (cb: any) => {
-        mockUsers.forEach(u => cb({ data: () => u }));
+        mockUsers.forEach((u, idx) => cb({ id: `user_${idx}`, data: () => u }));
       },
     };
-    vi.mocked(getDocsFromServer).mockResolvedValue(mockSnap as any);
 
     render(<ActiveUsersModal show={true} onClose={mockClose} />);
+
+    if (snapshotCallback) {
+      (snapshotCallback as any)(mockSnap);
+    }
 
     await waitFor(() => {
       expect(screen.getByText('Alice Active')).toBeInTheDocument();

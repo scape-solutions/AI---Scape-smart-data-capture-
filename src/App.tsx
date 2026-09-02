@@ -594,7 +594,7 @@ export default function App() {
     if (!user) return;
     const initialProject: ProjectState = {
       id: null,
-      projectName: "New Scape Bin-Picker Project",
+      projectName: "New SCAPE PICK-PILOT Project",
       generalResponses: {},
       parts: [{ responses: {}, images: [] }],
       report: null,

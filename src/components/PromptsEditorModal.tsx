@@ -294,7 +294,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess, initialTab
           activeTab === 'evaluatorDraft' ? defaultEvaluatorDraft.trim() :
             activeTab === 'autoFill' ? defaultAutoFill.trim() :
               activeTab === 'observationsExtraction' ? defaultObservationsExtraction.trim() :
-                defaultAppHelpGuide.trim();
+                defaultAppSupportGuide.trim();
 
       setPrompts(prev => ({
         ...prev,

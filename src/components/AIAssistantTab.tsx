@@ -504,9 +504,9 @@ export function AIAssistantTab({
             <Bot className="w-5 h-5 text-indigo-500" />
             AI Assistant
           </h2>
-          {currentProject.name && (
-            <span className="text-xs font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl truncate max-w-[200px]" title={currentProject.name}>
-              📁 {currentProject.name}
+          {currentProject.projectName && (
+            <span className="text-xs font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl truncate max-w-[200px]" title={currentProject.projectName}>
+              📁 {currentProject.projectName}
             </span>
           )}
         </div>

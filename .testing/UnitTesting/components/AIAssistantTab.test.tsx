@@ -11,24 +11,15 @@ vi.mock('react-markdown', () => ({
   default: ({ children }: any) => <div>{children}</div>,
 }));
 
-vi.mock('lucide-react', () => ({
-  Send: () => <div data-testid="send-icon" />,
-  Bot: () => <div data-testid="bot-icon" />,
-  User: () => <div data-testid="user-icon" />,
-  Check: () => <div data-testid="check-icon" />,
-  Edit2: () => <div data-testid="edit-icon" />,
-  CheckCircle2: () => <div data-testid="checkcircle-icon" />,
-  HelpCircle: () => <div data-testid="help-icon" />,
-  Paperclip: () => <div data-testid="clip-icon" />,
-  X: () => <div data-testid="x-icon" />,
-  MessageSquare: () => <div data-testid="messagesquare-icon" />,
-  FileText: () => <div data-testid="filetext-icon" />,
-  Settings2: () => <div data-testid="settings-icon" />,
-  Box: () => <div data-testid="box-icon" />,
-  Maximize: () => <div data-testid="maximize-icon" />,
-  Zap: () => <div data-testid="zap-icon" />,
-  Camera: () => <div data-testid="camera-icon" />,
-}));
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return new Proxy(actual, {
+    get: (target, prop) => {
+      if (prop in target) return target[prop as string];
+      return (props: any) => <div data-testid={`icon-${String(prop)}`} {...props} />;
+    }
+  });
+});
 
 describe('AIAssistantTab utilities', () => {
   describe('areValuesEqual', () => {

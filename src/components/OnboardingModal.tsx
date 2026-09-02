@@ -72,7 +72,7 @@ export function OnboardingModal({
                   {readOnly ? "Terms of Service (ToS)" : "Terms of Service & Onboarding"}
                 </h3>
                 <p className="text-xs text-slate-400 font-semibold mt-0.5">
-                  {readOnly ? "Scape Bin-Picker Projects Terms of Service" : "Confirm your information and accept our terms"}
+                  {readOnly ? "SCAPE PICK-PILOT Terms of Service" : "Confirm your information and accept our terms"}
                 </p>
               </div>
             </div>

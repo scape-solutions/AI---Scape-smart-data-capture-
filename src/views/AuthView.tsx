@@ -59,8 +59,8 @@ export function AuthView({
           <Cpu className="text-white w-8 h-8 absolute opacity-20" />
           <span className="absolute -bottom-2 -right-2 bg-white text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-red-100">Info</span>
         </div>
-        <h1 className="text-2xl font-bold text-slate-800 mb-2">Scape Evaluator</h1>
-        <p className="text-slate-500 mb-4 text-sm">Professional Bin-Picking Assessment</p>
+        <h1 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">SCAPE PICK-PILOT</h1>
+        <p className="text-slate-500 mb-4 text-sm font-medium">Smart Data Capture & Feasibility Assessment</p>
         
         {activeCampaignTag && (
           !allowedConfig ? (
@@ -207,7 +207,7 @@ export function AuthView({
                 </span>
                 PE
               </span>
-              <span className="text-xs font-bold text-slate-400">Bin-Picker Projects</span>
+              <span className="text-xs font-black tracking-wider text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-lg select-none">PICK-PILOT</span>
             </div>
 
             {/* Content Sections */}

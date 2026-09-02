@@ -3,9 +3,9 @@ DOCUMENT VERSION: appSupportGuide v2.0 | 2026-09-01
 AUTHORITATIVE SCAPE BIN-PICKING KNOWLEDGE BASE & APP MANUAL
 -->
 
-# Scape Bin-Picker Projects — Authoritative Knowledge Base & Technical Guide
+# SCAPE PICK-PILOT — Authoritative Knowledge Base & Technical Guide
 
-This document is the master knowledge base and technical manual for **Scape Bin-Picker Projects**. It contains complete domain rules for robotic bin-picking, vision sensor selection, gripper engineering, cycle time physics, and the complete dictionary of all questionnaire fields and app workflows.
+This document is the master knowledge base and technical manual for **SCAPE PICK-PILOT**. It contains complete domain rules for robotic bin-picking, vision sensor selection, gripper engineering, cycle time physics, and the complete dictionary of all questionnaire fields and app workflows.
 
 ---
 
