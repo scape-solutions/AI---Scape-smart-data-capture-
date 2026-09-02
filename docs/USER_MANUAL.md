@@ -182,27 +182,76 @@ The exported PDF report is structured into clean, role-aware sections:
 
 ---
 
-## 8. Administrering af Adgang og Roller (For Super User)
+## 8. Event Passcodes & Campaign Registration System
 
-For at tilføje eller fjerne brugere, ændre tilladte domæner eller tildele rettigheder (Evaluator/Super User) under drift, skal du redigere konfigurationsdokumentet i **Cloud Firestore**:
+The **Campaign Passcode System** provides controlled, trackable public registration for trade shows, marketing campaigns, webinars, or open onboarding events (e.g. *Automatik 2026*).
 
-### Trin-for-trin Vejledning:
-1. Gå til [Firebase Console](https://console.firebase.google.com/) og åbn dit projekt (**Scape Data Capture**).
-2. Gå til **Firestore Database** i venstre sidepanel.
-3. Find samlingen `config` og vælg dokumentet `access`.
-4. Du kan nu tilføje eller fjerne elementer i de fire array-felter:
-   * **`allowedDomains`**: Liste over domæner, der må oprette sig og logge ind i appen (f.eks. `scapesolutions.eu`, `scapesolutions.com`).
-   * **`allowedEmails`**: Specifikke eksterne e-mailadresser, der må logge ind.
-   * **`allowedEvaluators`**: E-mails på medarbejdere, der skal have adgang to **Evaluator Mode** (evaluatorpanelet, tildele cases, skrive technical reviews, osv.).
-   * **`superusers`**: E-mails på medarbejdere med adgang til **Super User Mode** (bulk data import/export, demo-data generation, og AI system prompts editor).
+### A. The "Entry Ticket" Model (Option A)
+* **Registration Gate:** Event codes (e.g. `?event=Automatik26` or `?event=open`) act as a registration entry pass.
+* **Once Registered, Always In:** When a user registers through an active campaign link, their account is permanently created in Firestore. Even if the campaign later expires or is paused, **existing registered users retain 100% full permanent access** to log in, view their projects, use the AI assistant, and review feasibility reports.
+* **Pause / Expiration:** If an event pass code is expired or marked as Paused in the Superuser panel, new visitors attempting to register with that link are blocked with a clear notification (*"Access restricted: The campaign pass code is paused, expired, or invalid"*).
 
-### Vigtigt om ændringer:
-* **Øjeblikkelig virkning:** Når du gemmer ændringer i Firestore, opdateres både serveren og browser-appen **med det samme (i realtid)** uden genstart eller udrulning.
-* **Sikkerhed:** Kun godkendte medarbejdere (`isScapeEmployee`) har skrivetilladelse til `config/access` dokumentet i databasen.
+### B. Who Can Sign Up & Assigned Roles
+1. **Public Campaign Visitors (via `?event=CodeName`):**
+   * **Assigned Role:** **Standard User / Customer** (`role: 'enduser' | 'integrator'`).
+   * **Capabilities:** Create bin-picking projects, chat with the AI assistant, upload 3D CAD (`.stl`) and photos, request automated AI advice, and view final Scape technical feasibility verdicts.
+2. **Whitelisted Scape Evaluators & Employees:**
+   * Accounts with `@scapesolutions.eu`, `@scapesolutions.com`, or configured in `config/access` `allowedEvaluators`.
+   * **Assigned Role:** **Scape Evaluator & Staff**.
+   * **Capabilities:** Access the full Evaluator Dashboard, take cases, lock/unlock projects, generate AI Evaluator Drafts, and publish technical reviews and verdicts.
+3. **Superusers:**
+   * Specific administrator emails configured in `config/access` `superusers`.
+   * **Assigned Role:** **Super User Mode**.
+   * **Capabilities:** Full access to **AI System Prompts Editor**, **Campaign Passcode Manager**, **User Activity Dashboard**, and bulk data export/import tools.
+
+### C. Managing Campaigns (Superuser Tools)
+1. Open the **Campaigns & Passcodes** tab inside the **Super User Tools** (`Edit AI Prompts` / `Campaign Tags`).
+2. **Create a New Passcode:**
+   * Enter the **Event Name** (e.g. `Automatik 2026`).
+   * Enter the **Passcode Tag** (e.g. `Automatik26`).
+   * Choose an **Expiration Date** (`YYYY-MM-DD`).
+   * Toggle **Active (ON/OFF)**.
+3. **Copy Shareable Link:** Click the copy button to get the ready-to-share URL:
+   `https://scape-bin-picker-projects.web.app/?event=Automatik26`
+4. **Campaign Tag Tracking:** When users sign up via this link, their profile is permanently tagged with `registeredViaCampaign: "Automatik26"`, which is visible on the **User Activity Dashboard**.
 
 ---
 
-## 9. Mobile Visual Viewport & Keyboard UX
+## 9. User Activity Dashboard & Account Controls
+
+Superusers can inspect live user engagement, track active sessions, and manage test data in real time by clicking the **User Activity** button in the header:
+
+* **Real-time Live Stream:** The dashboard streams updates in real time using Firestore snapshot listeners (no page reload needed).
+* **Live Session Heartbeat:**
+  * Displays a pulsating green indicator `🟢 Active Now` for any user with the tab open (2-minute heartbeat + tab visibility sync).
+  * Relative activity time: `12m ago`, `3h ago`, `2d ago`, or `Never Active`.
+* **Safe Suspend / Reactivate:**
+  * Superusers can suspend an account with one click (blocks login and AI generation without deleting or orphaning their projects and data).
+* **Test User Parameter (`🧪 Test Account`):**
+  * Accounts created for testing (e.g. `+test@gmail.com`) are auto-tagged or can be toggled manually with the **`🧪 Test` / `Mark Test`** button.
+  * **Test Filter Dropdown:** Filter between *All Accounts*, *Hide Test Accounts* (show only real production customers), and *Test Accounts Only*.
+
+---
+
+## 10. Voice Memo & Live Microphone Dictation (AI Assistant)
+
+The **AI Chat Assistant** includes integrated live audio recording and multimodal voice processing:
+
+### A. How to Use the Microphone
+1. Open the **AI Assistant** panel in the questionnaire.
+2. Click the **🎙️ Microphone icon** next to the chat input bar.
+3. If prompted by your browser, allow microphone permissions.
+4. Speak naturally in **Danish, English, German**, or your preferred language (e.g. *"Emnet er en stålbolt, længde 120mm, diameter 20mm, og vi skal plukke 400 emner i timen fra en standard gitterkasse"*).
+5. A live recording timer (`🔴 00:15`) displays while recording.
+6. Click the **Stop / Send** button.
+
+### B. Speech-to-Parameters & Automatic Engineering Math
+* The audio is recorded as high-quality audio (`audio/webm` or `audio/mp4`), compressed, and processed directly by Google Gemini's native multimodal audio model.
+* **Automatic Calculations:** The AI extracts all parameters, converts speech to text, calculates part weight (`volume × density`) and cycle times (`3600 / 400 = 9.0s`), and generates an interactive **Proposed Changes** card for one-click form completion.
+
+---
+
+## 11. Mobile Visual Viewport & Keyboard UX
 
 To provide a native-app feel on mobile devices and PWAs, the AI Assistant drawer has been engineered to handle soft keyboard adjustments smoothly:
 
@@ -213,3 +262,4 @@ To provide a native-app feel on mobile devices and PWAs, the AI Assistant drawer
 ### B. Auto-Scroll & Dismiss Gestures
 * **Focus Auto-Scroll:** Tapping the text input field triggers an automatic scroll that pushes the most recent AI questions to the bottom of the visible log, keeping them in plain view.
 * **Swipe-to-Dismiss:** Swiping or tapping on the chat message list (outside interactive buttons) automatically blurs the text area, collapsing the virtual keyboard.
+
