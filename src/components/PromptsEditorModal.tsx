@@ -828,17 +828,29 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess }: PromptsE
           <button
             onClick={handleSave}
             disabled={isLoading || isSaving}
-            className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-amber-500/10 flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all select-none cursor-pointer"
+            className={`px-5 sm:px-6 py-2 sm:py-2.5 rounded-xl text-white text-xs font-bold shadow-md flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all select-none cursor-pointer disabled:opacity-50 ${
+              activeTab === 'campaignTags'
+                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/10'
+                : activeTab === 'appSupportGuide'
+                ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/10'
+                : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/10'
+            }`}
           >
             {isSaving ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Saving...</span>
+                <span>Saving to Firebase...</span>
               </>
             ) : (
               <>
                 <Save className="w-3.5 h-3.5" />
-                <span>Save Prompts & Support Docs</span>
+                <span>
+                  {activeTab === 'campaignTags'
+                    ? 'Save Campaign Tags to Firebase'
+                    : activeTab === 'appSupportGuide'
+                    ? 'Save Support Guide'
+                    : 'Save Prompts & Settings'}
+                </span>
               </>
             )}
           </button>

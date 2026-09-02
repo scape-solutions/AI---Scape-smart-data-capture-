@@ -45,7 +45,7 @@ service cloud.firestore {
     }
 
     match /config/access {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isScape();
     }
 
