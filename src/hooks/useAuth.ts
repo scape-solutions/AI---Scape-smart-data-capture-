@@ -92,7 +92,7 @@ export const isCampaignTagActive = (tag: string | null | undefined, config?: any
   const cfg = config || globalAllowedConfig;
   const passcodes = cfg?.activeEventPasscodes;
   if (!passcodes || Object.keys(passcodes).length === 0) {
-    return cleanTag === 'open' || cleanTag === 'automatik26' || cleanTag === 'autonatik26';
+    return cleanTag === 'open';
   }
   for (const key of Object.keys(passcodes)) {
     const item = passcodes[key];
@@ -375,17 +375,19 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
           } else {
             // New user registration check (Option A: Tag acts as the registration key)
             const email = u.email || 'Unknown';
-            const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
-            const isAllowed = email ? isAllowedEvaluator(email, allowedEvaluators) : false;
+            let accessDoc = await getDoc(doc(db, 'config', 'access')).catch(() => null);
+            const liveConfig = (accessDoc && accessDoc.exists()) ? accessDoc.data() : (globalAllowedConfig || {});
+            const allowedEvaluators = liveConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+            const isAllowed = isAllowedEvaluator(email, allowedEvaluators);
             const isEmployee = isScapeEmployee(email, u.uid);
             const storedTag = typeof window !== 'undefined' ? localStorage.getItem('registered_event_tag') : null;
-            const isTagValid = isCampaignTagActive(storedTag, globalAllowedConfig);
+            const isTagValid = isCampaignTagActive(storedTag, liveConfig);
 
             if (!isAllowed && !isEmployee && !isTagValid) {
               await signOut(auth);
               setUser(null);
               setProfile(null);
-              setAuthError("Access restricted. An active event pass code (e.g. ?event=Open or ?event=Automatik26) or authorized email is required to register.");
+              setAuthError("Access restricted. The campaign pass code is paused, expired, or invalid. An active event pass code or authorized email is required to register.");
               setAuthLoading(false);
               return;
             }
@@ -476,6 +478,20 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   const signupWithEmail = async (email: string, pass: string, name: string) => {
     setAuthError(null);
     try {
+      // Pre-validate registration gate before creating auth user
+      let accessDoc = await getDoc(doc(db, 'config', 'access')).catch(() => null);
+      const liveConfig = (accessDoc && accessDoc.exists()) ? accessDoc.data() : globalAllowedConfig;
+      const allowedEvaluators = liveConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+      const isAllowed = isAllowedEvaluator(email, allowedEvaluators);
+      const isEmployee = isScapeEmployee(email);
+      const storedTag = typeof window !== 'undefined' ? localStorage.getItem('registered_event_tag') : null;
+      const isTagValid = isCampaignTagActive(storedTag, liveConfig);
+
+      if (!isAllowed && !isEmployee && !isTagValid) {
+        setAuthError("Access restricted. The campaign pass code is paused, expired, or invalid. An active event pass code or authorized email is required to register.");
+        return;
+      }
+
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       await updateProfile(cred.user, { displayName: name });
     } catch (e: any) {
