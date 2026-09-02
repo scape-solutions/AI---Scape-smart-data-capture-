@@ -65,9 +65,14 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
             {/* Backlight Glow */}
             <div className="absolute inset-0 bg-indigo-600/20 rounded-[2rem] blur-2xl group-hover:bg-indigo-600/30 transition-all duration-500" />
 
-            <div className="relative bg-white border border-slate-100 p-2 rounded-3xl shadow-2xl flex flex-col items-center justify-center w-[126px] h-[126px] shrink-0">
-              <QRCodeView url={typeof window !== 'undefined' ? `${window.location.origin}/?event=Open` : "https://scape-pick-pilot.web.app/?event=Open"} size={90} />
-              <span className="text-[8px] font-black uppercase tracking-wider text-slate-800 mt-1">
+            <div className="relative bg-white border border-slate-100 p-2.5 rounded-3xl shadow-2xl flex flex-col items-center justify-center w-[130px] h-[130px] shrink-0">
+              <QRCodeView 
+                url={typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1')
+                  ? `${window.location.origin}/?event=Automatik26` 
+                  : "https://scape-pick-pilot.web.app/?event=Automatik26"} 
+                size={94} 
+              />
+              <span className="text-[8px] font-black uppercase tracking-wider text-slate-800 mt-1 select-none">
                 Scan QR to Open
               </span>
             </div>
