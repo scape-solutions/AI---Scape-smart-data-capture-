@@ -96,12 +96,15 @@ export const isCampaignTagActive = (tag: string | null | undefined, config?: any
   }
   for (const key of Object.keys(passcodes)) {
     const item = passcodes[key];
+    if (!item) continue;
     const cleanKey = key.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-    const cleanCode = (item?.code || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const cleanCode = (item.code || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
     
     // Check if cleanTag matches key or code or known alias
     const isMatch = cleanKey === cleanTag || 
                     cleanCode === cleanTag ||
+                    cleanKey.includes(cleanTag) ||
+                    cleanTag.includes(cleanKey) ||
                     (cleanTag === 'automatik26' && (cleanKey === 'autonatik26' || cleanCode === 'autonatik26')) ||
                     (cleanTag === 'autonatik26' && (cleanKey === 'automatik26' || cleanCode === 'automatik26'));
 

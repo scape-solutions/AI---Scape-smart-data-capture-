@@ -63,7 +63,12 @@ export function AuthView({
         <p className="text-slate-500 mb-4 text-sm">Professional Bin-Picking Assessment</p>
         
         {activeCampaignTag && (
-          isCampaignTagActive(activeCampaignTag, allowedConfig) ? (
+          !allowedConfig ? (
+            <div className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 text-slate-500 text-xs font-bold rounded-full animate-pulse">
+              <span>🎟️</span>
+              <span>Validating campaign: {activeCampaignTag}...</span>
+            </div>
+          ) : isCampaignTagActive(activeCampaignTag, allowedConfig) ? (
             <div className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-full">
               <span>🎟️</span>
               <span>Campaign Access: {activeCampaignTag}</span>
