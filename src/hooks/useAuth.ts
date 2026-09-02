@@ -88,15 +88,24 @@ export const isDynamicSuperuser = (email: string | null | undefined) => {
 // Tjekker om en kampagne/event tag (f.eks. Automatik26) er aktiv og gyldig
 export const isCampaignTagActive = (tag: string | null | undefined, config?: any) => {
   if (!tag) return false;
-  const cleanTag = tag.toLowerCase().trim();
+  const cleanTag = tag.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
   const cfg = config || globalAllowedConfig;
   const passcodes = cfg?.activeEventPasscodes;
-  if (!passcodes) {
+  if (!passcodes || Object.keys(passcodes).length === 0) {
     return cleanTag === 'open' || cleanTag === 'automatik26' || cleanTag === 'autonatik26';
   }
   for (const key of Object.keys(passcodes)) {
     const item = passcodes[key];
-    if (key.toLowerCase() === cleanTag || item?.code?.toLowerCase() === cleanTag) {
+    const cleanKey = key.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const cleanCode = (item?.code || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    
+    // Check if cleanTag matches key or code or known alias
+    const isMatch = cleanKey === cleanTag || 
+                    cleanCode === cleanTag ||
+                    (cleanTag === 'automatik26' && (cleanKey === 'autonatik26' || cleanCode === 'autonatik26')) ||
+                    (cleanTag === 'autonatik26' && (cleanKey === 'automatik26' || cleanCode === 'automatik26'));
+
+    if (isMatch) {
       if (item.active === false) return false;
       if (item.expiresAt) {
         const today = new Date().toISOString().split('T')[0];
@@ -292,6 +301,16 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
           if (profileDoc.exists()) {
             let pData = profileDoc.data() as UserProfile;
 
+            // Check if user is suspended
+            if ((pData as any).isSuspended) {
+              await signOut(auth);
+              setUser(null);
+              setProfile(null);
+              setAuthError("Your account has been suspended. Please contact Scape support.");
+              setAuthLoading(false);
+              return;
+            }
+
             // Record last active time dynamically
             const lastActiveAt = new Date().toISOString();
             updateDoc(doc(db, 'users', u.uid), { lastActiveAt }).catch(console.error);
@@ -354,12 +373,24 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
             setProfile({ ...pData });
             setView('dashboard');
           } else {
-            // Create a skeleton profile for the new user so onboarding handles registration
+            // New user registration check (Option A: Tag acts as the registration key)
             const email = u.email || 'Unknown';
             const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
             const isAllowed = email ? isAllowedEvaluator(email, allowedEvaluators) : false;
-            const initialRole = isAllowed ? 'evaluator' : 'user';
+            const isEmployee = isScapeEmployee(email, u.uid);
             const storedTag = typeof window !== 'undefined' ? localStorage.getItem('registered_event_tag') : null;
+            const isTagValid = isCampaignTagActive(storedTag, globalAllowedConfig);
+
+            if (!isAllowed && !isEmployee && !isTagValid) {
+              await signOut(auth);
+              setUser(null);
+              setProfile(null);
+              setAuthError("Access restricted. An active event pass code (e.g. ?event=Open or ?event=Automatik26) or authorized email is required to register.");
+              setAuthLoading(false);
+              return;
+            }
+
+            const initialRole = (isAllowed || isEmployee) ? 'evaluator' : 'user';
             const newProfile: UserProfile = {
               email,
               name: u.displayName || '',
@@ -367,7 +398,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
               companyType: 'other',
               phone: '',
               requestedRole: initialRole,
-              registeredViaCampaign: storedTag || undefined,
+              registeredViaCampaign: (storedTag && isTagValid) ? storedTag : undefined,
               isAdmin: getEffectiveAdminStatus({
                 email,
                 name: u.displayName || '',

@@ -115,36 +115,21 @@ async function verifyFirebaseToken(req, res, next) {
 
     let hasAccess = isAllowedEmail || isAllowedDomain;
 
-    // If not direct domain/email match, check if user registered via an active campaign pass code
+    // Option A: If not direct domain/email match, any registered user profile in Firestore has access
     if (!hasAccess) {
       try {
         const userDoc = await db.collection('users').doc(decodedToken.uid).get();
         if (userDoc.exists) {
           const uData = userDoc.data();
-          const campaign = (uData.registeredViaCampaign || '').trim().toLowerCase();
-          if (campaign) {
-            const passcodes = allowedConfig.activeEventPasscodes;
-            if (passcodes && Object.keys(passcodes).length > 0) {
-              for (const key of Object.keys(passcodes)) {
-                const item = passcodes[key];
-                if (key.toLowerCase() === campaign || item?.code?.toLowerCase() === campaign) {
-                  if (item.active !== false) {
-                    const today = new Date().toISOString().split('T')[0];
-                    if (!item.expiresAt || today <= item.expiresAt) {
-                      hasAccess = true;
-                      break;
-                    }
-                  }
-                }
-              }
-            } else if (campaign === 'open' || campaign === 'automatik26') {
-              // Default fallback if Firestore config is not yet created
-              hasAccess = true;
-            }
+          if (uData.isSuspended !== true) {
+            hasAccess = true;
+          } else {
+            console.warn(`Suspended user attempted access: ${email}`);
+            return res.status(403).json({ error: 'Forbidden: Your account has been suspended.' });
           }
         }
       } catch (err) {
-        console.warn("Could not verify campaign registration for user:", err);
+        console.warn("Could not verify user registration in Firestore:", err);
       }
     }
 

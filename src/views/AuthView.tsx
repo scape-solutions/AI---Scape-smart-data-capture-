@@ -5,6 +5,7 @@
 import { Cpu, X, Play, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { IntroVideoModal } from '../components/IntroVideoModal';
+import { isCampaignTagActive } from '../hooks/useAuth';
 
 // Props interfacen. Disse værdier "flyder" ned fra App.tsx
 interface AuthViewProps {
@@ -60,10 +61,17 @@ export function AuthView({
         <p className="text-slate-500 mb-4 text-sm">Professional Bin-Picking Assessment</p>
         
         {activeCampaignTag && (
-          <div className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-full">
-            <span>🎟️</span>
-            <span>Campaign Access: {activeCampaignTag}</span>
-          </div>
+          isCampaignTagActive(activeCampaignTag) ? (
+            <div className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-full">
+              <span>🎟️</span>
+              <span>Campaign Access: {activeCampaignTag}</span>
+            </div>
+          ) : (
+            <div className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold rounded-full">
+              <span>⏸️</span>
+              <span>Campaign Paused / Expired: {activeCampaignTag}</span>
+            </div>
+          )
         )}
 
         <button

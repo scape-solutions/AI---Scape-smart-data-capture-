@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, getDocsFromServer } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromServer, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { X, RefreshCw, Users, Shield, Clock, Landmark, Loader2 } from 'lucide-react';
+import { X, RefreshCw, Users, Shield, Clock, Landmark, Loader2, Ban, CheckCircle } from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface ActiveUsersModalProps {
@@ -10,8 +10,9 @@ interface ActiveUsersModalProps {
 }
 
 export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [users, setUsers] = useState<(UserProfile & { id?: string; isSuspended?: boolean })[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Filter & Sorting state
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,9 +31,10 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
     try {
       // Force fetching from server directly to bypass client-side offline cache
       const snap = await getDocsFromServer(collection(db, 'users'));
-      const list: UserProfile[] = [];
+      const list: (UserProfile & { id?: string; isSuspended?: boolean })[] = [];
       snap.forEach(docSnap => {
         list.push({
+          id: docSnap.id,
           ...docSnap.data() as UserProfile
         });
       });
@@ -41,9 +43,10 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
       console.error("Failed to fetch fresh users from server, falling back to local cache:", e);
       try {
         const fallbackSnap = await getDocs(collection(db, 'users'));
-        const list: UserProfile[] = [];
+        const list: (UserProfile & { id?: string; isSuspended?: boolean })[] = [];
         fallbackSnap.forEach(docSnap => {
           list.push({
+            id: docSnap.id,
             ...docSnap.data() as UserProfile
           });
         });
@@ -53,6 +56,25 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleToggleSuspendUser = async (userId: string | undefined, userEmail: string, currentlySuspended: boolean | undefined) => {
+    if (!userId) return;
+    const actionText = currentlySuspended ? "reactivate" : "suspend";
+    if (!confirm(`Are you sure you want to ${actionText} access for user "${userEmail}"?`)) return;
+    
+    setUpdatingId(userId);
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        isSuspended: !currentlySuspended
+      });
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, isSuspended: !currentlySuspended } : u));
+    } catch (e: any) {
+      console.error("Failed to update user status:", e);
+      alert(`Failed to ${actionText} user: ` + (e.message || String(e)));
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -319,6 +341,12 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
                               Admin
                             </span>
                           )}
+                          {userProfile.registeredViaCampaign && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[9px] flex items-center gap-1 select-none" title={`Registered via campaign: ${userProfile.registeredViaCampaign}`}>
+                              <span>🎟️</span>
+                              <span>{userProfile.registeredViaCampaign}</span>
+                            </span>
+                          )}
                         </div>
                         <span className="text-[11px] text-slate-400 font-medium truncate max-w-[280px]" title={userProfile.email}>
                           {userProfile.email}
@@ -350,10 +378,44 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
                         </span>
                       </div>
 
-                      {/* Active indicator badge */}
-                      <span className={`px-2.5 py-1.5 text-[10px] font-bold border rounded-xl shadow-xs select-none ${status.color}`}>
-                        {status.text}
-                      </span>
+                      {/* Suspended or Active indicator badge */}
+                      {userProfile.isSuspended ? (
+                        <span className="px-2.5 py-1 text-[10px] font-bold border rounded-xl shadow-xs select-none bg-red-50 text-red-700 border-red-200">
+                          Suspended
+                        </span>
+                      ) : (
+                        <span className={`px-2.5 py-1 text-[10px] font-bold border rounded-xl shadow-xs select-none ${status.color}`}>
+                          {status.text}
+                        </span>
+                      )}
+
+                      {/* Suspend / Reactivate User Button */}
+                      {!isSuper && (
+                        <button
+                          onClick={() => handleToggleSuspendUser(userProfile.id, userProfile.email, userProfile.isSuspended)}
+                          disabled={updatingId === userProfile.id}
+                          className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 border shrink-0 ${
+                            userProfile.isSuspended
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200'
+                          }`}
+                          title={userProfile.isSuspended ? "Reactivate account" : "Suspend account (block login and AI access without deleting data)"}
+                        >
+                          {updatingId === userProfile.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-slate-500" />
+                          ) : userProfile.isSuspended ? (
+                            <>
+                              <CheckCircle className="w-3 h-3 text-emerald-600" />
+                              <span>Reactivate</span>
+                            </>
+                          ) : (
+                            <>
+                              <Ban className="w-3 h-3 text-slate-400" />
+                              <span>Suspend</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
