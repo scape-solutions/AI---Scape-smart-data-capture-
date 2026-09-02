@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, getDocsFromServer, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { X, RefreshCw, Users, Shield, Clock, Landmark, Loader2, Ban, CheckCircle } from 'lucide-react';
+import { X, RefreshCw, Users, Shield, Clock, Landmark, Loader2, Ban, CheckCircle, Tag, Radio } from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface ActiveUsersModalProps {
@@ -21,16 +21,10 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
   const [sortBy, setSortBy] = useState<string>('active-desc');
 
   useEffect(() => {
-    if (show) {
-      fetchUsers();
-    }
-  }, [show]);
-
-  const fetchUsers = async () => {
+    if (!show) return;
     setIsLoading(true);
-    try {
-      // Force fetching from server directly to bypass client-side offline cache
-      const snap = await getDocsFromServer(collection(db, 'users'));
+
+    const unsubscribe = onSnapshot(collection(db, 'users'), (snap) => {
       const list: (UserProfile & { id?: string; isSuspended?: boolean })[] = [];
       snap.forEach(docSnap => {
         list.push({
@@ -39,25 +33,14 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
         });
       });
       setUsers(list);
-    } catch (e) {
-      console.error("Failed to fetch fresh users from server, falling back to local cache:", e);
-      try {
-        const fallbackSnap = await getDocs(collection(db, 'users'));
-        const list: (UserProfile & { id?: string; isSuspended?: boolean })[] = [];
-        fallbackSnap.forEach(docSnap => {
-          list.push({
-            id: docSnap.id,
-            ...docSnap.data() as UserProfile
-          });
-        });
-        setUsers(list);
-      } catch (fallbackErr) {
-        console.error("Fallback cached fetch also failed:", fallbackErr);
-      }
-    } finally {
       setIsLoading(false);
-    }
-  };
+    }, (err) => {
+      console.error("Failed to subscribe to active users:", err);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [show]);
 
   const handleToggleSuspendUser = async (userId: string | undefined, userEmail: string, currentlySuspended: boolean | undefined) => {
     if (!userId) return;
@@ -69,7 +52,6 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
       await updateDoc(doc(db, 'users', userId), {
         isSuspended: !currentlySuspended
       });
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, isSuspended: !currentlySuspended } : u));
     } catch (e: any) {
       console.error("Failed to update user status:", e);
       alert(`Failed to ${actionText} user: ` + (e.message || String(e)));
@@ -83,11 +65,11 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   };
 
-  // Helper to determine if user is active (last 5 minutes)
+  // Helper to determine if user is active (last 3 minutes)
   const isUserActiveNow = (lastActiveAt: string | undefined) => {
     if (!lastActiveAt) return false;
     const diff = new Date().getTime() - new Date(lastActiveAt).getTime();
-    return diff >= 0 && diff < 5 * 60 * 1000;
+    return diff >= 0 && diff < 3 * 60 * 1000;
   };
 
   const getActiveStatus = (lastActiveAt: string | undefined) => {
@@ -107,30 +89,30 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
     if (diffMs < 0) {
       return { 
         text: 'Active Now', 
-        color: 'text-emerald-600 border-emerald-100 bg-emerald-50', 
+        color: 'text-emerald-700 border-emerald-200 bg-emerald-50 font-bold', 
         dot: 'bg-emerald-500 animate-pulse' 
       };
     }
 
     const diffMins = Math.floor(diffMs / (1000 * 60));
     
-    if (diffMins < 5) {
+    if (diffMins < 3) {
       return { 
         text: 'Active Now', 
-        color: 'text-emerald-600 border-emerald-100 bg-emerald-50 font-black', 
+        color: 'text-emerald-700 border-emerald-200 bg-emerald-50 font-black', 
         dot: 'bg-emerald-500 animate-pulse' 
       };
     } else if (diffMins < 60) {
       return { 
         text: `${diffMins}m ago`, 
-        color: 'text-slate-700 border-slate-200 bg-slate-50', 
+        color: 'text-slate-700 border-slate-200 bg-slate-50 font-semibold', 
         dot: 'bg-slate-400' 
       };
     } else if (diffMins < 24 * 60) {
       const hours = Math.floor(diffMins / 60);
       return { 
         text: `${hours}h ago`, 
-        color: 'text-slate-700 border-slate-200 bg-slate-50', 
+        color: 'text-slate-700 border-slate-200 bg-slate-50 font-medium', 
         dot: 'bg-slate-400' 
       };
     } else {
@@ -158,18 +140,34 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
     }
   };
 
+  const activeNowCount = users.filter(u => isUserActiveNow(u.lastActiveAt) && !u.isSuspended).length;
+
   // Perform client-side filtering and sorting
   const filteredAndSortedUsers = users
     .filter(user => {
       // 1. Search Query
       const queryStr = searchQuery.toLowerCase().trim();
-      const nameMatch = user.name.toLowerCase().includes(queryStr);
-      const emailMatch = user.email.toLowerCase().includes(queryStr);
+      const nameMatch = (user.name || '').toLowerCase().includes(queryStr);
+      const emailMatch = (user.email || '').toLowerCase().includes(queryStr);
       const companyMatch = (user.company || '').toLowerCase().includes(queryStr);
-      const searchMatch = !queryStr || nameMatch || emailMatch || companyMatch;
+      const campaignMatch = (user.registeredViaCampaign || '').toLowerCase().includes(queryStr);
+      const searchMatch = !queryStr || nameMatch || emailMatch || companyMatch || campaignMatch;
       
       // 2. Role Filter
-      const roleMatch = roleFilter === 'all' || user.role === roleFilter;
+      let roleMatch = true;
+      if (roleFilter === 'superuser') {
+        roleMatch = user.requestedRole === 'superuser';
+      } else if (roleFilter === 'evaluator') {
+        roleMatch = user.requestedRole === 'evaluator' || user.isAdmin === true;
+      } else if (roleFilter === 'integrator') {
+        roleMatch = user.role === 'integrator';
+      } else if (roleFilter === 'enduser') {
+        roleMatch = user.role === 'enduser';
+      } else if (roleFilter === 'user') {
+        roleMatch = user.requestedRole === 'user' || !user.requestedRole;
+      } else if (roleFilter === 'suspended') {
+        roleMatch = user.isSuspended === true;
+      }
       
       // 3. Status Filter (Only Active Now)
       const activeMatch = !onlyActive || isUserActiveNow(user.lastActiveAt);
@@ -183,13 +181,13 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
         return timeB - timeA;
       }
       if (sortBy === 'name-asc') {
-        return a.name.localeCompare(b.name);
+        return (a.name || '').localeCompare(b.name || '');
       }
       if (sortBy === 'company-asc') {
         return (a.company || '').localeCompare(b.company || '');
       }
-      if (sortBy === 'role-asc') {
-        return (a.role || '').localeCompare(b.role || '');
+      if (sortBy === 'email-asc') {
+        return (a.email || '').localeCompare(b.email || '');
       }
       return 0;
     });
@@ -208,19 +206,19 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
               <Users className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <h2 className="text-lg font-black text-slate-800 leading-tight">User Activity Dashboard</h2>
-              <p className="text-[11px] text-slate-400 font-semibold tracking-wider uppercase mt-0.5">Real-time registered users & session tracking</p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-slate-800 leading-tight">User Activity Dashboard</h2>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10px] font-black flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>{activeNowCount} online now</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-semibold tracking-wider uppercase mt-0.5">
+                {users.length} registered accounts in Firestore
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={fetchUsers}
-              disabled={isLoading}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
-              title="Refresh user list"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-amber-500' : ''}`} />
-            </button>
             <button 
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
@@ -236,7 +234,7 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
           <div className="flex-1 min-w-[200px]">
             <input 
               type="text" 
-              placeholder="Search by Name, Email, or Company..." 
+              placeholder="Search by Name, Email, Company, or Campaign Tag..." 
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full bg-white border border-slate-200/80 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all font-semibold text-slate-800"
@@ -250,10 +248,13 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
               onChange={e => setRoleFilter(e.target.value)}
               className="bg-white border border-slate-200/80 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:border-amber-500 cursor-pointer"
             >
-              <option value="all">All Roles</option>
+              <option value="all">All Users ({users.length})</option>
+              <option value="superuser">Superusers</option>
+              <option value="evaluator">Evaluators / Staff</option>
               <option value="integrator">Integrators</option>
               <option value="enduser">End-users</option>
-              <option value="other">Other Roles</option>
+              <option value="user">Standard Users</option>
+              <option value="suspended">Suspended Accounts</option>
             </select>
           </div>
 
@@ -266,8 +267,8 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
             >
               <option value="active-desc">Sort: Last Active</option>
               <option value="name-asc">Sort: Name (A-Z)</option>
+              <option value="email-asc">Sort: Email (A-Z)</option>
               <option value="company-asc">Sort: Company (A-Z)</option>
-              <option value="role-asc">Sort: Role</option>
             </select>
           </div>
 
@@ -282,7 +283,7 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
               />
               <div className="w-8 h-4 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500"></div>
               <span className="ml-2 text-xs font-bold text-slate-600">
-                Only Active Now
+                Only Active Now ({activeNowCount})
               </span>
             </label>
           </div>
@@ -293,7 +294,7 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
           {isLoading && users.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-              <span className="text-xs text-slate-400 font-bold">Loading active users...</span>
+              <span className="text-xs text-slate-400 font-bold">Connecting real-time user stream...</span>
             </div>
           ) : filteredAndSortedUsers.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-16 text-slate-400 italic bg-white border border-slate-100 rounded-2xl">
@@ -308,15 +309,25 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
                 
                 return (
                   <div 
-                    key={userProfile.email}
-                    className="p-4 bg-white border border-slate-100 hover:border-slate-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all shadow-xs"
+                    key={userProfile.id || userProfile.email}
+                    className={`p-4 bg-white border rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all shadow-xs ${
+                      userProfile.isSuspended 
+                        ? 'border-red-200 bg-red-50/30' 
+                        : 'border-slate-100 hover:border-slate-200/80'
+                    }`}
                   >
                     {/* User profile identifier */}
                     <div className="flex items-center gap-3.5 text-left min-w-0">
-                      <div className="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200/50 flex items-center justify-center font-black text-slate-600 text-xs shrink-0 select-none relative">
-                        {getInitials(userProfile.name)}
+                      <div className={`w-11 h-11 rounded-xl border flex items-center justify-center font-black text-xs shrink-0 select-none relative ${
+                        userProfile.isSuspended 
+                          ? 'bg-red-100 border-red-200 text-red-700' 
+                          : 'bg-slate-100 border-slate-200/50 text-slate-600'
+                      }`}>
+                        {getInitials(userProfile.name || userProfile.email)}
                         {/* Glowing active/inactive dot */}
-                        <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 border-2 border-white rounded-full ${status.dot}`} />
+                        <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 border-2 border-white rounded-full ${
+                          userProfile.isSuspended ? 'bg-red-500' : status.dot
+                        }`} />
                       </div>
                       <div className="min-w-0 flex flex-col">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -341,6 +352,11 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
                               Admin
                             </span>
                           )}
+                          {userProfile.role && userProfile.role !== 'other' && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[9px] uppercase tracking-wider select-none">
+                              {userProfile.role}
+                            </span>
+                          )}
                           {userProfile.registeredViaCampaign && (
                             <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[9px] flex items-center gap-1 select-none" title={`Registered via campaign: ${userProfile.registeredViaCampaign}`}>
                               <span>🎟️</span>
@@ -362,8 +378,8 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
                           <Landmark className="w-3 h-3 text-slate-400/80" />
                           Company
                         </span>
-                        <span className="text-xs font-bold text-slate-700 max-w-[150px] truncate" title={userProfile.company}>
-                          {userProfile.company || 'Not Specified'}
+                        <span className="text-xs font-bold text-slate-700 max-w-[150px] truncate" title={userProfile.company || userProfile.organization}>
+                          {userProfile.company || userProfile.organization || 'Not Specified'}
                         </span>
                       </div>
 
@@ -380,8 +396,9 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
 
                       {/* Suspended or Active indicator badge */}
                       {userProfile.isSuspended ? (
-                        <span className="px-2.5 py-1 text-[10px] font-bold border rounded-xl shadow-xs select-none bg-red-50 text-red-700 border-red-200">
-                          Suspended
+                        <span className="px-2.5 py-1 text-[10px] font-black border rounded-xl shadow-xs select-none bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
+                          <Ban className="w-3 h-3" />
+                          <span>Suspended</span>
                         </span>
                       ) : (
                         <span className={`px-2.5 py-1 text-[10px] font-bold border rounded-xl shadow-xs select-none ${status.color}`}>
@@ -425,7 +442,10 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-5 border-t border-slate-100 bg-slate-50 flex items-center justify-end">
+        <div className="px-8 py-5 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+          <span className="text-xs text-slate-400 font-semibold">
+            Showing {filteredAndSortedUsers.length} of {users.length} users
+          </span>
           <button
             onClick={onClose}
             className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold hover:bg-slate-100 text-slate-600 transition-all select-none cursor-pointer"

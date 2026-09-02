@@ -395,20 +395,24 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
               return;
             }
 
+            const nowIso = new Date().toISOString();
             const initialRole = (isAllowed || isEmployee) ? 'evaluator' : 'user';
             const newProfile: UserProfile = {
               email,
               name: u.displayName || '',
               company: '',
-              companyType: 'other',
+              organization: '',
+              role: 'other',
               phone: '',
               requestedRole: initialRole,
               registeredViaCampaign: (storedTag && isTagValid) ? storedTag : undefined,
+              lastActiveAt: nowIso,
               isAdmin: getEffectiveAdminStatus({
                 email,
                 name: u.displayName || '',
                 company: '',
-                companyType: 'other',
+                organization: '',
+                role: 'other',
                 phone: '',
                 requestedRole: initialRole,
                 isAdmin: false
@@ -428,6 +432,31 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     });
     return unsubscribe;
   }, []);
+
+  // Heartbeat: Periodically update lastActiveAt while user has the app open (every 2 minutes)
+  useEffect(() => {
+    if (!user) return;
+    const updateActiveTime = () => {
+      const lastActiveAt = new Date().toISOString();
+      updateDoc(doc(db, 'users', user.uid), { lastActiveAt }).catch(() => {});
+    };
+
+    // Update immediately when tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        updateActiveTime();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Heartbeat interval every 2 minutes
+    const interval = setInterval(updateActiveTime, 2 * 60 * 1000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [user]);
 
   // Logger ind via Google
   const login = async () => {
