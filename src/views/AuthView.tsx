@@ -18,6 +18,7 @@ interface AuthViewProps {
   authDisplayName: string;
   setAuthDisplayName: (e: string) => void;
   authError: string | null;
+  allowedConfig?: any;
   activeCampaignTag?: string | null;
   loginWithEmail: () => void;
   signupWithEmail: () => void;
@@ -35,6 +36,7 @@ export function AuthView({
   authDisplayName,
   setAuthDisplayName,
   authError,
+  allowedConfig,
   activeCampaignTag,
   loginWithEmail,
   signupWithEmail,
@@ -61,7 +63,7 @@ export function AuthView({
         <p className="text-slate-500 mb-4 text-sm">Professional Bin-Picking Assessment</p>
         
         {activeCampaignTag && (
-          isCampaignTagActive(activeCampaignTag) ? (
+          isCampaignTagActive(activeCampaignTag, allowedConfig) ? (
             <div className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-full">
               <span>🎟️</span>
               <span>Campaign Access: {activeCampaignTag}</span>

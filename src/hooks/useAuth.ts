@@ -588,6 +588,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     authError,
     setAuthError,
     authLoading,
+    allowedConfig,
     activeCampaignTag,
     login,
     loginWithEmail,
