@@ -1342,6 +1342,7 @@ export function useProjects(
 
     const data = {
       ...projectDataWithoutId,
+      userId: project.userId || user?.uid,
       parts: partsWithoutImages,
       chatHistory: sanitizeChatHistory(project.chatHistory || []),
       generalImages: [], // Hoveddokumentet skal ikke have base64 data
@@ -1352,7 +1353,7 @@ export function useProjects(
       userSubmittedObservations,
       userSubmittedAdviceTimestamp,
       updatedAt: serverTimestamp(),
-      projectName: project.generalResponses['1.01'] || "Untitled Project",
+      projectName: project.generalResponses?.['1.01'] || project.projectName || "Untitled Project",
       ownerName: project.ownerName && project.ownerName !== 'Unknown' ? project.ownerName : (profile?.name || user?.displayName || 'Unknown'),
       ownerCompany: project.ownerCompany && project.ownerCompany !== 'Unknown' ? project.ownerCompany : (profile?.company || 'Unknown'),
       ownerEmail: project.ownerEmail && project.ownerEmail !== 'Unknown' ? project.ownerEmail : (email || 'Unknown'),

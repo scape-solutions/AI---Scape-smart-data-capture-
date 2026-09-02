@@ -953,21 +953,20 @@ function ProposedChangesCard({ proposal, currentProject, setCurrentProject, upda
       setCurrentProject(updatedProject);
 
       // Gem ændringerne permanent i Firestore databasen
-      if (updatedProject.id) {
-        if (saveProject) {
-          await saveProject(updatedProject.status || 'draft', updatedProject);
-        } else {
-          if (editedProposal.generalResponses) {
-            await updateProjectField(updatedProject, 'generalResponses', updatedProject.generalResponses, 'AI auto-fill: general fields');
-          }
-          if (editedProposal.parts) {
-            const partsToSave = updatedProject.parts.map(p => ({
-              responses: p.responses,
-              images: p.images ?? [],
-              cadFile: p.cadFile ?? null,
-            }));
-            await updateProjectField(updatedProject, 'parts', partsToSave, 'AI auto-fill: part fields');
-          }
+      if (saveProject) {
+        const saved = await saveProject(updatedProject.status || 'draft', updatedProject);
+        if (saved && saved.id) updatedProject.id = saved.id;
+      } else if (updatedProject.id) {
+        if (editedProposal.generalResponses) {
+          await updateProjectField(updatedProject, 'generalResponses', updatedProject.generalResponses, 'AI auto-fill: general fields');
+        }
+        if (editedProposal.parts) {
+          const partsToSave = updatedProject.parts.map(p => ({
+            responses: p.responses,
+            images: p.images ?? [],
+            cadFile: p.cadFile ?? null,
+          }));
+          await updateProjectField(updatedProject, 'parts', partsToSave, 'AI auto-fill: part fields');
         }
       }
 
