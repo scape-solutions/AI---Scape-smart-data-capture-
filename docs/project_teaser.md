@@ -1,9 +1,9 @@
-# Scape Bin-Picker Projects — App Teaser & Testing Guide
+# SCAPE PICK-PILOT — App Teaser & Testing Guide
 
-**Live Web App & PWA Link:** <https://scape-bin-picker-projects.web.app/>  
+**Live Web App & PWA Link:** <https://scape-pick-pilot.web.app/>  
 *(Scan the on-screen QR code from any smartphone to test instantly on mobile)*
 
-Welcome to **Scape Bin-Picker Projects**, a modern, AI-powered tool designed to streamline technical feasibility evaluations, part specifications, and hardware selection (vision systems & grippers) for robotic bin-picking cells.
+Welcome to **SCAPE PICK-PILOT**, a modern, AI-powered tool designed to streamline technical feasibility evaluations, part specifications, and hardware selection (vision systems & grippers) for robotic bin-picking cells.
 
 Powered by **Gemini 2.5 Flash**, the platform translates plain-text cell descriptions, smartphone voice dictation, CAD files, and cell photos into structured, production-ready project specifications.
 
@@ -79,7 +79,7 @@ Log in via Google using your Google Workspace account. Our system dynamically ma
 
 ## Suggested 3-Minute Test Walkthrough
 
-1. **Open the App:** Open <https://scape-bin-picker-projects.web.app/> (or scan the QR code).
+1. **Open the App:** Open <https://scape-pick-pilot.web.app/> (or scan the QR code).
 2. **Check the Intro Guide:** Click **"Watch Intro & Instructions"** on the splash screen to view the 3-step visual storyboard.
 3. **Create a Project:** Click **"+ New Project"** from the Dashboard.
 4. **Talk to the AI:** Open the AI Assistant tab. Dictate or paste a cell description:

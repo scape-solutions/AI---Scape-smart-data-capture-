@@ -280,7 +280,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess, initialTab
   };
 
   const handleCopyLink = (code: string, key: string) => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://scape-bin-picker-projects.web.app';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://scape-pick-pilot.web.app';
     const url = `${origin}/?event=${encodeURIComponent(code)}`;
     navigator.clipboard.writeText(url);
     setCopiedKey(key);

@@ -212,7 +212,7 @@ import crypto from 'crypto';
 
 const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || '782472107063-6shdo17lf2lsvvuifsmg15hhffuu0k4h.apps.googleusercontent.com';
 const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
-const APP_URL = process.env.APP_URL || 'https://scape-bin-picker-projects.web.app';
+const APP_URL = process.env.APP_URL || 'https://scape-pick-pilot.web.app';
 const OAUTH_CALLBACK_URL = `${APP_URL}/api/auth/google/callback`;
 
 // We use Firestore instead of an in-memory Map to store the OAuth session state.

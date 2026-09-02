@@ -9,7 +9,7 @@ This manual is designed to help new users get started with **SCAPE PICK-PILOT** 
 The **SCAPE PICK-PILOT** is a smart data capture tool designed to collect bin-picking application parameters, evaluate feasibility, and recommend vision systems and grippers.
 
 ### Step 1: Authentication & Profile Setup
-1. Open the application in your browser: [https://scape-bin-picker-projects.web.app/](https://scape-bin-picker-projects.web.app/) (or [http://localhost:8080/](http://localhost:8080/) for local testing).
+1. Open the application in your browser: [https://scape-pick-pilot.web.app/](https://scape-pick-pilot.web.app/) (or [http://localhost:8080/](http://localhost:8080/) for local testing).
 2. Log in using your **Google account** or sign up with an **Email & Password**.
    * **iOS PWA Support:** If you have installed the app as a Progressive Web App (PWA) on iOS, Google Sign-In is supported natively inside standalone PWA mode using a custom cookie-based session bridge.
 3. Complete your **Profile Setup** by entering your name, company/organization, phone number, and primary role:
@@ -198,7 +198,7 @@ A user can register and access the application via any of the following paths:
    * **Behavior:** Can register and log in directly with Google or email password without an event passcode.
 3. **Campaign Event Passcodes (`activeEventPasscodes` / `?event=Tag`):**
    * For **public visitors, trade show leads, and external clients** who do not have an internal company email and are not pre-listed in `allowedEmails`.
-   * **Behavior:** Can register by opening an active campaign link (e.g. `https://scape-bin-picker-projects.web.app/?event=Automatik26`).
+   * **Behavior:** Can register by opening an active campaign link (e.g. `https://scape-pick-pilot.web.app/?event=Automatik26`).
 4. **Existing Registered Users (The "Once Registered, Always In" Rule):**
    * Any user who successfully completed registration in the past possesses a verified profile in Firestore (`/users/{uid}`).
    * **Behavior:** Retains full permanent access to log in and use their dashboard even if the original campaign pass code is paused or expires later (unless explicitly suspended by a Superuser).
@@ -223,7 +223,7 @@ A user can register and access the application via any of the following paths:
    * Choose an **Expiration Date** (`YYYY-MM-DD`).
    * Toggle **Active (ON/OFF)**.
 3. **Copy Shareable Link:** Click the copy button to get the ready-to-share URL:
-   `https://scape-bin-picker-projects.web.app/?event=Automatik26`
+   `https://scape-pick-pilot.web.app/?event=Automatik26`
 4. **Campaign Tag Tracking:** When users sign up via this link, their profile is permanently tagged with `registeredViaCampaign: "Automatik26"`, which is visible on the **User Activity Dashboard**.
 
 ---

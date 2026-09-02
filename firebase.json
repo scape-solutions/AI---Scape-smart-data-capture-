@@ -10,7 +10,7 @@
     }
   ],
   "hosting": {
-    "site": "scape-bin-picker-projects",
+    "site": "scape-pick-pilot",
     "public": "public",
     "ignore": [
       "firebase.json",
