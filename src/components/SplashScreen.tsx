@@ -17,9 +17,12 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
   };
 
   useEffect(() => {
-    // Also allow dismiss on pressing any key
-    const handleKeyDown = () => {
-      handleDismiss();
+    // Only dismiss on explicit Enter, Space, or Escape; ignore modifier/screenshot keys (Cmd/Shift/Alt/Ctrl)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+        handleDismiss();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
