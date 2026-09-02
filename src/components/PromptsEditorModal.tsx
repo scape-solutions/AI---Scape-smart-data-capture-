@@ -771,52 +771,54 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess, initialTab
             )}
           </div>
 
-          {/* Right Column: Revision History */}
-          <div className="w-full md:w-64 flex flex-col gap-3 border-t md:border-t-0 md:border-l border-slate-100 pt-5 md:pt-0 md:pl-6 shrink-0">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-left">
-              <History className="w-4 h-4 text-slate-400" />
-              <div>
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Revision History</h3>
-                <p className="text-[10px] text-slate-400">Last 6 saves to cloud</p>
+          {/* Right Column: Revision History (Only for AI System Prompts & Support Guide) */}
+          {activeTab !== 'campaignTags' && (
+            <div className="w-full md:w-64 flex flex-col gap-3 border-t md:border-t-0 md:border-l border-slate-100 pt-5 md:pt-0 md:pl-6 shrink-0">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-left">
+                <History className="w-4 h-4 text-slate-400" />
+                <div>
+                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Revision History</h3>
+                  <p className="text-[10px] text-slate-400">Last 6 saves to cloud</p>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 max-h-[220px] md:max-h-full pr-1">
+                {historyLoading ? (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                    <span className="text-[10px] text-slate-400 font-medium">Loading history...</span>
+                  </div>
+                ) : history.length === 0 ? (
+                  <div className="text-center py-8 text-[11px] text-slate-400 italic bg-slate-50 border border-slate-100 border-dashed rounded-xl">
+                    No revisions found
+                  </div>
+                ) : (
+                  history.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-3 bg-slate-50 border border-slate-100 hover:border-slate-200 rounded-xl flex flex-col gap-2 transition-all text-left"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-600 truncate max-w-[130px]" title={item.createdBy}>
+                          {formatEmail(item.createdBy)}
+                        </span>
+                        <span className="text-[9px] font-semibold text-slate-400">
+                          {formatTime(item.createdAt)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleRestore(item)}
+                        disabled={isLoading || isSaving}
+                        className="w-full text-center text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100/80 py-1 rounded-lg transition-all cursor-pointer"
+                      >
+                        Load Revision
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
-
-            <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 max-h-[220px] md:max-h-full pr-1">
-              {historyLoading ? (
-                <div className="flex flex-col items-center justify-center py-8 gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
-                  <span className="text-[10px] text-slate-400 font-medium">Loading history...</span>
-                </div>
-              ) : history.length === 0 ? (
-                <div className="text-center py-8 text-[11px] text-slate-400 italic bg-slate-50 border border-slate-100 border-dashed rounded-xl">
-                  No revisions found
-                </div>
-              ) : (
-                history.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 bg-slate-50 border border-slate-100 hover:border-slate-200 rounded-xl flex flex-col gap-2 transition-all text-left"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-600 truncate max-w-[130px]" title={item.createdBy}>
-                        {formatEmail(item.createdBy)}
-                      </span>
-                      <span className="text-[9px] font-semibold text-slate-400">
-                        {formatTime(item.createdAt)}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => handleRestore(item)}
-                      disabled={isLoading || isSaving}
-                      className="w-full text-center text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100/80 py-1 rounded-lg transition-all cursor-pointer"
-                    >
-                      Load Revision
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          )}
 
         </div>
 
