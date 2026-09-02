@@ -102,6 +102,8 @@ export interface UserProfile {
   registeredViaCampaign?: string;
   tosAcceptedAt?: any;
   lastActiveAt?: string;
+  isSuspended?: boolean;
+  isTestUser?: boolean;
 }
 
 export interface EventPasscode {
