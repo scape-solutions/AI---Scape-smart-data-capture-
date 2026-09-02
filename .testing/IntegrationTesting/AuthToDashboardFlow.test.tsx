@@ -102,7 +102,7 @@ describe('Auth to Dashboard Transition Integration', () => {
     fireEvent.click(dismissSplash);
 
     await waitFor(() => {
-      expect(screen.getByText('Scape Evaluator')).toBeInTheDocument();
+      expect(screen.getByText('SCAPE PICK-PILOT')).toBeInTheDocument();
     });
 
     // Rerender as if login completed (useAuth returns active user)

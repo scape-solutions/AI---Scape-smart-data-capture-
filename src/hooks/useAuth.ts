@@ -85,6 +85,41 @@ export const isDynamicSuperuser = (email: string | null | undefined) => {
   return isSuperuser(email, list);
 };
 
+// Tjekker om en kampagne/event tag (f.eks. Automatik26) er aktiv og gyldig
+export const isCampaignTagActive = (tag: string | null | undefined, config?: any) => {
+  if (!tag) return false;
+  const cleanTag = tag.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+  const cfg = config || globalAllowedConfig;
+  const passcodes = cfg?.activeEventPasscodes;
+  if (!passcodes || Object.keys(passcodes).length === 0) {
+    return cleanTag === 'open';
+  }
+  for (const key of Object.keys(passcodes)) {
+    const item = passcodes[key];
+    if (!item) continue;
+    const cleanKey = key.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const cleanCode = (item.code || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    
+    // Check if cleanTag matches key or code or known alias
+    const isMatch = cleanKey === cleanTag || 
+                    cleanCode === cleanTag ||
+                    cleanKey.includes(cleanTag) ||
+                    cleanTag.includes(cleanKey) ||
+                    (cleanTag === 'automatik26' && (cleanKey === 'autonatik26' || cleanCode === 'autonatik26')) ||
+                    (cleanTag === 'autonatik26' && (cleanKey === 'automatik26' || cleanCode === 'automatik26'));
+
+    if (isMatch) {
+      if (item.active === false) return false;
+      if (item.expiresAt) {
+        const today = new Date().toISOString().split('T')[0];
+        if (today > item.expiresAt) return false;
+      }
+      return true;
+    }
+  }
+  return false;
+};
+
 // Bestemmer om en bruger rent faktisk har 'Admin'/'Evaluator' rettigheder
 export const getEffectiveAdminStatus = (p: UserProfile | null, uid?: string | null) => {
   if (!p) return false;
@@ -107,21 +142,35 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true); // Starter som true mens vi venter på Firebase init
   const [allowedConfig, setAllowedConfig] = useState<any>(null);
+  const [activeCampaignTag, setActiveCampaignTag] = useState<string | null>(null);
+
+  // Extract event tag from URL query params on initial load
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tagFromUrl = params.get('event') || params.get('source') || params.get('tag');
+      if (tagFromUrl) {
+        localStorage.setItem('registered_event_tag', tagFromUrl.trim());
+        setActiveCampaignTag(tagFromUrl.trim());
+      } else {
+        const stored = localStorage.getItem('registered_event_tag');
+        if (stored) setActiveCampaignTag(stored);
+      }
+    }
+  }, []);
 
   // Sync the access config in real time
   useEffect(() => {
-    if (user) {
-      return onSnapshot(doc(db, 'config', 'access'), (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          globalAllowedConfig = data;
-          setAllowedConfig(data);
-        }
-      }, (error) => {
-        console.warn("Could not load dynamic config from Firestore (expected for external users). Using offline defaults.", error);
-      });
-    }
-  }, [user]);
+    return onSnapshot(doc(db, 'config', 'access'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        globalAllowedConfig = data;
+        setAllowedConfig(data);
+      }
+    }, (error) => {
+      console.warn("Could not load dynamic config from Firestore. Using offline defaults.", error);
+    });
+  }, []);
 
   // Auto-upgrade/downgrade role and sync isAdmin status dynamically when allowedConfig or user/profile updates
   useEffect(() => {
@@ -255,6 +304,16 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
           if (profileDoc.exists()) {
             let pData = profileDoc.data() as UserProfile;
 
+            // Check if user is suspended
+            if ((pData as any).isSuspended) {
+              await signOut(auth);
+              setUser(null);
+              setProfile(null);
+              setAuthError("Your account has been suspended. Please contact Scape support.");
+              setAuthLoading(false);
+              return;
+            }
+
             // Record last active time dynamically
             const lastActiveAt = new Date().toISOString();
             updateDoc(doc(db, 'users', u.uid), { lastActiveAt }).catch(console.error);
@@ -317,23 +376,43 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
             setProfile({ ...pData });
             setView('dashboard');
           } else {
-            // Create a skeleton profile for the new user so onboarding handles registration
+            // New user registration check (Option A: Tag acts as the registration key)
             const email = u.email || 'Unknown';
-            const allowedEvaluators = globalAllowedConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
-            const isAllowed = email ? isAllowedEvaluator(email, allowedEvaluators) : false;
-            const initialRole = isAllowed ? 'evaluator' : 'user';
+            let accessDoc = await getDoc(doc(db, 'config', 'access')).catch(() => null);
+            const liveConfig = (accessDoc && accessDoc.exists()) ? accessDoc.data() : (globalAllowedConfig || {});
+            const allowedEvaluators = liveConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+            const isAllowed = isAllowedEvaluator(email, allowedEvaluators);
+            const isEmployee = isScapeEmployee(email, u.uid);
+            const storedTag = typeof window !== 'undefined' ? localStorage.getItem('registered_event_tag') : null;
+            const isTagValid = isCampaignTagActive(storedTag, liveConfig);
+
+            if (!isAllowed && !isEmployee && !isTagValid) {
+              await signOut(auth);
+              setUser(null);
+              setProfile(null);
+              setAuthError("Access restricted. The campaign pass code is paused, expired, or invalid. An active event pass code or authorized email is required to register.");
+              setAuthLoading(false);
+              return;
+            }
+
+            const nowIso = new Date().toISOString();
+            const initialRole = (isAllowed || isEmployee) ? 'evaluator' : 'user';
             const newProfile: UserProfile = {
               email,
               name: u.displayName || '',
               company: '',
-              companyType: 'other',
+              organization: '',
+              role: 'other',
               phone: '',
               requestedRole: initialRole,
+              registeredViaCampaign: (storedTag && isTagValid) ? storedTag : undefined,
+              lastActiveAt: nowIso,
               isAdmin: getEffectiveAdminStatus({
                 email,
                 name: u.displayName || '',
                 company: '',
-                companyType: 'other',
+                organization: '',
+                role: 'other',
                 phone: '',
                 requestedRole: initialRole,
                 isAdmin: false
@@ -344,7 +423,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
             setView('profile_setup');
           }
         } catch (e) {
-          handleAppError(e, OperationType.READ, `users/${u.uid}`);
+          handleAppError(e, OperationType.GET, `users/${u.uid}`);
         }
       } else {
         setProfile(null);
@@ -353,6 +432,31 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     });
     return unsubscribe;
   }, []);
+
+  // Heartbeat: Periodically update lastActiveAt while user has the app open (every 2 minutes)
+  useEffect(() => {
+    if (!user) return;
+    const updateActiveTime = () => {
+      const lastActiveAt = new Date().toISOString();
+      updateDoc(doc(db, 'users', user.uid), { lastActiveAt }).catch(() => {});
+    };
+
+    // Update immediately when tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        updateActiveTime();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Heartbeat interval every 2 minutes
+    const interval = setInterval(updateActiveTime, 2 * 60 * 1000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [user]);
 
   // Logger ind via Google
   const login = async () => {
@@ -406,6 +510,20 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
   const signupWithEmail = async (email: string, pass: string, name: string) => {
     setAuthError(null);
     try {
+      // Pre-validate registration gate before creating auth user
+      let accessDoc = await getDoc(doc(db, 'config', 'access')).catch(() => null);
+      const liveConfig = (accessDoc && accessDoc.exists()) ? accessDoc.data() : globalAllowedConfig;
+      const allowedEvaluators = liveConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+      const isAllowed = isAllowedEvaluator(email, allowedEvaluators);
+      const isEmployee = isScapeEmployee(email);
+      const storedTag = typeof window !== 'undefined' ? localStorage.getItem('registered_event_tag') : null;
+      const isTagValid = isCampaignTagActive(storedTag, liveConfig);
+
+      if (!isAllowed && !isEmployee && !isTagValid) {
+        setAuthError("Access restricted. The campaign pass code is paused, expired, or invalid. An active event pass code or authorized email is required to register.");
+        return;
+      }
+
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       await updateProfile(cred.user, { displayName: name });
     } catch (e: any) {
@@ -502,6 +620,8 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     authError,
     setAuthError,
     authLoading,
+    allowedConfig,
+    activeCampaignTag,
     login,
     loginWithEmail,
     signupWithEmail,

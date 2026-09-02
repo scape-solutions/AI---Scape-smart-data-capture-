@@ -17,9 +17,12 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
   };
 
   useEffect(() => {
-    // Also allow dismiss on pressing any key
-    const handleKeyDown = () => {
-      handleDismiss();
+    // Only dismiss on explicit Enter, Space, or Escape; ignore modifier/screenshot keys (Cmd/Shift/Alt/Ctrl)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+        handleDismiss();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -65,10 +68,15 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
             {/* Backlight Glow */}
             <div className="absolute inset-0 bg-indigo-600/20 rounded-[2rem] blur-2xl group-hover:bg-indigo-600/30 transition-all duration-500" />
 
-            <div className="relative bg-white border border-slate-100 p-2 rounded-3xl shadow-2xl flex flex-col items-center justify-center w-[126px] h-[126px] shrink-0">
-              <QRCodeView url="https://scape-bin-picker-projects.web.app/" size={92} />
-              <span className="text-[8px] font-black uppercase tracking-wider text-slate-700 mt-1">
-                Scan Web App
+            <div className="relative bg-white border border-slate-100 p-2.5 rounded-3xl shadow-2xl flex flex-col items-center justify-center w-[130px] h-[130px] shrink-0">
+              <QRCodeView 
+                url={typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1')
+                  ? `${window.location.origin}/?event=Automatik26` 
+                  : "https://scape-pick-pilot.web.app/?event=Automatik26"} 
+                size={94} 
+              />
+              <span className="text-[8px] font-black uppercase tracking-wider text-slate-800 mt-1 select-none">
+                Scan QR to Open
               </span>
             </div>
           </div>
@@ -84,9 +92,9 @@ export function SplashScreen({ onClose }: SplashScreenProps) {
 
         {/* Title */}
         <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-b from-white via-slate-100 to-slate-400">
-          Scape Bin-Picker Projects
-          <span className="block mt-2 text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-red-500 to-indigo-400">
-            Project Information
+          SCAPE PICK-PILOT
+          <span className="block mt-2 text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-red-500 to-indigo-400 text-2xl md:text-3xl font-extrabold tracking-normal">
+            Smart Data Capture & Feasibility
           </span>
         </h1>
 

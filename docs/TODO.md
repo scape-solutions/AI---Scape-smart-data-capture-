@@ -141,3 +141,25 @@ This document tracks actionable tasks and fixes derived from recent testing feed
   - Deling af projekter som Viewers, invitationer via e-mail eller link-lobby, og overførsel af ejerskab. (Se [sharing_rules_analysis.md](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/docs/sharing_rules_analysis.md)).
 - [ ] **Permanent lagring af uploadede lydfiler (Firebase Storage):**
   - Gem uploadede lydoptagelser i Firebase Storage (i stedet for kun at overføre dem til Gemini under sessionen), og gem et afspilleligt URL-link i chat-historikken, så brugeren og evaluator altid kan genhøre lydoptagelsen direkte i chatten.
+
+---
+
+### BUNDLE 5: Messe, Kampagner & Vækst-Sikring (Growth, Tracking & Rate-Limiting)
+
+- [ ] **Lead Source & Kampagne-Tagging (f.eks. `?source=messe2024` eller `?source=linkedin`):**
+  - Gem kilde-tagget (`source` / `campaign`) på brugerens profil og i projektets metadata (`leadSource`).
+  - Tilføj et kilde-filter i Scapes Evaluator Dashboard, så evaluatorer kan filtrere efter "Messe 2024", "LinkedIn Kampagne" eller "Direkte".
+  - Vis et tydeligt kilde-badge på hvert projektkort.
+
+- [ ] **AI Rate-Limiting & Quota Styring (Maksimalt forbrug pr. bruger/dag):**
+  - Opret server-side rate-limiting i `server.js` med en daglig tæller i Firestore (`/user_limits/{userId_YYYYMMDD}`).
+  - Maks 15 `⚡ AI Advice` kald og maks 50 `AI Chat` beskeder pr. ekstern bruger pr. dag (viser pæn "Daglig grænse nået"-besked).
+  - Evaluatorer og Superusers er automatisk undtaget fra begrænsningen.
+
+- [ ] **"Show, Don't Tell" — Præ-indlæst Eksempelprojekt for nye brugere:**
+  - Når en ny bruger logger ind første gang og har 0 projekter, oprettes automatisk et fuldt udfyldt eksempel-projekt (f.eks. *"Pumpeaksel i Euro-palle"* med CAD-model, fotos og færdiggrøn `⚡ AI Advice`), så messegæster straks kan se appens fulde værdi.
+
+- [x] **Realtids-styring og udløb af Event Tags i `config/access` & Generisk QR-kode (`Open`):**
+  - **Løsning:** Oprettet `activeEventPasscodes` i `config/access` i Firestore med fuld styring i Superuser-visningen (`PromptsEditorModal.tsx`).
+  - Indbygget QR-kode på intro/splash-skærmen ([SplashScreen.tsx](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/src/components/SplashScreen.tsx)) er forbundet med det permanente, generiske tag `?event=Open` (`Scan QR to Open`), så QR-koden i appen forbliver permanent gyldig, mens specifikke kampagner (f.eks. `Automatik26`) kan oprettes og styres dynamisk i Superuser-modalen.
+

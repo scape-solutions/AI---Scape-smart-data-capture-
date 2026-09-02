@@ -31,7 +31,16 @@ let allowedConfig = {
     'per.juul.nielsen@scapesolutions.eu',
     'demo@scapesolutions.eu'
   ],
-  superusers: ['rune.k.larsen@scapesolutions.eu']
+  superusers: ['rune.k.larsen@scapesolutions.eu'],
+  activeEventPasscodes: {
+    automatik26: {
+      code: 'Automatik26',
+      name: 'Automatik 2026 Messe',
+      active: true,
+      expiresAt: '2026-10-05',
+      createdAt: '2026-09-01'
+    }
+  }
 };
 
 // Helper function to update in-memory access configuration
@@ -40,7 +49,16 @@ function updateAccessConfig(data) {
     allowedDomains: data.allowedDomains || [],
     allowedEmails: data.allowedEmails || [],
     allowedEvaluators: data.allowedEvaluators || [],
-    superusers: data.superusers || []
+    superusers: data.superusers || [],
+    activeEventPasscodes: data.activeEventPasscodes || {
+      automatik26: {
+        code: 'Automatik26',
+        name: 'Automatik 2026 Messe',
+        active: true,
+        expiresAt: '2026-10-05',
+        createdAt: '2026-09-01'
+      }
+    }
   };
   console.log("Updated access config successfully loaded from Firestore:", allowedConfig);
 }
@@ -66,9 +84,7 @@ db.collection('config').doc('access').onSnapshot((docSnap) => {
   console.warn("Error listening to Firestore config/access changes (expected locally if not authenticated):", error);
 });
 
-// Middleware to verify Firebase ID Token and check email domain/address.
-// In local development (NODE_ENV !== 'production') token verification is skipped
-// so you can test AI features without needing Application Default Credentials.
+// Middleware to verify Firebase ID Token and check email domain/address or active event campaign registration.
 async function verifyFirebaseToken(req, res, next) {
   // --- DEV BYPASS ---
   if (process.env.NODE_ENV !== 'production') {
@@ -97,8 +113,27 @@ async function verifyFirebaseToken(req, res, next) {
     const isAllowedEmail = allowedConfig.allowedEmails.some(e => e.toLowerCase() === emailLower);
     const isAllowedDomain = allowedConfig.allowedDomains.some(d => d.toLowerCase() === domain);
 
-    // Check if user has a valid Scape domain or is specifically whitelisted
-    if (!isAllowedEmail && !isAllowedDomain) {
+    let hasAccess = isAllowedEmail || isAllowedDomain;
+
+    // Option A: If not direct domain/email match, any registered user profile in Firestore has access
+    if (!hasAccess) {
+      try {
+        const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+        if (userDoc.exists) {
+          const uData = userDoc.data();
+          if (uData.isSuspended !== true) {
+            hasAccess = true;
+          } else {
+            console.warn(`Suspended user attempted access: ${email}`);
+            return res.status(403).json({ error: 'Forbidden: Your account has been suspended.' });
+          }
+        }
+      } catch (err) {
+        console.warn("Could not verify user registration in Firestore:", err);
+      }
+    }
+
+    if (!hasAccess) {
       console.warn(`Unauthorized access attempt from email: ${email}`);
       return res.status(403).json({ error: 'Forbidden: You do not have access to this application.' });
     }
@@ -108,6 +143,55 @@ async function verifyFirebaseToken(req, res, next) {
   } catch (error) {
     console.error('Error verifying Firebase ID token:', error);
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+}
+
+// Daily Rate Limiter Middleware: Max 15 AI calls per user per day (Mic voice messages count as 1 AI call)
+async function dailyAiRateLimiter(req, res, next) {
+  if (process.env.NODE_ENV !== 'production') {
+    return next(); // Skip in local dev
+  }
+
+  const uid = req.user?.uid;
+  const email = req.user?.email || '';
+
+  // Evaluators and superusers bypass the rate limit
+  const isEvaluator = (allowedConfig.allowedEvaluators || []).some(e => e.toLowerCase() === email.toLowerCase()) ||
+                      (allowedConfig.superusers || []).some(s => s.toLowerCase() === email.toLowerCase()) ||
+                      email.toLowerCase().endsWith('@scapesolutions.eu') ||
+                      email.toLowerCase().endsWith('@scapesolutions.com');
+  if (isEvaluator) {
+    return next();
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const limitDocRef = db.collection('user_limits').doc(`${uid}_${today}`);
+
+  try {
+    const limitDoc = await limitDocRef.get();
+    let currentCalls = 0;
+    if (limitDoc.exists) {
+      currentCalls = limitDoc.data().totalCalls || 0;
+    }
+
+    const MAX_DAILY_CALLS = 15;
+    if (currentCalls >= MAX_DAILY_CALLS) {
+      return res.status(429).json({
+        error: `Daily AI quota reached (${MAX_DAILY_CALLS}/${MAX_DAILY_CALLS} calls). Your quota resets at midnight. Contact Scape Solutions for full evaluation access.`
+      });
+    }
+
+    // Increment usage asynchronously
+    await limitDocRef.set({
+      totalCalls: currentCalls + 1,
+      lastCallAt: new Date().toISOString(),
+      email
+    }, { merge: true });
+
+    next();
+  } catch (err) {
+    console.error("Rate limiter error:", err);
+    next(); // Don't block user if rate limit check encounters Firestore error
   }
 }
 
@@ -128,7 +212,7 @@ import crypto from 'crypto';
 
 const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || '782472107063-6shdo17lf2lsvvuifsmg15hhffuu0k4h.apps.googleusercontent.com';
 const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
-const APP_URL = process.env.APP_URL || 'https://scape-bin-picker-projects.web.app';
+const APP_URL = process.env.APP_URL || 'https://scape-pick-pilot.web.app';
 const OAUTH_CALLBACK_URL = `${APP_URL}/api/auth/google/callback`;
 
 // We use Firestore instead of an in-memory Map to store the OAuth session state.
@@ -467,7 +551,7 @@ app.get('/api/debug-projects', async (req, res) => {
 /**
  * Dedicated API Endpoint for External User Advice
  */
-app.post('/api/ai/advice', verifyFirebaseToken, async (req, res) => {
+app.post('/api/ai/advice', verifyFirebaseToken, dailyAiRateLimiter, async (req, res) => {
   if (!ai) {
     return res.status(503).json({ error: "Gemini API key is not configured on this server." });
   }
@@ -533,7 +617,7 @@ app.post('/api/ai/draft', verifyFirebaseToken, async (req, res) => {
 /**
  * Dedicated API Endpoint for Auto-fill Chat Assistant
  */
-app.post('/api/ai/chat', verifyFirebaseToken, async (req, res) => {
+app.post('/api/ai/chat', verifyFirebaseToken, dailyAiRateLimiter, async (req, res) => {
   if (!ai) {
     return res.status(503).json({ error: "Gemini API key is not configured on this server." });
   }
@@ -707,15 +791,15 @@ app.post('/api/support-chat', verifyFirebaseToken, async (req, res) => {
     }
 
     const systemInstruction = `You are Scape App Support & Technical AI.
-Your job is to answer user questions about using the Scape Bin-Picker Projects web application, understanding field definitions, or explaining robotics physics constraints (such as cycle time tradeoffs, part weight/gripper suction, or vision scanner selection).
+Your job is to answer user questions about using the SCAPE PICK-PILOT web application, understanding field definitions, or explaining robotics physics constraints (such as cycle time tradeoffs, part weight/gripper suction, or vision scanner selection).
 
 AUTHORITATIVE SCAPE APP DOCUMENTATION:
 ${helpGuideText}
 
 STRICT RELEVANCE & GUARDRAILS:
-1. ONLY answer questions directly related to Scape Bin-Picker Projects, the Scape application, bin-picking robotics technology, vision scanners, grippers, part specifications, cycle time calculations, or cell requirements.
+1. ONLY answer questions directly related to SCAPE PICK-PILOT, the Scape application, bin-picking robotics technology, vision scanners, grippers, part specifications, cycle time calculations, or cell requirements.
 2. If the user asks general non-relevant questions (e.g. tourist facts like "hvor højt er Rundetårn?", weather, cooking, sports, general trivia), you MUST politely refuse to answer. Reply in Danish:
-   "Jeg kan desværre kun svare på spørgsmål vedrørende Scape Bin-Picker Projects appen, spørgeskemaet og Scape bin-picking teknologi. Har du et spørgsmål til dit bin-picking projekt eller dine emner?"
+   "Jeg kan desværre kun svare på spørgsmål vedrørende SCAPE PICK-PILOT appen, spørgeskemaet og Scape bin-picking teknologi. Har du et spørgsmål til dit bin-picking projekt eller dine emner?"
 3. DOMAIN FACT - SCAPE BINS ARE NEVER MIXED: A bin container in Scape Bin-Picking ALWAYS contains items of ONE single part type (or single part family) at a time. Scape NEVER picks from mixed-contents bins containing completely unrelated items (e.g. gearboxes mixed with brake pads in one container is NEVER done).
 
 FORMATTING & CHAT RULES:

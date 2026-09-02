@@ -2,9 +2,10 @@
  * AuthView.tsx
  * Dette er den første skærm, brugeren ser. Den håndterer SignIn og SignUp.
  */
-import { Cpu, X, Play } from 'lucide-react';
+import { Cpu, X, Play, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { IntroVideoModal } from '../components/IntroVideoModal';
+import { isCampaignTagActive } from '../hooks/useAuth';
 
 // Props interfacen. Disse værdier "flyder" ned fra App.tsx
 interface AuthViewProps {
@@ -17,6 +18,8 @@ interface AuthViewProps {
   authDisplayName: string;
   setAuthDisplayName: (e: string) => void;
   authError: string | null;
+  allowedConfig?: any;
+  activeCampaignTag?: string | null;
   loginWithEmail: () => void;
   signupWithEmail: () => void;
   loginWithGoogle: () => void;
@@ -33,6 +36,8 @@ export function AuthView({
   authDisplayName,
   setAuthDisplayName,
   authError,
+  allowedConfig,
+  activeCampaignTag,
   loginWithEmail,
   signupWithEmail,
   loginWithGoogle,
@@ -54,9 +59,28 @@ export function AuthView({
           <Cpu className="text-white w-8 h-8 absolute opacity-20" />
           <span className="absolute -bottom-2 -right-2 bg-white text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-red-100">Info</span>
         </div>
-        <h1 className="text-2xl font-bold text-slate-800 mb-2">Scape Evaluator</h1>
-        <p className="text-slate-500 mb-4 text-sm">Professional Bin-Picking Assessment</p>
+        <h1 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">SCAPE PICK-PILOT</h1>
+        <p className="text-slate-500 mb-4 text-sm font-medium">Smart Data Capture & Feasibility Assessment</p>
         
+        {activeCampaignTag && (
+          !allowedConfig ? (
+            <div className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 text-slate-500 text-xs font-bold rounded-full animate-pulse">
+              <span>🎟️</span>
+              <span>Validating campaign: {activeCampaignTag}...</span>
+            </div>
+          ) : isCampaignTagActive(activeCampaignTag, allowedConfig) ? (
+            <div className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-full">
+              <span>🎟️</span>
+              <span>Campaign Access: {activeCampaignTag}</span>
+            </div>
+          ) : (
+            <div className="mb-4 inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold rounded-full">
+              <span>⏸️</span>
+              <span>Campaign Paused / Expired: {activeCampaignTag}</span>
+            </div>
+          )
+        )}
+
         <button
           type="button"
           onClick={() => setIsIntroModalOpen(true)}
@@ -183,7 +207,7 @@ export function AuthView({
                 </span>
                 PE
               </span>
-              <span className="text-xs font-bold text-slate-400">Bin-Picker Projects</span>
+              <span className="text-xs font-black tracking-wider text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-lg select-none">PICK-PILOT</span>
             </div>
 
             {/* Content Sections */}

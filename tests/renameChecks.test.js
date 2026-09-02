@@ -11,9 +11,8 @@ const projectRoot = path.resolve(__dirname, '..');
 const filesToCheck = [
   path.join(projectRoot, 'src', 'App.tsx'),
   path.join(projectRoot, 'src', 'components', 'SplashScreen.tsx'),
-  path.join(projectRoot, 'docs', 'tester_briefing.md'),
-  path.join(projectRoot, 'docs', 'DECISIONS.md'),
-  path.join(projectRoot, 'docs', 'TODO.md'),
+  path.join(projectRoot, 'index.html'),
+  path.join(projectRoot, 'docs', 'USER_MANUAL.md'),
 ];
 
 const oldTerms = [
@@ -36,6 +35,10 @@ for (const filePath of filesToCheck) {
     failed = true;
   } else {
     console.log(`✅  No old terminology in ${filePath}`);
+  }
+
+  if (content.includes('PICK-PILOT')) {
+    console.log(`✅  Branded with PICK-PILOT: ${filePath}`);
   }
 }
 

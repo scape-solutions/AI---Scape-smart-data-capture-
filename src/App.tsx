@@ -443,6 +443,8 @@ export default function App() {
     authError,
     setAuthError,
     authLoading,
+    allowedConfig,
+    activeCampaignTag,
     login,
     loginWithEmail,
     signupWithEmail,
@@ -587,17 +589,17 @@ export default function App() {
     }
   }, [showSplash]);
 
-  // Opretter et helt nyt "tomt" projekt i hukommelsen. 
-  // Bemærk: Det gemmes ikke i databasen endnu.
-  const createNewProject = (withAI = false) => {
-    setCurrentProject({
+  // Opretter et nyt projekt og persisterer et initielt draft til databasen
+  const createNewProject = async (withAI = false) => {
+    if (!user) return;
+    const initialProject: ProjectState = {
       id: null,
-      projectName: "New Scape Bin-Picker Project",
+      projectName: "New SCAPE PICK-PILOT Project",
       generalResponses: {},
       parts: [{ responses: {}, images: [] }],
       report: null,
       status: 'draft',
-      userId: user!.uid,
+      userId: user.uid,
       ownerEmail: getEffectiveEmail() || undefined,
       ownerName: profile?.name || user?.displayName || undefined,
       ownerCompany: profile?.company || undefined,
@@ -607,13 +609,24 @@ export default function App() {
       lastActivePartIndex: 0,
       lastActiveCustomSection: null,
       lastIsReviewing: false,
-    });
+    };
+    setCurrentProject(initialProject);
     setView('questionnaire');
     setCurrentStep(0);
     setIsReviewing(false);
     setActiveCustomSection(null);
     setReviewTab('advice');
     setActivePartIndex(0);
+
+    // Gem det nye projekt i Firestore med det samme så et browser-reload aldrig mister projektet!
+    try {
+      const saved = await saveProject('draft', initialProject);
+      if (saved) {
+        setCurrentProject(saved);
+      }
+    } catch (err) {
+      console.error("Failed to auto-create draft project:", err);
+    }
   };
 
   const openProject = async (p: ProjectState) => {
@@ -851,7 +864,10 @@ export default function App() {
 
       const updatedProject = { ...currentProject, chatHistory: finalHistory };
       setCurrentProject(updatedProject);
-      if (updatedProject.id) {
+      if (saveProject) {
+        const saved = await saveProject(updatedProject.status || 'draft', updatedProject);
+        if (saved && saved.id) updatedProject.id = saved.id;
+      } else if (updatedProject.id) {
         await updateProjectField(updatedProject, 'chatHistory', finalHistory, "AI Assistant chat updated");
       }
     } catch (e: any) {
@@ -889,6 +905,8 @@ export default function App() {
         authPassword={authPassword} setAuthPassword={setAuthPassword}
         authDisplayName={authDisplayName} setAuthDisplayName={setAuthDisplayName}
         authError={authError}
+        allowedConfig={allowedConfig}
+        activeCampaignTag={activeCampaignTag}
         loginWithEmail={() => loginWithEmail(authEmail, authPassword)}
         signupWithEmail={() => signupWithEmail(authEmail, authPassword, authDisplayName)}
         loginWithGoogle={login}

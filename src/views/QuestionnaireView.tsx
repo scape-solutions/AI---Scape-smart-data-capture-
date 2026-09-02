@@ -525,7 +525,9 @@ export function QuestionnaireView({
       let isFilled = false;
 
       if (q.type === 'media') {
-        if (q.id === 'generalImages') {
+        if (q.id === '1.04_image') {
+          isFilled = !!(responses['1.04_image'] && responses['1.04_image'].length > 0);
+        } else if (q.id === 'generalImages') {
           isFilled = !!(currentProject.generalImages && currentProject.generalImages.length > 0);
         } else {
           isFilled = !!(part && part.images && part.images.length > 0);
@@ -722,7 +724,7 @@ export function QuestionnaireView({
     setDeleteImageConfirm({ show: false, type: 'single', imageType: 'general' });
   };
 
-  const processUploadedImages = async (files: File[]) => {
+  const processUploadedImages = async (files: File[], targetFieldId?: string) => {
     const compressedImages: string[] = [];
     setGlobalSuccess(`Optimizing ${files.length} image(s)...`);
 
@@ -749,7 +751,20 @@ export function QuestionnaireView({
       }
     }
 
-    if (currentStep === 0) {
+    if (targetFieldId === '1.04_image') {
+      const currentBinImages = Array.isArray(currentProject.generalResponses['1.04_image'])
+        ? currentProject.generalResponses['1.04_image']
+        : [];
+      const updated = {
+        ...currentProject,
+        generalResponses: {
+          ...currentProject.generalResponses,
+          '1.04_image': [...currentBinImages, ...compressedImages]
+        }
+      };
+      setCurrentProject(updated);
+      saveProject(currentProject.status || 'draft', updated);
+    } else if (currentStep === 0) {
       const updatedGeneralImages = [
         ...(currentProject.generalImages || []),
         ...compressedImages
@@ -1960,18 +1975,20 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                     </p>
                   </div>
 
-                  {/* Info Card / Explanation */}
-                  <div className="p-5 bg-blue-50/50 border border-blue-100 rounded-2xl text-blue-900 text-sm space-y-2">
-                    <p className="font-bold flex items-center gap-2">
-                      <Info className="w-4 h-4 text-blue-500" />
-                      About the Business Case Tool
-                    </p>
-                    <p className="text-xs text-blue-800 leading-relaxed">
-                      This section serves as a placeholder for a future interactive ROI calculator. In final production, we will help you make a precise calculation using both already entered project values (such as robot brand, cycles, and parts complexity) and additional operational questions. The goal is to help estimate project cost, payback period, and overall rate of return based on simulated Scape installation prices.
-                    </p>
+                  {/* Prominent Draft / Under Development Warning Banner */}
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-amber-900 shadow-3xs">
+                    <span className="text-2xl shrink-0">🚧</span>
+                    <div>
+                      <span className="font-black text-xs uppercase tracking-wider block text-amber-900">
+                        Draft Feature — Under Development (For Reference Only)
+                      </span>
+                      <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                        This ROI simulation tool is a preliminary draft and is not in active use for formal quotation. No prices are fixed or guaranteed.
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Interactive Mock Inputs */}
+                  {/* Interactive Inputs */}
                   <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-2xs space-y-6">
                     <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">ROI Estimation Parameters (Simulation)</h3>
 
@@ -2031,18 +2048,18 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
                       {/* Installation Cost base */}
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-600 block">Est. Scape Installation Price Base (EUR)</label>
+                        <label className="text-xs font-bold text-slate-600 block">Est. Robot Cell Installation Budget (EUR, Optional)</label>
                         <input
                           type="number"
                           disabled={isReadOnly}
-                          value={currentProject.generalResponses['businessCaseInstallCost'] ?? 120000}
+                          value={currentProject.generalResponses['businessCaseInstallCost'] ?? ''}
                           onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
+                            const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
                             const updated = { ...currentProject.generalResponses, businessCaseInstallCost: val };
                             setCurrentProject({ ...currentProject, generalResponses: updated });
                           }}
                           className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all text-base md:text-sm"
-                          placeholder="e.g. 120000"
+                          placeholder="Enter estimated budget (e.g. 100000)"
                         />
                       </div>
                     </div>
@@ -2052,11 +2069,11 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       const labor = currentProject.generalResponses['businessCaseSavedLabor'] ?? 50;
                       const sh = currentProject.generalResponses['businessCaseShifts'] ?? 2;
                       const days = currentProject.generalResponses['businessCaseWorkDays'] ?? 220;
-                      const cost = currentProject.generalResponses['businessCaseInstallCost'] ?? 120000;
+                      const cost = currentProject.generalResponses['businessCaseInstallCost'];
 
                       const annualHours = sh * 8 * days;
                       const annualSavings = annualHours * labor;
-                      const paybackMonths = annualSavings > 0 ? (cost / annualSavings) * 12 : 0;
+                      const paybackMonths = cost && cost > 0 && annualSavings > 0 ? (cost / annualSavings) * 12 : null;
 
                       return (
                         <div className="p-6 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col md:flex-row justify-between gap-6 mt-6 items-center">
@@ -2069,8 +2086,8 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                           <div className="w-px h-10 bg-slate-200 hidden md:block" />
                           <div className="space-y-1 text-center">
                             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Est. Payback Period</span>
-                            <span className="text-xl font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg">
-                              {paybackMonths > 0 ? `${paybackMonths.toFixed(1)} Months` : 'N/A'}
+                            <span className={`text-xl font-black px-3 py-1 rounded-lg ${paybackMonths !== null ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400 bg-slate-100'}`}>
+                              {paybackMonths !== null ? `${paybackMonths.toFixed(1)} Months` : 'Specify Budget Above'}
                             </span>
                           </div>
                         </div>
@@ -2286,6 +2303,88 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                   </div>
 
                   <div className="space-y-6">
+                    {/* Form Filled By - Contact Info Card (Project Info Step) */}
+                    {currentStep === 0 && (
+                      <div className="p-6 bg-slate-50/80 border border-slate-200/80 rounded-3xl space-y-4 shadow-3xs">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                              <span>Form Filled By (Contact Information)</span>
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Specify who completed this evaluation form (pre-filled with your profile, edit if filling on behalf of someone else).
+                            </p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-bold text-slate-600 block mb-1">Company</label>
+                            <input
+                              type="text"
+                              disabled={isReadOnly}
+                              value={currentProject.generalResponses['contact_company'] ?? profile?.company ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_company: val } };
+                                setCurrentProject(updated);
+                                saveProject(currentProject.status || 'draft', updated);
+                              }}
+                              placeholder="e.g. Acme Automation ApS"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-slate-600 block mb-1">Contact Name</label>
+                            <input
+                              type="text"
+                              disabled={isReadOnly}
+                              value={currentProject.generalResponses['contact_name'] ?? profile?.name ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_name: val } };
+                                setCurrentProject(updated);
+                                saveProject(currentProject.status || 'draft', updated);
+                              }}
+                              placeholder="e.g. John Doe"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-slate-600 block mb-1">E-mail</label>
+                            <input
+                              type="email"
+                              disabled={isReadOnly}
+                              value={currentProject.generalResponses['contact_email'] ?? profile?.email ?? user?.email ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_email: val } };
+                                setCurrentProject(updated);
+                                saveProject(currentProject.status || 'draft', updated);
+                              }}
+                              placeholder="e.g. john@acme.com"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-slate-600 block mb-1">Telephone</label>
+                            <input
+                              type="tel"
+                              disabled={isReadOnly}
+                              value={currentProject.generalResponses['contact_phone'] ?? profile?.phone ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_phone: val } };
+                                setCurrentProject(updated);
+                                saveProject(currentProject.status || 'draft', updated);
+                              }}
+                              placeholder="e.g. +45 12 34 56 78"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {(currentStep === 0 ? GENERAL_STEPS[0] : PART_STEPS[currentStep - 1]).questions.map(q => {
                       const responses = currentStep === 0 ? currentProject.generalResponses : currentProject.parts[activePartIndex].responses;
 
@@ -2295,6 +2394,12 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                       const isFieldFilled = (question: any, res: Record<string, any>, partItem?: any) => {
                         const val = res[question.id];
                         if (question.type === 'media') {
+                          if (question.id === '1.04_image') {
+                            return !!(res['1.04_image'] && res['1.04_image'].length > 0);
+                          }
+                          if (question.id === 'generalImages') {
+                            return !!(currentProject.generalImages && currentProject.generalImages.length > 0);
+                          }
                           return !!(partItem && partItem.images && partItem.images.length > 0);
                         } else if (question.type === 'boolean') {
                           return typeof val === 'boolean';
@@ -2920,10 +3025,13 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
                           {/* Media Image Photo Uploader */}
                           {q.type === 'media' && (() => {
+                            const isBinImage = q.id === '1.04_image';
                             const isGeneralImages = q.id === 'generalImages';
-                            const imageList = isGeneralImages
-                              ? (currentProject.generalImages || [])
-                              : (currentProject.parts[activePartIndex]?.images || []);
+                            const imageList: string[] = isBinImage
+                              ? (Array.isArray(currentProject.generalResponses['1.04_image']) ? currentProject.generalResponses['1.04_image'] : [])
+                              : isGeneralImages
+                                ? (currentProject.generalImages || [])
+                                : (currentProject.parts[activePartIndex]?.images || []);
 
                             return (
                               <div className="space-y-4">
@@ -2941,7 +3049,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                       const files = Array.from(e.dataTransfer.files);
                                       const imageFiles = files.filter(f => f.type.startsWith('image/'));
                                       if (imageFiles.length > 0) {
-                                        await processUploadedImages(imageFiles);
+                                        await processUploadedImages(imageFiles, q.id);
                                       } else {
                                         alert("Invalid file format. Please drop image files only.");
                                       }
@@ -2958,7 +3066,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                   <span className="text-xs font-bold text-slate-500 mt-2">
                                     {isDraggingImages
                                       ? "Drop photos here!"
-                                      : (isGeneralImages ? "Select or drag Environmental Photos" : "Select or drag Part Photos")}
+                                      : (isBinImage ? "Select or drag Bin / Container Photo" : isGeneralImages ? "Select or drag Environmental Photos" : "Select or drag Part Photos")}
                                   </span>
                                   <span className="text-[10px] text-slate-400 mt-1 font-semibold">Supports JPG, PNG</span>
                                   <input
@@ -2967,7 +3075,11 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                     accept="image/*"
                                     disabled={isReadOnly}
                                     className="hidden"
-                                    onChange={handleUploadImages}
+                                    onChange={(e) => {
+                                      if (e.target.files && e.target.files.length > 0) {
+                                        processUploadedImages(Array.from(e.target.files), q.id);
+                                      }
+                                    }}
                                   />
                                 </label>
 
@@ -2979,12 +3091,24 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                     <button
                                       onClick={e => {
                                         e.preventDefault();
-                                        setDeleteImageConfirm({
-                                          show: true,
-                                          type: 'all',
-                                          imageType: isGeneralImages ? 'general' : 'part',
-                                          partIndex: isGeneralImages ? -1 : activePartIndex
-                                        });
+                                        if (isBinImage) {
+                                          const updated = {
+                                            ...currentProject,
+                                            generalResponses: {
+                                              ...currentProject.generalResponses,
+                                              '1.04_image': []
+                                            }
+                                          };
+                                          setCurrentProject(updated);
+                                          saveProject(currentProject.status || 'draft', updated);
+                                        } else {
+                                          setDeleteImageConfirm({
+                                            show: true,
+                                            type: 'all',
+                                            imageType: isGeneralImages ? 'general' : 'part',
+                                            partIndex: isGeneralImages ? -1 : activePartIndex
+                                          });
+                                        }
                                       }}
                                       className="text-[10px] uppercase font-black tracking-widest text-red-500 hover:underline cursor-pointer"
                                     >
@@ -3000,7 +3124,7 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                         src={img}
                                         onClick={() => setFullscreenImage(img)}
                                         className="w-full h-full object-cover cursor-pointer transition-transform duration-200 group-hover:scale-105"
-                                        alt={isGeneralImages ? `Environmental photo ${imgIdx + 1}` : `Part upload ${imgIdx + 1}`}
+                                        alt={isBinImage ? `Bin photo ${imgIdx + 1}` : isGeneralImages ? `Environmental photo ${imgIdx + 1}` : `Part upload ${imgIdx + 1}`}
                                       />
                                       {/* Overlay Controls */}
                                       <div
@@ -3013,9 +3137,11 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                             e.stopPropagation();
                                             const link = document.createElement('a');
                                             link.href = img;
-                                            link.download = isGeneralImages
-                                              ? `general-image-${imgIdx + 1}.png`
-                                              : `part-${activePartIndex + 1}-image-${imgIdx + 1}.png`;
+                                            link.download = isBinImage
+                                              ? `bin-photo-${imgIdx + 1}.png`
+                                              : isGeneralImages
+                                                ? `general-image-${imgIdx + 1}.png`
+                                                : `part-${activePartIndex + 1}-image-${imgIdx + 1}.png`;
                                             document.body.appendChild(link);
                                             link.click();
                                             document.body.removeChild(link);
@@ -3030,13 +3156,26 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
                                             onClick={(e) => {
                                               e.preventDefault();
                                               e.stopPropagation();
-                                              setDeleteImageConfirm({
-                                                show: true,
-                                                type: 'single',
-                                                imageType: isGeneralImages ? 'general' : 'part',
-                                                partIndex: isGeneralImages ? -1 : activePartIndex,
-                                                imgIdx
-                                              });
+                                              if (isBinImage) {
+                                                const updatedImages = (currentProject.generalResponses['1.04_image'] || []).filter((_: any, idx: number) => idx !== imgIdx);
+                                                const updated = {
+                                                  ...currentProject,
+                                                  generalResponses: {
+                                                    ...currentProject.generalResponses,
+                                                    '1.04_image': updatedImages
+                                                  }
+                                                };
+                                                setCurrentProject(updated);
+                                                saveProject(currentProject.status || 'draft', updated);
+                                              } else {
+                                                setDeleteImageConfirm({
+                                                  show: true,
+                                                  type: 'single',
+                                                  imageType: isGeneralImages ? 'general' : 'part',
+                                                  partIndex: isGeneralImages ? -1 : activePartIndex,
+                                                  imgIdx: imgIdx
+                                                });
+                                              }
                                             }}
                                             className="p-1 bg-red-600/90 hover:bg-red-600 text-white rounded-md transition-all active:scale-95 shadow-xs cursor-pointer"
                                             title="Delete image"

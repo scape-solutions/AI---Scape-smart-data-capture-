@@ -1334,12 +1334,15 @@ export function useProjects(
 
     // Vi bygger det data-objekt, vi vil sende til databasen.
     // Vi trækker 'id' ud så vi ALDRIG gemmer et forældet 'id: null' eller database-ID som et felt i Firestore dokumentet!
+    const { id: _, ...projectDataWithoutId } = project;
+    const nextLocked = project.isLocked ?? (status === 'submitted' || status === 'approved' || status === 'rejected');
     const userSubmittedReport = project.userSubmittedReport || (status === 'submitted' ? (project.report || null) : null);
     const userSubmittedObservations = project.userSubmittedObservations || (status === 'submitted' ? (project.fieldObservations || null) : null);
     const userSubmittedAdviceTimestamp = project.userSubmittedAdviceTimestamp || (status === 'submitted' ? (project.lastAdviceTimestamp || new Date().toLocaleString()) : null);
 
     const data = {
       ...projectDataWithoutId,
+      userId: project.userId || user?.uid,
       parts: partsWithoutImages,
       chatHistory: sanitizeChatHistory(project.chatHistory || []),
       generalImages: [], // Hoveddokumentet skal ikke have base64 data
@@ -1350,7 +1353,7 @@ export function useProjects(
       userSubmittedObservations,
       userSubmittedAdviceTimestamp,
       updatedAt: serverTimestamp(),
-      projectName: project.generalResponses['1.01'] || "Untitled Project",
+      projectName: project.generalResponses?.['1.01'] || project.projectName || "Untitled Project",
       ownerName: project.ownerName && project.ownerName !== 'Unknown' ? project.ownerName : (profile?.name || user?.displayName || 'Unknown'),
       ownerCompany: project.ownerCompany && project.ownerCompany !== 'Unknown' ? project.ownerCompany : (profile?.company || 'Unknown'),
       ownerEmail: project.ownerEmail && project.ownerEmail !== 'Unknown' ? project.ownerEmail : (email || 'Unknown'),

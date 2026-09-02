@@ -46,7 +46,7 @@ export function IntroVideoModal({ isOpen, onClose, defaultTab = 'storyboard' }: 
       badge: "Fast Start",
       badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
       title: "2. Launch App & Create New Project",
-      description: "Access Scape Bin-Picker Projects from any smartphone or browser. Click '+ Create New Project' to open your private, structured engineering workspace in seconds.",
+      description: "Access SCAPE PICK-PILOT from any smartphone or browser. Click '+ Create New Project' to open your private, structured engineering workspace in seconds.",
       image: "/onboarding/story_panel_2.jpg",
       icon: PlusCircle,
       points: [
@@ -133,7 +133,7 @@ export function IntroVideoModal({ isOpen, onClose, defaultTab = 'storyboard' }: 
             </div>
             <div>
               <h2 className="text-lg md:text-xl font-black text-slate-900 leading-tight">
-                Scape Bin-Picker Projects
+                SCAPE PICK-PILOT
               </h2>
               <p className="text-xs text-slate-500 font-medium">
                 App Storyboard, Vision & Step-by-Step Guide

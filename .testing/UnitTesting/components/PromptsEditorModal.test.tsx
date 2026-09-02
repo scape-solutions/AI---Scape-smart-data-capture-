@@ -14,19 +14,15 @@ vi.mock('../../../src/docs/autoFillPrompt.md?raw', () => ({ default: 'mock auto 
 vi.mock('../../../src/docs/observationsExtractionPrompt.md?raw', () => ({ default: 'mock observations extraction' }));
 
 // Mock Lucide icons
-vi.mock('lucide-react', () => ({
-  X: () => <div data-testid="x-icon" />,
-  Save: () => <div data-testid="save-icon" />,
-  FileText: () => <div data-testid="file-icon" />,
-  Bot: () => <div data-testid="bot-icon" />,
-  Sparkles: () => <div data-testid="sparkles-icon" />,
-  Loader2: () => <div data-testid="loader-icon" />,
-  BookOpen: () => <div data-testid="book-icon" />,
-  RefreshCw: () => <div data-testid="refresh-icon" />,
-  Download: () => <div data-testid="download-icon" />,
-  Upload: () => <div data-testid="upload-icon" />,
-  History: () => <div data-testid="history-icon" />,
-}));
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return new Proxy(actual, {
+    get: (target, prop) => {
+      if (prop in target) return target[prop as string];
+      return (props: any) => <div data-testid={`icon-${String(prop)}`} {...props} />;
+    }
+  });
+});
 
 vi.mock('firebase/firestore', () => ({
   getFirestore: vi.fn(() => ({})),  // initializes firebase
