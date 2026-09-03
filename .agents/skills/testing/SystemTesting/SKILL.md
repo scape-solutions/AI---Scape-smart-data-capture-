@@ -83,17 +83,30 @@ Pandoc is a powerful document converter that converts Markdown directly to DOCX 
 1. **Install Pandoc** (if not already installed):
    - On Windows (PowerShell):
      ```powershell
+<<<<<<< HEAD
      winget install JohnMacFarlane.Pandoc
      ```
    *(Note: Restart your terminal/VS Code after installing so `pandoc` is recognized in PATH).*
 
+=======
+     winget install mdq.pandoc
+     ```
+>>>>>>> cba3e0e5c59b5f1cce2249b19f862a0c1fd0e876
 2. **Convert a single file**:
    ```powershell
    pandoc -s docs/testing/uc1_test_cases.md -o docs/testing/uc1_test_cases.docx
    ```
 3. **Convert all 7 files in batch** (PowerShell command):
    ```powershell
+<<<<<<< HEAD
    Get-ChildItem docs/testing/uc*_test_cases.md | ForEach-Object { $docxPath = $_.FullName -replace '\.md$', '.docx'; pandoc -s $_.FullName -o $docxPath; Write-Host "Converted: $($_.Name) -> $(Split-Path $docxPath -Leaf)" }
+=======
+   Get-ChildItem docs/testing/uc*_test_cases.md | ForEach-Object {
+       $docxPath = $_.FullName -replace '\.md$', '.docx'
+       pandoc -s $_.FullName -o $docxPath
+       Write-Host "Converted: $($_.Name) -> $(Split-Path $docxPath -Leaf)"
+   }
+>>>>>>> cba3e0e5c59b5f1cce2249b19f862a0c1fd0e876
    ```
 
 ### Method B: Using VS Code Extensions (GUI Method)
