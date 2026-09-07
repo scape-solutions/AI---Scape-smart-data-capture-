@@ -13,6 +13,7 @@ gcloud run deploy scape-evaluator \
   --region europe-west3 \
   --allow-unauthenticated \
   --min-instances=1 \
+  --max-instances=2 \
   --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest,GOOGLE_OAUTH_CLIENT_SECRET=GOOGLE_OAUTH_CLIENT_SECRET:latest"
 
 echo "Deployment complete!"

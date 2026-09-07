@@ -472,21 +472,16 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.');
       const isStandalone = (window.navigator as any).standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 
-      if (isStandalone && isMobile && !isLocal) {
-        // I iOS standalone PWA tilstand virker hverken popups eller redirect retur.
-        // Derfor navigerer vi til vores server-side OAuth proxy, som bygger broen.
+      if (isMobile && !isLocal) {
+        // På alle mobile enheder (både Safari, Chrome og PWA standalone)
+        // navigerer vi til vores server-side OAuth proxy (/api/auth/google/start).
+        // Dette omgår 100% Apples Safari ITP cookie/storage-blokering af Firebase signInWithRedirect.
         window.location.href = '/api/auth/google/start';
         return;
       }
 
-      if (isMobile && !isLocal) {
-        // Firebase anbefaler signInWithRedirect på mobile enheder og PWA'er,
-        // da signInWithPopup kan blive blokeret af popup-blockers i iOS standalone mode.
-        await signInWithRedirect(auth, provider);
-      } else {
-        // Vi bruger signInWithPopup på desktop og ved lokal test (for at undgå redirect-port fejl).
-        await signInWithPopup(auth, provider);
-      }
+      // Vi bruger signInWithPopup på desktop og ved lokal test
+      await signInWithPopup(auth, provider);
     } catch (e: any) {
       setAuthLoading(false);
       console.error("Login error:", e);

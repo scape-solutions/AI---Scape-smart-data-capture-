@@ -121,6 +121,8 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 
 ### Øvrige Opgaver
 
+- [ ] **Opsig Duet AI / Gemini for Google Cloud abonnement:**
+  - Deaktiver den faste Duet AI for Developers / Gemini Code Assist licens i Google Cloud Console for at fjerne den faste udgift på ~150 kr./md. (Appens funktion via Gemini API forbliver 100% upåvirket).
 - [ ] **Multi-language app:**
   - Gør applikationen multi-language (understøttelse af flere sprog i UI og prompts).
 - [x] **Opsamling af ustruktureret AI-data:**
