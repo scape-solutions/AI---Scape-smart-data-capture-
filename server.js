@@ -242,15 +242,17 @@ app.get('/api/auth/google/start', async (req, res) => {
     return res.status(503).send('Google OAuth not configured on this server. Please add GOOGLE_OAUTH_CLIENT_SECRET.');
   }
 
-  // Dynamically resolve protocol and host to avoid redirecting to the wrong domain
+  // Dynamically resolve protocol and host, falling back to public APP_URL if behind Cloud Run internal hostname
   const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.headers['x-forwarded-host'] || req.get('host');
-  const currentAppUrl = `${protocol}://${host}`;
+  const rawHost = req.headers['x-forwarded-host'] || req.get('host') || '';
+  
+  let currentAppUrl = APP_URL;
+  if (rawHost.includes('scape-pick-pilot.web.app') || rawHost.includes('scape-pick-pilot.firebaseapp.com') || rawHost.includes('localhost') || rawHost.startsWith('127.0.0.1')) {
+    currentAppUrl = `${protocol}://${rawHost}`;
+  }
   const callbackUrl = `${currentAppUrl}/api/auth/google/callback`;
 
-  console.log(`[OAuth Start] headers:`, req.headers);
-  console.log(`[OAuth Start] resolved protocol: ${protocol}, host: ${host}`);
-  console.log(`[OAuth Start] constructed redirect_uri: ${callbackUrl}`);
+  console.log(`[OAuth Start] resolved host: ${rawHost}, using callbackUrl: ${callbackUrl}`);
 
   const state = crypto.randomUUID();
   
@@ -291,8 +293,11 @@ app.get('/api/auth/google/start', async (req, res) => {
 app.get('/api/auth/google/callback', async (req, res) => {
   const { code, state, error } = req.query;
   const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.headers['x-forwarded-host'] || req.get('host');
-  const currentAppUrl = `${protocol}://${host}`;
+  const rawHost = req.headers['x-forwarded-host'] || req.get('host') || '';
+  let currentAppUrl = APP_URL;
+  if (rawHost.includes('scape-pick-pilot.web.app') || rawHost.includes('scape-pick-pilot.firebaseapp.com') || rawHost.includes('localhost') || rawHost.startsWith('127.0.0.1')) {
+    currentAppUrl = `${protocol}://${rawHost}`;
+  }
   const callbackUrl = `${currentAppUrl}/api/auth/google/callback`;
 
   if (error || !code || !state) {
