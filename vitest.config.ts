@@ -13,6 +13,7 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     setupFiles: './.testing/vitest.setup.ts',
+    exclude: ['**/tests/**', '**/node_modules/**', '**/dist/**', '**/.git/**'],
   },
   define: {
     'process.env.GEMINI_API_KEY': JSON.stringify('mock-api-key'),

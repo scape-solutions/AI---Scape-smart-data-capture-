@@ -1,9 +1,8 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { AIAssistantTab, areValuesEqual, isProposalAlreadyApplied } from '../../../src/components/AIAssistantTab';
 import { ProjectState } from '../../../src/types';
-// .testing/setup.ts
 import '@testing-library/jest-dom/vitest';
 
 // Mock dependencies
@@ -80,6 +79,13 @@ describe('AIAssistantTab utilities', () => {
       };
       expect(isProposalAlreadyApplied(proposal, mockProject, 0)).toBe(false);
     });
+
+    it('returns false for image actions so proposal action card is always shown', () => {
+      expect(isProposalAlreadyApplied({ suggestedAction: 'assign_image' }, mockProject, 0)).toBe(false);
+      expect(isProposalAlreadyApplied({ suggestedAction: 'move_image' }, mockProject, 0)).toBe(false);
+      expect(isProposalAlreadyApplied({ suggestedAction: 'copy_image' }, mockProject, 0)).toBe(false);
+      expect(isProposalAlreadyApplied({ suggestedAction: 'delete_image' }, mockProject, 0)).toBe(false);
+    });
   });
 });
 
@@ -109,5 +115,21 @@ describe('AIAssistantTab render', () => {
     );
 
     expect(screen.getByText('Hello, how can I assist you today?')).toBeInTheDocument();
+  });
+
+  it('renders input area and mic button for voice memos', () => {
+    render(
+      <AIAssistantTab
+        currentProject={mockProject}
+        setCurrentProject={vi.fn()}
+        sendMessageToAssistant={vi.fn().mockResolvedValue(undefined)}
+        isGeneratingReport={false}
+        updateProjectField={vi.fn().mockResolvedValue(undefined)}
+        activePartIndex={0}
+      />
+    );
+
+    expect(screen.getByPlaceholderText(/Describe project/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Record Voice Memo/i)).toBeInTheDocument();
   });
 });

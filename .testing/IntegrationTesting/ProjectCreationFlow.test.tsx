@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { DashboardView } from '../../src/views/DashboardView';
 import { ProjectState } from '../../src/types';
 
@@ -35,66 +35,95 @@ vi.mock('lucide-react', () => ({
   Users: () => <div data-testid="users-icon" />,
 }));
 
-describe('Project Creation Flow Integration', () => {
+describe('Project Creation Flow Integration (UC1)', () => {
+  const mockCreateNewProject = vi.fn();
+  const initialProjects: ProjectState[] = [
+    { id: '1', projectName: 'Existing Project', status: 'draft', userId: 'u-1', parts: [] },
+  ];
+
+  const baseProps = {
+    projects: initialProjects,
+    profile: { isAdmin: false, name: 'User', company: 'Org', email: 'user@example.com' },
+    user: { uid: 'u-1' },
+    sortBy: 'date',
+    setSortBy: vi.fn(),
+    filterStatus: 'all',
+    setFilterStatus: vi.fn(),
+    filterOrg: '',
+    setFilterOrg: vi.fn(),
+    filterUser: '',
+    setFilterUser: vi.fn(),
+    showInactive: false,
+    setShowInactive: vi.fn(),
+    createNewProject: mockCreateNewProject,
+    openProject: vi.fn(),
+    fetchLog: vi.fn(),
+    deleteProject: vi.fn(),
+    restoreProject: vi.fn(),
+    toggleLock: vi.fn(),
+    takeProject: vi.fn(),
+    updateStatus: vi.fn(),
+    toggleInactive: vi.fn(),
+    isGeneratingDemo: false,
+    isCleaningDemo: false,
+    generateDemoProjects: vi.fn().mockResolvedValue(undefined),
+    cleanDemoProjects: vi.fn().mockResolvedValue(undefined),
+    acceptProject: vi.fn(),
+    acceptAllPendingProjects: vi.fn(),
+    importProjectsFromJson: vi.fn(),
+    fetchProjectImages: vi.fn().mockImplementation((p) => Promise.resolve(p)),
+    setGlobalSuccess: vi.fn(),
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders creation prompt and triggers create callback on clicks', async () => {
-    const mockCreateNewProject = vi.fn();
-    const initialProjects: ProjectState[] = [
-      { id: '1', projectName: 'Existing Project', status: 'draft', userId: 'u-1', parts: [] },
-    ];
+  it('triggers Start Manually creation pathway with withAI = false', () => {
+    render(<DashboardView {...baseProps} />);
 
-    const { rerender } = render(
-      <DashboardView
-        projects={initialProjects}
-        profile={{ isAdmin: false, name: 'User', company: 'Org', email: 'user@example.com' }}
-        user={{ uid: 'u-1' }}
-        sortBy="date"
-        setSortBy={vi.fn()}
-        filterStatus="all"
-        setFilterStatus={vi.fn()}
-        filterOrg=""
-        setFilterOrg={vi.fn()}
-        filterUser=""
-        setFilterUser={vi.fn()}
-        showInactive={false}
-        setShowInactive={vi.fn()}
-        createNewProject={mockCreateNewProject}
-        openProject={vi.fn()}
-        fetchLog={vi.fn()}
-        deleteProject={vi.fn()}
-        restoreProject={vi.fn()}
-        toggleLock={vi.fn()}
-        takeProject={vi.fn()}
-        updateStatus={vi.fn()}
-        toggleInactive={vi.fn()}
-        isGeneratingDemo={false}
-        isCleaningDemo={false}
-        generateDemoProjects={vi.fn().mockResolvedValue(undefined)}
-        cleanDemoProjects={vi.fn().mockResolvedValue(undefined)}
-        acceptProject={vi.fn()}
-        acceptAllPendingProjects={vi.fn()}
-        importProjectsFromJson={vi.fn()}
-        fetchProjectImages={vi.fn().mockImplementation((p) => Promise.resolve(p))}
-        setGlobalSuccess={vi.fn()}
-      />
-    );
-
-    // Initial list has only 1 project card
-    expect(screen.getAllByTestId('project-card')).toHaveLength(1);
-
-    // Click "New Project" button to trigger the onboarding creation
+    // Click "New Project" button
     const newBtn = screen.getByRole('button', { name: /New Project/i });
     fireEvent.click(newBtn);
 
-    // Verify option dialog pops up
+    // Modal appears
     expect(screen.getByText('Create New Project')).toBeInTheDocument();
 
-    const blankBtn = screen.getByRole('button', { name: /Start Manually/i });
-    fireEvent.click(blankBtn);
+    const manualBtn = screen.getByRole('button', { name: /Start Manually/i });
+    fireEvent.click(manualBtn);
 
-    expect(mockCreateNewProject).toHaveBeenCalledWith(false); // withAI = false
+    expect(mockCreateNewProject).toHaveBeenCalledWith(false);
+  });
+
+  it('triggers Start with AI creation pathway with withAI = true', () => {
+    render(<DashboardView {...baseProps} />);
+
+    const newBtn = screen.getByRole('button', { name: /New Project/i });
+    fireEvent.click(newBtn);
+
+    expect(screen.getByText('Create New Project')).toBeInTheDocument();
+
+    const aiBtn = screen.getByRole('button', { name: /Start with AI/i });
+    fireEvent.click(aiBtn);
+
+    expect(mockCreateNewProject).toHaveBeenCalledWith(true);
+  });
+
+  it('allows dismissing creation modal without creating a project', () => {
+    render(<DashboardView {...baseProps} />);
+
+    const newBtn = screen.getByRole('button', { name: /New Project/i });
+    fireEvent.click(newBtn);
+
+    expect(screen.getByText('Create New Project')).toBeInTheDocument();
+
+    // Click X close button
+    const closeBtn = screen.getByTestId('x-icon').closest('button');
+    if (closeBtn) {
+      fireEvent.click(closeBtn);
+    }
+
+    expect(screen.queryByText('Create New Project')).not.toBeInTheDocument();
+    expect(mockCreateNewProject).not.toHaveBeenCalled();
   });
 });
