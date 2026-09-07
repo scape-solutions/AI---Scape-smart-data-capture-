@@ -448,6 +448,7 @@ export default function App() {
     login,
     loginWithEmail,
     signupWithEmail,
+    sendPasswordReset,
     logout,
     saveProfile,
     switchMode,
@@ -604,6 +605,7 @@ export default function App() {
       ownerName: profile?.name || user?.displayName || undefined,
       ownerCompany: profile?.company || undefined,
       ownerPhone: profile?.phone || undefined,
+      campaignTag: profile?.registeredViaCampaign || undefined,
       isSplitScreen: withAI,
       lastActiveStep: 0,
       lastActivePartIndex: 0,
@@ -910,6 +912,7 @@ export default function App() {
         loginWithEmail={() => loginWithEmail(authEmail, authPassword)}
         signupWithEmail={() => signupWithEmail(authEmail, authPassword, authDisplayName)}
         loginWithGoogle={login}
+        sendPasswordReset={sendPasswordReset}
         authLoading={authLoading}
       />
     );

@@ -11,6 +11,7 @@ The **SCAPE PICK-PILOT** is a smart data capture tool designed to collect bin-pi
 ### Step 1: Authentication & Profile Setup
 1. Open the application in your browser: [https://scape-pick-pilot.web.app/](https://scape-pick-pilot.web.app/) (or [http://localhost:8080/](http://localhost:8080/) for local testing).
 2. Log in using your **Google account** or sign up with an **Email & Password**.
+   * **Password Reset:** If you forget your password, click **"Glemt adgangskode? / Forgot password?"** below the password field. Enter your registered email address to receive an instant, secure reset link in your inbox.
    * **iOS PWA Support:** If you have installed the app as a Progressive Web App (PWA) on iOS, Google Sign-In is supported natively inside standalone PWA mode using a custom cookie-based session bridge.
 3. Complete your **Profile Setup** by entering your name, company/organization, phone number, and primary role:
    * **End User / Slutkunde**: Manufacturing plants, factories, etc.
@@ -215,32 +216,40 @@ A user can register and access the application via any of the following paths:
 
 ---
 
-### C. Managing Campaigns (Superuser Tools)
-1. Open the **Campaigns & Passcodes** tab inside the **Super User Tools** (`Edit AI Prompts` / `Campaign Tags`).
+### C. Managing Campaigns & Lead Attribution
+1. Open the **Campaigns & Passcodes** tab inside the **Super User Tools** (`Campaign & QR Tags` button on the dashboard or inside `Edit AI Prompts`).
 2. **Create a New Passcode:**
    * Enter the **Event Name** (e.g. `Automatik 2026`).
    * Enter the **Passcode Tag** (e.g. `Automatik26`).
    * Choose an **Expiration Date** (`YYYY-MM-DD`).
    * Toggle **Active (ON/OFF)**.
-3. **Copy Shareable Link:** Click the copy button to get the ready-to-share URL:
+3. **Copy Shareable Link / QR Code:** Click the copy button to get the ready-to-share URL:
    `https://scape-pick-pilot.web.app/?event=Automatik26`
-4. **Campaign Tag Tracking:** When users sign up via this link, their profile is permanently tagged with `registeredViaCampaign: "Automatik26"`, which is visible on the **User Activity Dashboard**.
+4. **Automatic Project Tag Inheritance:**
+   * When visitors register via this link, their user profile is permanently tagged with `registeredViaCampaign: "Automatik26"`.
+   * Any new project created by this user automatically inherits `campaignTag: "Automatik26"`.
+5. **Project Card Badges:**
+   * Project cards display a distinct emerald badge `🎟️ Automatik26` in the header badge group next to the project status.
+6. **Dashboard Search & CRM Export:**
+   * Evaluators and Super Users can type `"Automatik"` or `"Automatik26"` in the dashboard search bar to instantly filter down to leads originating from that trade show.
+   * `campaignTag` is included in all JSON project exports for seamless attribution in CRM systems.
 
 ---
 
-## 9. User Activity Dashboard & Account Controls
+## 9. User Activity Directory & Account Controls
 
-Superusers can inspect live user engagement, track active sessions, and manage test data in real time by clicking the **User Activity** button in the header:
+Both **Super Users** and **Scape Evaluators** can inspect live user engagement and visitor directories by clicking the **Active Users** button in the dashboard toolbar:
 
-* **Real-time Live Stream:** The dashboard streams updates in real time using Firestore snapshot listeners (no page reload needed).
+* **Real-time Live Stream:** The directory streams updates in real time using Firestore snapshot listeners (no page reload needed).
 * **Live Session Heartbeat:**
   * Displays a pulsating green indicator `🟢 Active Now` for any user with the tab open (2-minute heartbeat + tab visibility sync).
   * Relative activity time: `12m ago`, `3h ago`, `2d ago`, or `Never Active`.
-* **Safe Suspend / Reactivate:**
-  * Superusers can suspend an account with one click (blocks login and AI generation without deleting or orphaning their projects and data).
-* **Test User Parameter (`🧪 Test Account`):**
-  * Accounts created for testing (e.g. `+test@gmail.com`) are auto-tagged or can be toggled manually with the **`🧪 Test` / `Mark Test`** button.
-  * **Test Filter Dropdown:** Filter between *All Accounts*, *Hide Test Accounts* (show only real production customers), and *Test Accounts Only*.
+* **Campaign & Event Badges:** Each visitor card shows their registration badge (e.g., `🎟️ Automatik26`).
+* **Role-Based Security & Permissions:**
+  * **Scape Evaluators (Read-Only Mode):** Evaluators can search attendees, check company/email details, and filter by role or test accounts. Destructive action buttons are completely hidden.
+  * **Super Users (Administrative Controls):** Superusers have access to:
+    * **Safe Suspend / Reactivate:** Suspend an account with one click (blocks login and AI generation without deleting or orphaning their projects and data).
+    * **Test User Parameter (`🧪 Test Account`):** Accounts created for testing can be toggled manually with the **`🧪 Test` / `Mark Test`** button to exclude them from real production reporting.
 
 ---
 

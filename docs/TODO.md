@@ -125,6 +125,8 @@ This document tracks actionable tasks and fixes derived from recent testing feed
   - Gør applikationen multi-language (understøttelse af flere sprog i UI og prompts).
 - [x] **Opsamling af ustruktureret AI-data:**
   - **Løsning:** Implementeret via felt `1.06` (Generel projektinformation) og `2.15` (Ekstra emne-information) i `questionnaire.ts` og `autoFillPrompt.md` (v7), hvor ustrukturerede chat-oplysninger opsamles og gemmes i databasen.
+- [x] **Glemt Adgangskode / Password Reset Flow:**
+  - **Løsning:** Tilføjet en `"Glemt adgangskode? / Forgot password?"` knap og visning i `AuthView.tsx` samt `sendPasswordReset` i `useAuth.ts`, som kalder Firebases `sendPasswordResetEmail(auth, email)`. Viser klar dansk/engelsk bekræftelse og sender automatisk et sikkert reset-link til brugerens indbakke.
 - [ ] **Håndtering af udløbet session (UX fejlbesked):**
   - Ryd error states ved login/logout, og fang udløbne tokens (auth/id-token-expired) for at redirecte pænt med en klar besked ("Session udløbet") i stedet for en rå databasefejl.
 - [ ] **Budget & Alarmer:**
@@ -146,10 +148,12 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 
 ### BUNDLE 5: Messe, Kampagner & Vækst-Sikring (Growth, Tracking & Rate-Limiting)
 
-- [ ] **Lead Source & Kampagne-Tagging (f.eks. `?source=messe2024` eller `?source=linkedin`):**
-  - Gem kilde-tagget (`source` / `campaign`) på brugerens profil og i projektets metadata (`leadSource`).
-  - Tilføj et kilde-filter i Scapes Evaluator Dashboard, så evaluatorer kan filtrere efter "Messe 2024", "LinkedIn Kampagne" eller "Direkte".
-  - Vis et tydeligt kilde-badge på hvert projektkort.
+- [x] **Lead Source & Kampagne-Tagging (f.eks. `?event=Automatik26` eller `?source=messe`):**
+  - **Løsning:** Implementeret fuld kampagne-arv og sporing. Når en bruger tilmelder sig via et event-link (f.eks. `?event=Automatik26`), tilknyttes tagget automatisk til brugerprofilen og overføres direkte til alle nye projekter (`campaignTag`).
+  - **Project Card Badge:** Projektkort viser et grønt `🎟️ Automatik26` badge i headeren.
+  - **Dashboard Søgning:** Evaluatorer og brugere kan søge direkte på kampagnenavne (f.eks. `Automatik` eller `Automatik26`) i Dashboard-søgefeltet.
+  - **Evaluator Brugerkatalog:** Evaluatorer har nu adgang til **Active Users** oversigten i skrivebeskyttet (Read-Only) tilstand for at se deltagere og messe-tags, mens administrative handlinger (suspendering) er låst til Super Users.
+  - **CRM Export:** `campaignTag` bevares i alle JSON-eksporter for ubesværet lead-tilskrivning.
 
 - [ ] **AI Rate-Limiting & Quota Styring (Maksimalt forbrug pr. bruger/dag):**
   - Opret server-side rate-limiting i `server.js` med en daglig tæller i Firestore (`/user_limits/{userId_YYYYMMDD}`).

@@ -67,4 +67,23 @@ describe('AuthView', () => {
     render(<AuthView {...baseProps} authStep="signup" />);
     expect(screen.getByPlaceholderText('Full Name')).toBeInTheDocument();
   });
+
+  it('renders Forgot Password view and sends reset email', () => {
+    const mockSendPasswordReset = vi.fn().mockResolvedValue(true);
+    render(
+      <AuthView 
+        {...baseProps} 
+        authStep="forgot" 
+        authEmail="test@example.com"
+        sendPasswordReset={mockSendPasswordReset} 
+      />
+    );
+
+    expect(screen.getByText('Reset Password')).toBeInTheDocument();
+    const sendBtn = screen.getByRole('button', { name: /Send Reset Link/i });
+    expect(sendBtn).not.toBeDisabled();
+    fireEvent.click(sendBtn);
+
+    expect(mockSendPasswordReset).toHaveBeenCalledWith('test@example.com');
+  });
 });

@@ -82,6 +82,7 @@ export interface ProjectState {
   ownerEmail?: string;
   ownerPhone?: string;
   leadSource?: string;
+  campaignTag?: string;
   
   // 'any' betyder, at vi slår type-kontrollen fra her. 
   // Her forventer vi et Firebase Timestamp objekt.

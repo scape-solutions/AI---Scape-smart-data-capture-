@@ -172,12 +172,13 @@ export function DashboardView({
       }
     }
     
-    // Global search checking Company, Project Name, Owner Name, Owner Email, or ID
+    // Global search checking Company, Project Name, Owner Name, Owner Email, Campaign Tag, or ID
     if (filterOrg && 
         !p.ownerCompany?.toLowerCase().includes(filterOrg.toLowerCase()) && 
         !p.projectName?.toLowerCase().includes(filterOrg.toLowerCase()) &&
         !p.ownerName?.toLowerCase().includes(filterOrg.toLowerCase()) &&
         !p.ownerEmail?.toLowerCase().includes(filterOrg.toLowerCase()) &&
+        !(p.campaignTag && p.campaignTag.toLowerCase().includes(filterOrg.toLowerCase())) &&
         !(p.id && p.id.toLowerCase().includes(filterOrg.toLowerCase()))
     ) return false;
     
@@ -207,6 +208,18 @@ export function DashboardView({
               </div>
               
               <div className="flex items-center gap-2 shrink-0">
+                {/* Active Users directory button for Evaluators & Admins */}
+                {(profile?.requestedRole === 'evaluator' || (profile?.isAdmin && profile?.requestedRole !== 'superuser')) && (
+                  <button 
+                    onClick={() => setShowUsersModal(true)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white px-3 md:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-amber-600/10 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0 select-none cursor-pointer"
+                    title="View registered attendees and campaign visitors"
+                  >
+                    <Users className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden sm:inline">Active Users</span>
+                  </button>
+                )}
+
                 {/* Sleek Filters Toggle Button */}
                 <button 
                   onClick={() => setIsFilterExpanded(!isFilterExpanded)} 
@@ -340,7 +353,7 @@ export function DashboardView({
                 <div className="flex-1 min-w-[200px]">
                   <input 
                     type="text" 
-                    placeholder="Search Project, Org, or ID..." 
+                    placeholder="Search Project, Org, Campaign, or ID..." 
                     className="w-full bg-white border border-slate-200/80 rounded-xl p-3 text-xs focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none transition-all font-semibold text-slate-800"
                     value={filterOrg}
                     onChange={e => setFilterOrg(e.target.value)}
@@ -465,6 +478,7 @@ export function DashboardView({
         <ActiveUsersModal 
           show={showUsersModal} 
           onClose={() => setShowUsersModal(false)} 
+          profile={profile}
         />
       )}
 

@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { ShieldCheck, CheckCircle2, Clock, History, Trash2, ChevronRight, User as UserIcon, RotateCcw, Download, FileText, Check, XCircle } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, Clock, History, Trash2, ChevronRight, User as UserIcon, RotateCcw, Download, FileText, Check, XCircle, Tag } from 'lucide-react';
 import { ProjectState, UserProfile } from '../types';
 import { GENERAL_STEPS, PART_STEPS } from '../questionnaire';
 import { generateProjectPdf } from '../utils/pdfGenerator';
@@ -201,6 +201,16 @@ export function ProjectCard({
 
                 {p.status}
               </span>
+              {/* Campaign / Event Tag Badge */}
+              {p.campaignTag && (
+                <span 
+                  className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0 select-none shadow-3xs"
+                  title={`Campaign / Event: ${p.campaignTag}`}
+                >
+                  <Tag className="w-3 h-3 text-emerald-600" />
+                  <span>{p.campaignTag}</span>
+                </span>
+              )}
               {/* Hvis projektet er staged for import, vis denne badge */}
               {p.isImportPending && (
                 <span className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1 shrink-0 animate-pulse">

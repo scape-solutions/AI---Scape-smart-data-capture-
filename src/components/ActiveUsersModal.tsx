@@ -7,9 +7,10 @@ import { UserProfile } from '../types';
 interface ActiveUsersModalProps {
   show: boolean;
   onClose: () => void;
+  profile?: UserProfile | null;
 }
 
-export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
+export function ActiveUsersModal({ show, onClose, profile }: ActiveUsersModalProps) {
   const [users, setUsers] = useState<(UserProfile & { id?: string; isSuspended?: boolean; isTestUser?: boolean })[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -469,51 +470,53 @@ export function ActiveUsersModal({ show, onClose }: ActiveUsersModalProps) {
                         </span>
                       )}
 
-                      {/* Actions: Test User Toggle & Suspend/Reactivate */}
-                      <div className="flex items-center gap-1.5">
-                        {/* Toggle Test User button */}
-                        <button
-                          onClick={() => handleToggleTestUser(userProfile.id, isTest)}
-                          disabled={updatingId === userProfile.id}
-                          className={`px-2 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 border shrink-0 ${
-                            isTest
-                              ? 'bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200'
-                              : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200'
-                          }`}
-                          title={isTest ? "Unmark as test user" : "Mark as test user"}
-                        >
-                          <FlaskConical className="w-3 h-3" />
-                          <span>{isTest ? 'Test' : 'Mark Test'}</span>
-                        </button>
-
-                        {/* Suspend / Reactivate User Button */}
-                        {!isSuper && (
+                      {/* Actions: Test User Toggle & Suspend/Reactivate (Super Users only) */}
+                      {profile?.requestedRole === 'superuser' && (
+                        <div className="flex items-center gap-1.5">
+                          {/* Toggle Test User button */}
                           <button
-                            onClick={() => handleToggleSuspendUser(userProfile.id, userProfile.email, userProfile.isSuspended)}
+                            onClick={() => handleToggleTestUser(userProfile.id, isTest)}
                             disabled={updatingId === userProfile.id}
                             className={`px-2 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 border shrink-0 ${
-                              userProfile.isSuspended
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200'
+                              isTest
+                                ? 'bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200'
+                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200'
                             }`}
-                            title={userProfile.isSuspended ? "Reactivate account" : "Suspend account (block login and AI access without deleting data)"}
+                            title={isTest ? "Unmark as test user" : "Mark as test user"}
                           >
-                            {updatingId === userProfile.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin text-slate-500" />
-                            ) : userProfile.isSuspended ? (
-                              <>
-                                <CheckCircle className="w-3 h-3 text-emerald-600" />
-                                <span>Reactivate</span>
-                              </>
-                            ) : (
-                              <>
-                                <Ban className="w-3 h-3 text-slate-400" />
-                                <span>Suspend</span>
-                              </>
-                            )}
+                            <FlaskConical className="w-3 h-3" />
+                            <span>{isTest ? 'Test' : 'Mark Test'}</span>
                           </button>
-                        )}
-                      </div>
+
+                          {/* Suspend / Reactivate User Button */}
+                          {!isSuper && (
+                            <button
+                              onClick={() => handleToggleSuspendUser(userProfile.id, userProfile.email, userProfile.isSuspended)}
+                              disabled={updatingId === userProfile.id}
+                              className={`px-2 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 border shrink-0 ${
+                                userProfile.isSuspended
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200'
+                              }`}
+                              title={userProfile.isSuspended ? "Reactivate account" : "Suspend account (block login and AI access without deleting data)"}
+                            >
+                              {updatingId === userProfile.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin text-slate-500" />
+                              ) : userProfile.isSuspended ? (
+                                <>
+                                  <CheckCircle className="w-3 h-3 text-emerald-600" />
+                                  <span>Reactivate</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Ban className="w-3 h-3 text-slate-400" />
+                                  <span>Suspend</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
