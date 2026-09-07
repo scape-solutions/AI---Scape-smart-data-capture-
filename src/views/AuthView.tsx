@@ -2,7 +2,7 @@
  * AuthView.tsx
  * Dette er den første skærm, brugeren ser. Den håndterer SignIn og SignUp.
  */
-import { Cpu, X, Play, Sparkles } from 'lucide-react';
+import { Cpu, X, Play, Sparkles, Loader2, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { IntroVideoModal } from '../components/IntroVideoModal';
 import { isCampaignTagActive } from '../hooks/useAuth';
@@ -23,6 +23,7 @@ interface AuthViewProps {
   loginWithEmail: () => void;
   signupWithEmail: () => void;
   loginWithGoogle: () => void;
+  sendPasswordReset?: (email: string) => Promise<boolean>;
   authLoading: boolean;
 }
 
@@ -41,11 +42,28 @@ export function AuthView({
   loginWithEmail,
   signupWithEmail,
   loginWithGoogle,
+  sendPasswordReset,
   authLoading
 }: AuthViewProps) {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isIntroModalOpen, setIsIntroModalOpen] = useState(false);
+  const [resetSentEmail, setResetSentEmail] = useState<string | null>(null);
+  const [isSendingReset, setIsSendingReset] = useState(false);
   const emailValid = !authEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authEmail.trim());
+
+  const handleSendReset = async () => {
+    if (!sendPasswordReset || !authEmail.trim()) return;
+    setIsSendingReset(true);
+    setResetSentEmail(null);
+    try {
+      const success = await sendPasswordReset(authEmail.trim());
+      if (success) {
+        setResetSentEmail(authEmail.trim());
+      }
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -100,58 +118,125 @@ export function AuthView({
           </div>
         ) : (
           <>
-            <div className="space-y-4 mb-8">
-              <div className="flex gap-2 p-1 bg-slate-50 rounded-xl mb-6">
-                <button onClick={() => setAuthStep('signin')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authStep === 'signin' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Sign In</button>
-                <button onClick={() => setAuthStep('signup')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authStep === 'signup' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Sign Up</button>
-              </div>
+            {authStep === 'forgot' ? (
+              <div className="space-y-4 mb-8 text-left animate-fadeIn">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Reset Password</span>
+                  <button 
+                    type="button" 
+                    onClick={() => { setAuthStep('signin'); setResetSentEmail(null); }}
+                    className="text-xs font-bold text-slate-400 hover:text-slate-700 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3 h-3" />
+                    <span>Back</span>
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 font-medium">
+                  Indtast din e-mailadresse for at modtage et link til at nulstille din adgangskode.
+                </p>
 
-              {/* Vises kun hvis vi er i 'signup' tilstand */}
-              {authStep === 'signup' && (
-                <input 
-                  type="text" 
-                  placeholder="Full Name" 
-                  className="w-full p-4 bg-slate-50 rounded-xl text-sm border-none focus:ring-2 focus:ring-blue-600"
-                  value={authDisplayName}
-                  onChange={e => setAuthDisplayName(e.target.value)}
-                />
-              )}
-              
-              <div className="space-y-1 text-left">
-                <input 
-                  type="email" 
-                  placeholder="Email" 
-                  className={`w-full p-4 bg-slate-50 rounded-xl text-sm focus:outline-hidden focus:ring-2 transition-all ${
-                    !emailValid 
-                      ? 'ring-2 ring-red-500 bg-red-50/30' 
-                      : 'focus:ring-blue-600'
-                  }`}
-                  value={authEmail}
-                  onChange={e => setAuthEmail(e.target.value)}
-                />
-                {!emailValid && (
-                  <p className="text-[10px] text-red-500 font-bold px-1">Indtast en gyldig e-mailadresse / Enter a valid email</p>
+                <div className="space-y-1">
+                  <input 
+                    type="email" 
+                    placeholder="Email" 
+                    className={`w-full p-4 bg-slate-50 rounded-xl text-sm focus:outline-hidden focus:ring-2 transition-all ${
+                      !emailValid 
+                        ? 'ring-2 ring-red-500 bg-red-50/30' 
+                        : 'focus:ring-blue-600'
+                    }`}
+                    value={authEmail}
+                    onChange={e => setAuthEmail(e.target.value)}
+                  />
+                  {!emailValid && (
+                    <p className="text-[10px] text-red-500 font-bold px-1">Indtast en gyldig e-mailadresse / Enter a valid email</p>
+                  )}
+                </div>
+
+                {resetSentEmail && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 animate-fadeIn text-center">
+                    ✓ Link sendt til <span className="underline">{resetSentEmail}</span>! Tjek venligst din indbakke.
+                  </div>
                 )}
+
+                {authError && <p className="text-[10px] text-red-500 font-bold">{authError}</p>}
+
+                <button 
+                  type="button"
+                  onClick={handleSendReset} 
+                  disabled={!authEmail.trim() || !emailValid || isSendingReset}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-indigo-600/10"
+                >
+                  {isSendingReset && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+                  <span>{isSendingReset ? 'Sender link...' : 'Send Reset Link'}</span>
+                </button>
               </div>
+            ) : (
+              <div className="space-y-4 mb-8">
+                <div className="flex gap-2 p-1 bg-slate-50 rounded-xl mb-6">
+                  <button onClick={() => setAuthStep('signin')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authStep === 'signin' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Sign In</button>
+                  <button onClick={() => setAuthStep('signup')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authStep === 'signup' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Sign Up</button>
+                </div>
 
-              <input 
-                type="password" 
-                placeholder="Password" 
-                className="w-full p-4 bg-slate-50 rounded-xl text-sm border-none focus:ring-2 focus:ring-blue-600"
-                value={authPassword}
-                onChange={e => setAuthPassword(e.target.value)}
-              />
+                {/* Vises kun hvis vi er i 'signup' tilstand */}
+                {authStep === 'signup' && (
+                  <input 
+                    type="text" 
+                    placeholder="Full Name" 
+                    className="w-full p-4 bg-slate-50 rounded-xl text-sm border-none focus:ring-2 focus:ring-blue-600"
+                    value={authDisplayName}
+                    onChange={e => setAuthDisplayName(e.target.value)}
+                  />
+                )}
+                
+                <div className="space-y-1 text-left">
+                  <input 
+                    type="email" 
+                    placeholder="Email" 
+                    className={`w-full p-4 bg-slate-50 rounded-xl text-sm focus:outline-hidden focus:ring-2 transition-all ${
+                      !emailValid 
+                        ? 'ring-2 ring-red-500 bg-red-50/30' 
+                        : 'focus:ring-blue-600'
+                    }`}
+                    value={authEmail}
+                    onChange={e => setAuthEmail(e.target.value)}
+                  />
+                  {!emailValid && (
+                    <p className="text-[10px] text-red-500 font-bold px-1">Indtast en gyldig e-mailadresse / Enter a valid email</p>
+                  )}
+                </div>
 
-              {authError && <p className="text-[10px] text-red-500 font-bold">{authError}</p>}
+                <div className="space-y-1">
+                  <input 
+                    type="password" 
+                    placeholder="Password" 
+                    className="w-full p-4 bg-slate-50 rounded-xl text-sm border-none focus:ring-2 focus:ring-blue-600"
+                    value={authPassword}
+                    onChange={e => setAuthPassword(e.target.value)}
+                  />
+                  {authStep === 'signin' && (
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => { setAuthStep('forgot'); setResetSentEmail(null); }}
+                        className="text-[11px] text-indigo-600 hover:text-indigo-700 font-bold hover:underline cursor-pointer transition-all"
+                      >
+                        Glemt adgangskode? / Forgot password?
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-              <button 
-                onClick={authStep === 'signin' ? loginWithEmail : signupWithEmail} 
-                disabled={!authEmail.trim() || !authPassword.trim() || !emailValid || (authStep === 'signup' && !authDisplayName.trim())}
-                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 cursor-pointer"
-              >
-                {authStep === 'signin' ? 'Sign In' : 'Create Account'}
-              </button>
-            </div>
+                {authError && <p className="text-[10px] text-red-500 font-bold">{authError}</p>}
+
+                <button 
+                  onClick={authStep === 'signin' ? loginWithEmail : signupWithEmail} 
+                  disabled={!authEmail.trim() || !authPassword.trim() || !emailValid || (authStep === 'signup' && !authDisplayName.trim())}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 cursor-pointer"
+                >
+                  {authStep === 'signin' ? 'Sign In' : 'Create Account'}
+                </button>
+              </div>
+            )}
 
             <div className="relative mb-8">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>

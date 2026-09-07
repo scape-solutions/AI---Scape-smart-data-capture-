@@ -221,6 +221,7 @@ export function normalizeProject(p: any): ProjectState {
     ownerPhone: p?.ownerPhone || 'Unknown',
     takenBy: p?.takenBy || null,
     takenByName: p?.takenByName || null,
+    campaignTag: p?.campaignTag || undefined,
     isInactive: !!p?.isInactive,
     isDeleted: !!p?.isDeleted,
     isDemo: !!p?.isDemo,
@@ -241,6 +242,7 @@ const demoProfiles = [
     ownerCompany: "Nordic Automation",
     ownerEmail: "sven@nordicauto.se",
     ownerPhone: "+46 8 123 4567",
+    campaignTag: "Automatica26",
     parts: [
       {
         name: "L-Bracket 120x80",
@@ -1357,7 +1359,8 @@ export function useProjects(
       ownerName: project.ownerName && project.ownerName !== 'Unknown' ? project.ownerName : (profile?.name || user?.displayName || 'Unknown'),
       ownerCompany: project.ownerCompany && project.ownerCompany !== 'Unknown' ? project.ownerCompany : (profile?.company || 'Unknown'),
       ownerEmail: project.ownerEmail && project.ownerEmail !== 'Unknown' ? project.ownerEmail : (email || 'Unknown'),
-      ownerPhone: project.ownerPhone && project.ownerPhone !== 'Unknown' ? project.ownerPhone : (profile?.phone || 'Unknown')
+      ownerPhone: project.ownerPhone && project.ownerPhone !== 'Unknown' ? project.ownerPhone : (profile?.phone || 'Unknown'),
+      campaignTag: project.campaignTag || profile?.registeredViaCampaign || undefined
     };
     
     // Ensure no undefined fields are passed to Firestore
@@ -1386,7 +1389,8 @@ export function useProjects(
           ownerName: data.ownerName,
           ownerCompany: data.ownerCompany,
           ownerEmail: data.ownerEmail,
-          ownerPhone: data.ownerPhone
+          ownerPhone: data.ownerPhone,
+          campaignTag: data.campaignTag
         };
         setCurrentProject(updated);
         lastSavedProjectRef.current = JSON.parse(JSON.stringify(updated));
@@ -1427,7 +1431,8 @@ export function useProjects(
           ownerName: data.ownerName,
           ownerCompany: data.ownerCompany,
           ownerEmail: data.ownerEmail,
-          ownerPhone: data.ownerPhone
+          ownerPhone: data.ownerPhone,
+          campaignTag: data.campaignTag
         };
         setCurrentProject(updated);
         lastSavedProjectRef.current = JSON.parse(JSON.stringify(updated));
@@ -1539,6 +1544,7 @@ export function useProjects(
           ownerCompany: p.ownerCompany,
           ownerEmail: p.ownerEmail,
           ownerPhone: p.ownerPhone || "+45 88888888",
+          campaignTag: p.campaignTag || undefined,
           generalResponses: {
             "1.01": p.projectName,
             "1.02": p.parts.length,
@@ -1735,7 +1741,8 @@ export function useProjects(
           takenByName: p.takenByName || null,
           isVerdictVisible: !!p.isVerdictVisible,
           editRequestPending: !!p.editRequestPending,
-          editRequestReason: p.editRequestReason || ''
+          editRequestReason: p.editRequestReason || '',
+          campaignTag: p.campaignTag || undefined
         };
 
         const docRef = await addDoc(collection(db, 'projects'), {

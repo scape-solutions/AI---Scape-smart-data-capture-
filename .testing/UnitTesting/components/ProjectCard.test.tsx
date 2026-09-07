@@ -147,6 +147,7 @@ describe('ProjectCard', () => {
     expect(mockOpenProject).toHaveBeenCalledWith(mockProject);
   });
 
+<<<<<<< HEAD
   it('renders Unlock Requested badge and review button when editRequestPending is true (UC5)', () => {
     const pendingProject: ProjectState = {
       ...mockProject,
@@ -154,12 +155,23 @@ describe('ProjectCard', () => {
       isLocked: true,
       editRequestPending: true,
       editRequestReason: 'Need to add new CAD file',
+=======
+  it('renders campaign tag badge when campaignTag is present', () => {
+    const campaignProject: ProjectState = {
+      ...mockProject,
+      campaignTag: 'Automatica26',
+>>>>>>> e755448 (Resent passwcd, event tag serch)
     };
 
     render(
       <ProjectCard
+<<<<<<< HEAD
         p={pendingProject}
         profile={mockAdminProfile}
+=======
+        p={campaignProject}
+        profile={mockProfile}
+>>>>>>> e755448 (Resent passwcd, event tag serch)
         user={mockUser}
         openProject={mockOpenProject}
         fetchLog={mockFetchLog}
@@ -174,6 +186,7 @@ describe('ProjectCard', () => {
       />
     );
 
+<<<<<<< HEAD
     expect(screen.getByText('Unlock Requested')).toBeInTheDocument();
     expect(screen.getByText('Review Request')).toBeInTheDocument();
   });
@@ -247,5 +260,8 @@ describe('ProjectCard', () => {
 
     expect(screen.getByText('JSON Format')).toBeInTheDocument();
     expect(screen.getByText('PDF Report')).toBeInTheDocument();
+=======
+    expect(screen.getByText('Automatica26')).toBeInTheDocument();
+>>>>>>> e755448 (Resent passwcd, event tag serch)
   });
 });

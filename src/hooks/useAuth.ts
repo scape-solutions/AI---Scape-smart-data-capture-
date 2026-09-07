@@ -17,6 +17,7 @@ import {
   User,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   updateProfile
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -531,6 +532,27 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     }
   };
 
+  const sendPasswordReset = async (email: string): Promise<boolean> => {
+    setAuthError(null);
+    if (!email || !email.trim()) {
+      setAuthError("Indtast din e-mailadresse for at nulstille adgangskoden / Enter your email to reset password.");
+      return false;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      return true;
+    } catch (e: any) {
+      if (e.code === 'auth/user-not-found') {
+        setAuthError("Der blev ikke fundet nogen bruger med denne e-mail / No user found with this email.");
+      } else if (e.code === 'auth/invalid-email') {
+        setAuthError("Ugyldig e-mailadresse / Invalid email format.");
+      } else {
+        setAuthError(e.message || "Failed to send reset email.");
+      }
+      return false;
+    }
+  };
+
   const logout = () => signOut(auth);
 
   // Nogle gange har vi kun email fra Firebase, nogle gange fra profilen.
@@ -625,6 +647,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     login,
     loginWithEmail,
     signupWithEmail,
+    sendPasswordReset,
     logout,
     saveProfile,
     switchMode,
