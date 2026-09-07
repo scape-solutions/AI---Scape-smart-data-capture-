@@ -1360,7 +1360,7 @@ export function useProjects(
       ownerCompany: project.ownerCompany && project.ownerCompany !== 'Unknown' ? project.ownerCompany : (profile?.company || 'Unknown'),
       ownerEmail: project.ownerEmail && project.ownerEmail !== 'Unknown' ? project.ownerEmail : (email || 'Unknown'),
       ownerPhone: project.ownerPhone && project.ownerPhone !== 'Unknown' ? project.ownerPhone : (profile?.phone || 'Unknown'),
-      campaignTag: project.campaignTag || profile?.registeredViaCampaign || undefined
+      campaignTag: project.campaignTag || (typeof window !== 'undefined' ? sessionStorage.getItem('session_event_tag') : null) || profile?.registeredViaCampaign || undefined
     };
     
     // Ensure no undefined fields are passed to Firestore

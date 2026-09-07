@@ -101,6 +101,7 @@ export interface UserProfile {
   requestedRole?: 'evaluator' | 'user' | 'superuser';
   userModePreferred?: boolean;
   registeredViaCampaign?: string;
+  lastSeenCampaign?: string;
   tosAcceptedAt?: any;
   lastActiveAt?: string;
   isSuspended?: boolean;

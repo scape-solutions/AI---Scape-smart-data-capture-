@@ -86,6 +86,30 @@ export const isDynamicSuperuser = (email: string | null | undefined) => {
   return isSuperuser(email, list);
 };
 
+// Tjekker om fri registrering på den rå URL er aktiveret
+export const isOpenRegistrationActive = (config?: any) => {
+  const cfg = config || globalAllowedConfig;
+  if (cfg?.openRegistration !== undefined) return cfg.openRegistration === true;
+  if (cfg?.activeEventPasscodes?.['open'] !== undefined) return cfg.activeEventPasscodes['open'].active !== false;
+  return false; // Standard: lukket
+};
+
+// Tjekker om en person må registrere en ny konto
+export const isRegistrationAllowed = (
+  email: string,
+  tag: string | null | undefined,
+  config?: any,
+  uid?: string | null
+) => {
+  const cfg = config || globalAllowedConfig;
+  const allowedEvaluators = cfg?.allowedEvaluators || ALLOWED_EVALUATORS;
+  if (isAllowedEvaluator(email, allowedEvaluators)) return true;
+  if (isScapeEmployee(email, uid)) return true;
+  if (tag && isCampaignTagActive(tag, cfg)) return true;
+  if (!tag && isOpenRegistrationActive(cfg)) return true;
+  return false;
+};
+
 // Tjekker om en kampagne/event tag (f.eks. Automatik26) er aktiv og gyldig
 export const isCampaignTagActive = (tag: string | null | undefined, config?: any) => {
   if (!tag) return false;
@@ -150,12 +174,18 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tagFromUrl = params.get('event') || params.get('source') || params.get('tag');
+
+      // Clear legacy sticky localStorage tag so raw URL never retains old events
+      localStorage.removeItem('registered_event_tag');
+
       if (tagFromUrl) {
-        localStorage.setItem('registered_event_tag', tagFromUrl.trim());
-        setActiveCampaignTag(tagFromUrl.trim());
+        const cleanTag = tagFromUrl.trim();
+        sessionStorage.setItem('session_event_tag', cleanTag);
+        setActiveCampaignTag(cleanTag);
       } else {
-        const stored = localStorage.getItem('registered_event_tag');
-        if (stored) setActiveCampaignTag(stored);
+        // Raw URL: Never display a badge on the login screen
+        setActiveCampaignTag(null);
+        sessionStorage.removeItem('session_event_tag');
       }
     }
   }, []);
@@ -374,30 +404,51 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
               }
             }
 
+            // Track campaign session for existing users
+            const sessionTag = typeof window !== 'undefined' ? sessionStorage.getItem('session_event_tag') : null;
+            if (sessionTag && isCampaignTagActive(sessionTag, globalAllowedConfig)) {
+              const updates: any = {};
+              if (!pData.registeredViaCampaign) {
+                // If user had no tag originally, set this as primary campaign
+                updates.registeredViaCampaign = sessionTag;
+                pData.registeredViaCampaign = sessionTag;
+              } else if (pData.registeredViaCampaign !== sessionTag && pData.lastSeenCampaign !== sessionTag) {
+                // Preserve original lead source, record current event as lastSeenCampaign
+                updates.lastSeenCampaign = sessionTag;
+                pData.lastSeenCampaign = sessionTag;
+              }
+              if (Object.keys(updates).length > 0) {
+                updateDoc(doc(db, 'users', u.uid), updates).catch(console.error);
+              }
+            }
+
             setProfile({ ...pData });
             setView('dashboard');
           } else {
-            // New user registration check (Option A: Tag acts as the registration key)
+            // New user registration check
             const email = u.email || 'Unknown';
             let accessDoc = await getDoc(doc(db, 'config', 'access')).catch(() => null);
             const liveConfig = (accessDoc && accessDoc.exists()) ? accessDoc.data() : (globalAllowedConfig || {});
-            const allowedEvaluators = liveConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
-            const isAllowed = isAllowedEvaluator(email, allowedEvaluators);
-            const isEmployee = isScapeEmployee(email, u.uid);
-            const storedTag = typeof window !== 'undefined' ? localStorage.getItem('registered_event_tag') : null;
-            const isTagValid = isCampaignTagActive(storedTag, liveConfig);
+            const sessionTag = typeof window !== 'undefined' ? sessionStorage.getItem('session_event_tag') : null;
 
-            if (!isAllowed && !isEmployee && !isTagValid) {
+            const allowedToRegister = isRegistrationAllowed(email, sessionTag, liveConfig, u.uid);
+
+            if (!allowedToRegister) {
               await signOut(auth);
               setUser(null);
               setProfile(null);
-              setAuthError("Access restricted. The campaign pass code is paused, expired, or invalid. An active event pass code or authorized email is required to register.");
+              setAuthError("Access restricted. An active event pass code, campaign QR link or authorized email is required to register.");
               setAuthLoading(false);
               return;
             }
 
             const nowIso = new Date().toISOString();
+            const allowedEvaluators = liveConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
+            const isEmployee = isScapeEmployee(email, u.uid);
+            const isAllowed = isAllowedEvaluator(email, allowedEvaluators);
             const initialRole = (isAllowed || isEmployee) ? 'evaluator' : 'user';
+            const validTag = (sessionTag && isCampaignTagActive(sessionTag, liveConfig)) ? sessionTag : undefined;
+
             const newProfile: UserProfile = {
               email,
               name: u.displayName || '',
@@ -406,7 +457,7 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
               role: 'other',
               phone: '',
               requestedRole: initialRole,
-              registeredViaCampaign: (storedTag && isTagValid) ? storedTag : undefined,
+              registeredViaCampaign: validTag,
               lastActiveAt: nowIso,
               isAdmin: getEffectiveAdminStatus({
                 email,
@@ -509,14 +560,12 @@ export function useAuth(handleAppError: (e: any, op?: OperationType, path?: stri
       // Pre-validate registration gate before creating auth user
       let accessDoc = await getDoc(doc(db, 'config', 'access')).catch(() => null);
       const liveConfig = (accessDoc && accessDoc.exists()) ? accessDoc.data() : globalAllowedConfig;
-      const allowedEvaluators = liveConfig?.allowedEvaluators || ALLOWED_EVALUATORS;
-      const isAllowed = isAllowedEvaluator(email, allowedEvaluators);
-      const isEmployee = isScapeEmployee(email);
-      const storedTag = typeof window !== 'undefined' ? localStorage.getItem('registered_event_tag') : null;
-      const isTagValid = isCampaignTagActive(storedTag, liveConfig);
+      const sessionTag = typeof window !== 'undefined' ? sessionStorage.getItem('session_event_tag') : null;
 
-      if (!isAllowed && !isEmployee && !isTagValid) {
-        setAuthError("Access restricted. The campaign pass code is paused, expired, or invalid. An active event pass code or authorized email is required to register.");
+      const allowedToRegister = isRegistrationAllowed(email, sessionTag, liveConfig);
+
+      if (!allowedToRegister) {
+        setAuthError("Access restricted. An active event pass code, campaign QR link or authorized email is required to register.");
         return;
       }
 

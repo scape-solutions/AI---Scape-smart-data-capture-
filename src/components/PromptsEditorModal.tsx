@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, addDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { X, Save, FileText, Bot, Sparkles, Loader2, RefreshCw, Download, Upload, History, BookOpen, QrCode, Plus, Trash2, CheckCircle, Copy, Calendar, Tag, ExternalLink } from 'lucide-react';
+import { X, Save, FileText, Bot, Sparkles, Loader2, RefreshCw, Download, Upload, History, BookOpen, QrCode, Plus, Trash2, CheckCircle, Copy, Calendar, Tag, ExternalLink, Globe, Lock } from 'lucide-react';
 import { EventPasscode } from '../types';
 
 // Import local filesystem prompt files as defaults/fallbacks using Vite's ?raw import
@@ -41,6 +41,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess, initialTab
 
   // Campaign tags state
   const [eventPasscodes, setEventPasscodes] = useState<Record<string, EventPasscode>>({});
+  const [openRegistration, setOpenRegistration] = useState(false);
   const [newTagCode, setNewTagCode] = useState('');
   const [newTagName, setNewTagName] = useState('');
   const [newTagExpiry, setNewTagExpiry] = useState('2026-10-05');
@@ -69,6 +70,7 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess, initialTab
       const snap = await getDoc(doc(db, 'config', 'access'));
       if (snap.exists()) {
         const data = snap.data();
+        setOpenRegistration(data.openRegistration === true);
         if (data.activeEventPasscodes && Object.keys(data.activeEventPasscodes).length > 0) {
           setEventPasscodes(data.activeEventPasscodes);
         } else {
@@ -191,10 +193,11 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess, initialTab
         updatedAt: timestamp
       }, { merge: true });
 
-      // Update activeEventPasscodes in config/access
+      // Update activeEventPasscodes and openRegistration in config/access
       try {
         await setDoc(doc(db, 'config', 'access'), {
-          activeEventPasscodes: eventPasscodes
+          activeEventPasscodes: eventPasscodes,
+          openRegistration: openRegistration
         }, { merge: true });
       } catch (err) {
         console.warn("Failed to update config/access event tags:", err);
@@ -243,6 +246,19 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess, initialTab
         }
       };
     });
+  };
+
+  const handleToggleOpenRegistration = async () => {
+    const nextVal = !openRegistration;
+    setOpenRegistration(nextVal);
+    try {
+      await setDoc(doc(db, 'config', 'access'), {
+        openRegistration: nextVal
+      }, { merge: true });
+      setGlobalSuccess(nextVal ? "Open Registration enabled (rå URL er åben)" : "Closed Mode enabled (kræver QR kode eller Scape email)");
+    } catch (err) {
+      console.warn("Failed to update openRegistration in config/access:", err);
+    }
   };
 
   const handleDeleteTag = (key: string) => {
@@ -499,6 +515,46 @@ export function PromptsEditorModal({ show, onClose, setGlobalSuccess, initialTab
                 <p className="text-xs text-slate-500 mb-4 leading-relaxed">
                   Manage active event pass codes and QR campaign tags (e.g. for expos or LinkedIn promotions). Visitors using an active campaign link can register and access the app directly.
                 </p>
+
+                {/* Public / Open Registration Mode Card */}
+                <div className={`p-4 rounded-2xl border mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                  openRegistration ? 'bg-amber-50/70 border-amber-300' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`p-2.5 rounded-xl shrink-0 ${openRegistration ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                      {openRegistration ? <Globe className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-slate-800">
+                          {openRegistration ? 'Open Public Registration (Rå URL er Åben)' : 'Closed Mode (Standard: Kun med QR / Kode)'}
+                        </span>
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          openRegistration ? 'bg-amber-200 text-amber-900' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {openRegistration ? 'OPEN = TRUE' : 'OPEN = FALSE'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {openRegistration 
+                          ? 'Enhver på internettet kan oprette sig direkte på den rå URL (scape-pick-pilot.web.app) uden QR-kode.'
+                          : 'Nye eksterne brugere skal have scannet en aktiv QR-kode (f.eks. Automatik26) for at kunne oprette en konto.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleOpenRegistration}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5 shadow-2xs ${
+                      openRegistration
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                    }`}
+                  >
+                    <span>{openRegistration ? 'Slå Lukket Tilstand Til' : 'Slå Fri Registrering Til'}</span>
+                  </button>
+                </div>
 
                 {/* Create New Tag Box */}
                 <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 mb-5">

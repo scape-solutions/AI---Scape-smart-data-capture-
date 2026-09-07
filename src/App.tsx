@@ -605,7 +605,7 @@ export default function App() {
       ownerName: profile?.name || user?.displayName || undefined,
       ownerCompany: profile?.company || undefined,
       ownerPhone: profile?.phone || undefined,
-      campaignTag: profile?.registeredViaCampaign || undefined,
+      campaignTag: (typeof window !== 'undefined' ? sessionStorage.getItem('session_event_tag') : null) || profile?.registeredViaCampaign || undefined,
       isSplitScreen: withAI,
       lastActiveStep: 0,
       lastActivePartIndex: 0,
