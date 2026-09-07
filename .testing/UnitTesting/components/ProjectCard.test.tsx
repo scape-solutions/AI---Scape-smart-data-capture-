@@ -147,31 +147,16 @@ describe('ProjectCard', () => {
     expect(mockOpenProject).toHaveBeenCalledWith(mockProject);
   });
 
-<<<<<<< HEAD
-  it('renders Unlock Requested badge and review button when editRequestPending is true (UC5)', () => {
-    const pendingProject: ProjectState = {
-      ...mockProject,
-      status: 'submitted',
-      isLocked: true,
-      editRequestPending: true,
-      editRequestReason: 'Need to add new CAD file',
-=======
   it('renders campaign tag badge when campaignTag is present', () => {
     const campaignProject: ProjectState = {
       ...mockProject,
       campaignTag: 'Automatica26',
->>>>>>> e755448 (Resent passwcd, event tag serch)
     };
 
     render(
       <ProjectCard
-<<<<<<< HEAD
-        p={pendingProject}
-        profile={mockAdminProfile}
-=======
         p={campaignProject}
         profile={mockProfile}
->>>>>>> e755448 (Resent passwcd, event tag serch)
         user={mockUser}
         openProject={mockOpenProject}
         fetchLog={mockFetchLog}
@@ -186,82 +171,6 @@ describe('ProjectCard', () => {
       />
     );
 
-<<<<<<< HEAD
-    expect(screen.getByText('Unlock Requested')).toBeInTheDocument();
-    expect(screen.getByText('Review Request')).toBeInTheDocument();
-  });
-
-  it('renders evaluator controls: Take Case, Lock/Unlock, Approve, Reject (UC6)', () => {
-    const submittedProject: ProjectState = {
-      ...mockProject,
-      status: 'submitted',
-      isLocked: false,
-    };
-
-    render(
-      <ProjectCard
-        p={submittedProject}
-        profile={mockAdminProfile}
-        user={mockUser}
-        openProject={mockOpenProject}
-        fetchLog={mockFetchLog}
-        deleteProject={mockDeleteProject}
-        restoreProject={mockRestoreProject}
-        toggleLock={mockToggleLock}
-        takeProject={mockTakeProject}
-        updateStatus={mockUpdateStatus}
-        toggleInactive={mockToggleInactive}
-        acceptProject={mockAcceptProject}
-        fetchProjectImages={mockFetchProjectImages}
-      />
-    );
-
-    const takeCaseBtn = screen.getByRole('button', { name: /Take Case/i });
-    expect(takeCaseBtn).toBeInTheDocument();
-    fireEvent.click(takeCaseBtn);
-    expect(mockTakeProject).toHaveBeenCalledWith(submittedProject);
-
-    const lockBtn = screen.getByRole('button', { name: /^Lock$/i });
-    expect(lockBtn).toBeInTheDocument();
-    fireEvent.click(lockBtn);
-    expect(mockToggleLock).toHaveBeenCalledWith(submittedProject);
-
-    const approveBtn = screen.getByRole('button', { name: /Approve/i });
-    fireEvent.click(approveBtn);
-    expect(mockUpdateStatus).toHaveBeenCalledWith(submittedProject, 'approved');
-
-    const rejectBtn = screen.getByRole('button', { name: /Reject/i });
-    fireEvent.click(rejectBtn);
-    expect(mockUpdateStatus).toHaveBeenCalledWith(submittedProject, 'rejected');
-  });
-
-  it('renders export dropdown for admin profile (UC7)', () => {
-    render(
-      <ProjectCard
-        p={mockProject}
-        profile={mockAdminProfile}
-        user={mockUser}
-        openProject={mockOpenProject}
-        fetchLog={mockFetchLog}
-        deleteProject={mockDeleteProject}
-        restoreProject={mockRestoreProject}
-        toggleLock={mockToggleLock}
-        takeProject={mockTakeProject}
-        updateStatus={mockUpdateStatus}
-        toggleInactive={mockToggleInactive}
-        acceptProject={mockAcceptProject}
-        fetchProjectImages={mockFetchProjectImages}
-      />
-    );
-
-    const exportBtn = screen.getByRole('button', { name: /Export/i });
-    expect(exportBtn).toBeInTheDocument();
-    fireEvent.click(exportBtn);
-
-    expect(screen.getByText('JSON Format')).toBeInTheDocument();
-    expect(screen.getByText('PDF Report')).toBeInTheDocument();
-=======
     expect(screen.getByText('Automatica26')).toBeInTheDocument();
->>>>>>> e755448 (Resent passwcd, event tag serch)
   });
 });
