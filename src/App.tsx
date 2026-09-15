@@ -596,7 +596,12 @@ export default function App() {
     const initialProject: ProjectState = {
       id: null,
       projectName: "New SCAPE PICK-PILOT Project",
-      generalResponses: {},
+      generalResponses: {
+        contact_company: profile?.company || '',
+        contact_name: profile?.name || user?.displayName || '',
+        contact_email: getEffectiveEmail() || '',
+        contact_phone: profile?.phone || '',
+      },
       parts: [{ responses: {}, images: [] }],
       report: null,
       status: 'draft',

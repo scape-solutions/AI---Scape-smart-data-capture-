@@ -2304,86 +2304,93 @@ To prevent errors, please simplify your CAD model, export it as a low-poly binar
 
                   <div className="space-y-6">
                     {/* Form Filled By - Contact Info Card (Project Info Step) */}
-                    {currentStep === 0 && (
-                      <div className="p-6 bg-slate-50/80 border border-slate-200/80 rounded-3xl space-y-4 shadow-3xs">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                              <span>Form Filled By (Contact Information)</span>
-                            </h4>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              Specify who completed this evaluation form (pre-filled with your profile, edit if filling on behalf of someone else).
-                            </p>
+                    {currentStep === 0 && (() => {
+                      const defaultCompany = (currentProject.ownerCompany && currentProject.ownerCompany !== 'No Company' && currentProject.ownerCompany !== 'Unknown') ? currentProject.ownerCompany : '';
+                      const defaultName = (currentProject.ownerName && currentProject.ownerName !== 'Unknown Owner' && currentProject.ownerName !== 'Unknown') ? currentProject.ownerName : '';
+                      const defaultEmail = (currentProject.ownerEmail && currentProject.ownerEmail !== 'Unknown Email' && currentProject.ownerEmail !== 'Unknown') ? currentProject.ownerEmail : '';
+                      const defaultPhone = (currentProject.ownerPhone && currentProject.ownerPhone !== 'Unknown Phone' && currentProject.ownerPhone !== 'Unknown') ? currentProject.ownerPhone : '';
+
+                      return (
+                        <div className="p-6 bg-slate-50/80 border border-slate-200/80 rounded-3xl space-y-4 shadow-3xs">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                <span>Form Filled By (Contact Information)</span>
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                Contact information of the person who filled this specification (set on project creation, edit if filling on behalf of someone else).
+                              </p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-xs font-bold text-slate-600 block mb-1">Company</label>
+                              <input
+                                type="text"
+                                disabled={isReadOnly}
+                                value={currentProject.generalResponses['contact_company'] ?? defaultCompany}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_company: val } };
+                                  setCurrentProject(updated);
+                                  saveProject(currentProject.status || 'draft', updated);
+                                }}
+                                placeholder="e.g. Acme Automation ApS"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold text-slate-600 block mb-1">Contact Name</label>
+                              <input
+                                type="text"
+                                disabled={isReadOnly}
+                                value={currentProject.generalResponses['contact_name'] ?? defaultName}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_name: val } };
+                                  setCurrentProject(updated);
+                                  saveProject(currentProject.status || 'draft', updated);
+                                }}
+                                placeholder="e.g. John Doe"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold text-slate-600 block mb-1">E-mail</label>
+                              <input
+                                type="email"
+                                disabled={isReadOnly}
+                                value={currentProject.generalResponses['contact_email'] ?? defaultEmail}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_email: val } };
+                                  setCurrentProject(updated);
+                                  saveProject(currentProject.status || 'draft', updated);
+                                }}
+                                placeholder="e.g. john@acme.com"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold text-slate-600 block mb-1">Telephone</label>
+                              <input
+                                type="tel"
+                                disabled={isReadOnly}
+                                value={currentProject.generalResponses['contact_phone'] ?? defaultPhone}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_phone: val } };
+                                  setCurrentProject(updated);
+                                  saveProject(currentProject.status || 'draft', updated);
+                                }}
+                                placeholder="e.g. +45 12 34 56 78"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              />
+                            </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-xs font-bold text-slate-600 block mb-1">Company</label>
-                            <input
-                              type="text"
-                              disabled={isReadOnly}
-                              value={currentProject.generalResponses['contact_company'] ?? profile?.company ?? ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_company: val } };
-                                setCurrentProject(updated);
-                                saveProject(currentProject.status || 'draft', updated);
-                              }}
-                              placeholder="e.g. Acme Automation ApS"
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-bold text-slate-600 block mb-1">Contact Name</label>
-                            <input
-                              type="text"
-                              disabled={isReadOnly}
-                              value={currentProject.generalResponses['contact_name'] ?? profile?.name ?? ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_name: val } };
-                                setCurrentProject(updated);
-                                saveProject(currentProject.status || 'draft', updated);
-                              }}
-                              placeholder="e.g. John Doe"
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-bold text-slate-600 block mb-1">E-mail</label>
-                            <input
-                              type="email"
-                              disabled={isReadOnly}
-                              value={currentProject.generalResponses['contact_email'] ?? profile?.email ?? user?.email ?? ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_email: val } };
-                                setCurrentProject(updated);
-                                saveProject(currentProject.status || 'draft', updated);
-                              }}
-                              placeholder="e.g. john@acme.com"
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-bold text-slate-600 block mb-1">Telephone</label>
-                            <input
-                              type="tel"
-                              disabled={isReadOnly}
-                              value={currentProject.generalResponses['contact_phone'] ?? profile?.phone ?? ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const updated = { ...currentProject, generalResponses: { ...currentProject.generalResponses, contact_phone: val } };
-                                setCurrentProject(updated);
-                                saveProject(currentProject.status || 'draft', updated);
-                              }}
-                              placeholder="e.g. +45 12 34 56 78"
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {(currentStep === 0 ? GENERAL_STEPS[0] : PART_STEPS[currentStep - 1]).questions.map(q => {
                       const responses = currentStep === 0 ? currentProject.generalResponses : currentProject.parts[activePartIndex].responses;
