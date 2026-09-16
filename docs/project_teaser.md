@@ -15,9 +15,9 @@
 
 ```
 ┌─────────────────────────┐     ┌─────────────────────────┐     ┌─────────────────────────┐
-│ 1. The Bottleneck       │ ──> │ 2. Guided Data Capture  │ ──> │ 3. Scape Evaluation     │
-│ Slow emails, missing    │     │ Step-by-step guidance   │     │ Expert verification by  │
-│ dimensions, guesswork.  │     │ with voice, CAD & photo.│     │ Scape application team. │
+│ 1. The Bottleneck       │ ──> │ 2. Voice & CAD Capture  │ ──> │ 3. Instant Feasibility  │
+│ Slow emails, missing    │     │ Dictate on the shop     │     │ Automated camera &      │
+│ dimensions, guesswork.  │     │ floor or drop 3D CAD.   │     │ gripper recommendations.│
 └─────────────────────────┘     └─────────────────────────┘     └─────────────────────────┘
 ```
 
@@ -47,8 +47,8 @@ Evaluating robotic bin-picking cells used to take days of back-and-forth emails,
   * Identifies part entanglement or nesting risks.
   * Verifies gripper suction cups and magnetic payload limits.
 
-### 📑 5. Scape Expert Evaluation & Verified PDF Report
-* Submit directly to Scape robotics application engineers for expert feasibility review, verified cycle times, and an official branded **PDF Feasibility Report**.
+### 📑 5. One-Click Feasibility & PDF Report
+* Download a professional, branded **PDF Feasibility Report** to share with management, system integrators, and project stakeholders.
 
 ---
 
