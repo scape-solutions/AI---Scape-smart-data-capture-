@@ -1554,11 +1554,7 @@ export function useProjects(
             "1.04_h": p.binH,
             "1.05": p.robotBrand,
             "1.05_other": p.robotBrand === 'other' ? (p.robotBrandOther || 'Kawasaki RS007L') : '',
-            "1.06": p.additionalNotes,
-            "contact_company": p.ownerCompany,
-            "contact_name": p.ownerName,
-            "contact_email": p.ownerEmail,
-            "contact_phone": p.ownerPhone || "+45 88888888"
+            "1.06": p.additionalNotes
           },
           parts: p.parts.map(part => {
             const partResponses = {

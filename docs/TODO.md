@@ -169,13 +169,3 @@ This document tracks actionable tasks and fixes derived from recent testing feed
   - **Løsning:** Oprettet `activeEventPasscodes` i `config/access` i Firestore med fuld styring i Superuser-visningen (`PromptsEditorModal.tsx`).
   - Indbygget QR-kode på intro/splash-skærmen ([SplashScreen.tsx](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/src/components/SplashScreen.tsx)) er forbundet med det permanente, generiske tag `?event=Open` (`Scan QR to Open`), så QR-koden i appen forbliver permanent gyldig, mens specifikke kampagner (f.eks. `Automatik26`) kan oprettes og styres dynamisk i Superuser-modalen.
 
-- [ ] **Anonym Kampagne- & QR-scan Tæller (Messebesøgende tracking):**
-  - **Udfordring:** Mange messegæster scanner QR-koden på standen af nysgerrighed, men logger ikke ind med det samme på telefonen. I dag vises kun brugere, der fuldfører et login, så uautentificerede scanninger/besøgende forsvinder sporløst.
-  - **Løsning:**
-    - Tilføj en letvægts, anonym tæller i Firestore (f.eks. i `/campaign_analytics/{campaignTag}` eller `/config/access` med `totalScans`, `lastScannedAt` og tidsstempler).
-    - Hver gang appen åbnes med et tag (f.eks. `?event=Automatik26` eller `?event=Open`), registreres et anonymt scannings-event automatisk (via et let kald til backend `/api/track-scan` eller direkte `increment` i Firestore).
-    - Vis tallene direkte i Superuser-interfacet under **Campaign & QR Tags** (og/eller **Active Users**), så man kan se:
-      - Antal rå scanninger / sidevisninger.
-      - Antal oprettede brugere.
-      - Konverteringsrate (f.eks. *"Automatik26: 48 scanninger ➔ 6 oprettede brugere (12.5% konvertering)"*).
-
