@@ -117,6 +117,45 @@ This document tracks actionable tasks and fixes derived from recent testing feed
 - [x] **Dual-AI System (Context-Aware App Support & Technical Guidance):**
   - **Løsning:** Implementeret i `server.js` (`/api/support-chat`), `autoFillPrompt.md` (v8 `suggestedAction: ask_support`), `App.tsx` og `AIAssistantTab.tsx`. Support-AI'en samler dynamisk sin viden fra `appHelpGuide.md` og `fieldExplanations.ts` uden prompt-sprawl. Support-svar vises med et særskilt `💡 App & Technical Support` badge og opretholder en uafhængig `supportChatHistory`.
 
+- [ ] **100% Cloud Parity for Lokal Udvikling (`npm run dev` vs. Cloud Run):**
+  - **Baggrund & Problem (Hvorfor det virker i skyen, men fejler lokalt):**
+    * På Cloud Run (`https://scape-pick-pilot.web.app`) kører `server.js` altid i containeren på port 8080. Browseren har INGEN `GEMINI_API_KEY`, så ALLE 5 AI-kald går via `/api/*` gennem Express backend-proxyen.
+    * Under lokal udvikling (`npm run dev`) kører kun Vite på port 3000. Express-serveren på port 8080 kører IKKE som standard.
+    * 4 af de 5 AI-kald i `src/App.tsx` (`generateAdviceAPI`, `extractObservationsAPI`, `generateDraftAPI`, `sendChatAPI`) har en `if (GEMINI_API_KEY)` forgrening, der kalder Google Gemini direkte i browseren og omgår serveren fuldstændigt.
+    * Det 5. kald (`sendSupportChatAPI`) har INGEN `if (GEMINI_API_KEY)` forgrening. Den kalder altid `fetch('/api/support-chat')`, som Vite proxier til port 8080.
+    * Fordi port 8080 ikke kører, fejler support-kaldet med `504 Gateway Timeout` / `ECONNREFUSED`. Fejlen fanges af `try ... catch (jsonErr)` i `App.tsx:863` og sluges i stilhed, så support-boksen aldrig vises.
+  - **Oversigt over de 5 AI-kald der skal ensrettes:**
+    1. `generateAdviceAPI` (`POST /api/ai/advice`) – Bypasser i dag serveren lokalt.
+    2. `extractObservationsAPI` (`POST /api/ai/extract-observations`) – Bypasser i dag serveren lokalt.
+    3. `generateDraftAPI` (`POST /api/ai/draft`) – Bypasser i dag serveren lokalt.
+    4. `sendChatAPI` (`POST /api/ai/chat`) – Bypasser i dag serveren lokalt.
+    5. `sendSupportChatAPI` (`POST /api/support-chat`) – Kræver backend-serveren og fejler lokalt uden port 8080.
+  - **Konkret implementeringsplan (Når det skal udføres):**
+    1. **Pakke-script for samtiddig kørsel (`package.json`):**
+       * Konfigurer `npm run dev` (f.eks. med `concurrently`) så det starter BÅDE Vite på port 3000 og Express backend-serveren på port 8080 (`node --env-file=.env.local server.js`) i én samlet kommando.
+       * Dermed kører backend-serveren altid lokalt, nøjagtigt som den gør på Cloud Run.
+    2. **Ensretning af API-kald i `src/App.tsx` (Fjern fragmenteret klient-bypassing):**
+       * Lad alle 5 funktioner kalde backend `/api/*` som primær vej, så lokal test afspejler serverens reelle rate-limits (`dailyAiRateLimiter`), Firebase token-verifikation og prompt-assembly.
+       * `if (GEMINI_API_KEY)` i browseren kan evt. bibeholdes som en failover-sikring, eller fjernes helt til fordel for server-proxyen.
+    3. **Rens UI for Spøgelseskort i `AIAssistantTab.tsx`:**
+       * I `ProposedChangesCard` mangler et tjek:
+         ```tsx
+         if (proposal.suggestedAction === 'ask_support') return null;
+         ```
+         Uden dette tjek vises der et tomt gult kort med *"Ready to fill in 0 fields"* og en virkningsløs *"Apply Changes"* knap, når `ask_support` returneres.
+    4. **Ret stikrav for `appSupportGuide.md` i `server.js`:**
+       * I `server.js:789` leder koden efter `path.join(__dirname, 'src', 'docs', 'appSupportGuide.md')`.
+       * I Docker/Cloud Run kopieres filerne til `/app/docs/` (`COPY --from=builder /app/src/docs ./docs`).
+       * Ret koden i `server.js` til at tjekke begge stier (`./docs/appSupportGuide.md` og `./src/docs/appSupportGuide.md`) med `fs.existsSync`, så filen altid findes både i lokalt miljø og i Docker containeren.
+    5. **Synlig fejlhåndtering i `App.tsx`:**
+       * Hvis `sendSupportChatAPI` kaster en fejl, må den ikke sluges i en tavs `console.warn`. Vis en venlig fejlbesked i chatten (f.eks. *"⚠️ Kunne ikke forbinde til Support AI serveren"*).
+    6. **Håndtering af "Failed to fetch" & Store Lydoptagelser (Voice Memos):**
+       * Fejlen `⚠️ AI error: Failed to fetch` opstår, når browserens `fetch()` afbrydes på netværksniveau (enten pga. manglende port 8080, netværks-timeout eller fordi en Base64-lydoptagelse overskrider proxy-/serverstørrelsen).
+       * **Løsninger til implementering:**
+         - Erstat den tekniske fejlbesked `"Failed to fetch"` med en brugervenlig forklaring (f.eks. *"Netværksfejl: Serveren svarede ikke. Tjek internetforbindelsen eller prøv en kortere optagelse."*).
+         - Sæt en tidsbegrænsning på voice memos (f.eks. maks 60–90 sekunders optagelse) for at forhindre gigantiske Base64-payloads, der overskrider Cloud Runs/Firebase Hostings grænser.
+         - Sikr at `server.js` og proxy-indstillinger tillader tilstrækkelig body-størrelse til audio.
+
 ---
 
 ### Øvrige Opgaver
@@ -162,10 +201,19 @@ This document tracks actionable tasks and fixes derived from recent testing feed
   - Maks 15 `⚡ AI Advice` kald og maks 50 `AI Chat` beskeder pr. ekstern bruger pr. dag (viser pæn "Daglig grænse nået"-besked).
   - Evaluatorer og Superusers er automatisk undtaget fra begrænsningen.
 
-- [ ] **"Show, Don't Tell" — Præ-indlæst Eksempelprojekt for nye brugere:**
-  - Når en ny bruger logger ind første gang og har 0 projekter, oprettes automatisk et fuldt udfyldt eksempel-projekt (f.eks. *"Pumpeaksel i Euro-palle"* med CAD-model, fotos og færdiggrøn `⚡ AI Advice`), så messegæster straks kan se appens fulde værdi.
+- [ ] **Præ-indlæst Eksempelprojekt & "Pull Demo Project" for alle brugere:**
+  - **Automatisk for nye brugere:** Når en ny bruger logger ind første gang, vises automatisk et præ-indlæst, fuldt udfyldt demo-projekt på deres Dashboard (f.eks. *"Pumpeaksel i Euro-palle"* med CAD-model, fotos og færdiggrøn `⚡ AI Advice`), så nye brugere straks kan se appens fulde værdi i stedet for et tomt dashboard.
+  - **On-demand knap for alle brugere:** En bruger skal til enhver tid kunne hente/trække et præ-udfyldt demo-projekt via en synlig knap på Dashboardet (f.eks. *"Hent eksempelprojekt" / "Pull Demo Project"*), så de altid kan udforske og eksperimentere med et referenceprojekt.
+  - **Isoleret kopi:** Projektet oprettes som en personlig kopi i brugerens egen liste, så de kan teste, redigere og køre AI uden begrænsninger.
 
 - [x] **Realtids-styring og udløb af Event Tags i `config/access` & Generisk QR-kode (`Open`):**
   - **Løsning:** Oprettet `activeEventPasscodes` i `config/access` i Firestore med fuld styring i Superuser-visningen (`PromptsEditorModal.tsx`).
   - Indbygget QR-kode på intro/splash-skærmen ([SplashScreen.tsx](file:///Users/runeklausenlarsen/Development/scape-bin-picking-evaluator/src/components/SplashScreen.tsx)) er forbundet med det permanente, generiske tag `?event=Open` (`Scan QR to Open`), så QR-koden i appen forbliver permanent gyldig, mens specifikke kampagner (f.eks. `Automatik26`) kan oprettes og styres dynamisk i Superuser-modalen.
+
+- [ ] **Anonym Kampagne- & QR-scan Tæller (Messebesøgende tracking):**
+  - **Udfordring:** Mange messegæster scanner QR-koden på standen af nysgerrighed, men logger ikke ind med det samme på telefonen. I dag vises kun brugere, der fuldfører et login, så uautentificerede scanninger/besøgende forsvinder sporløst.
+  - **Løsning:**
+    - Tilføj en letvægts, anonym tæller i Firestore (f.eks. i `/campaign_analytics/{campaignTag}` eller `/config/access` med `totalScans`, `lastScannedAt` og tidsstempler).
+    - Hver gang appen åbnes med et tag (f.eks. `?event=Automatik26` eller `?event=Open`), registreres et anonymt scannings-event automatisk (via et let kald til backend `/api/track-scan` eller direkte `increment` i Firestore).
+    - Vis tallene direkte i Superuser-interfacet under **Campaign & QR Tags** (og/eller **Active Users**), så man kan se rå scanninger, oprettede brugere og konverteringsrate (f.eks. *"Automatik26: 48 scanninger ➔ 6 oprettede brugere (12.5% konvertering)"*).
 
